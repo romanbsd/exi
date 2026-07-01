@@ -1,5 +1,26 @@
 enum ExiAlignment { bitPacked, byteAligned, preCompression }
 
+enum ExiSchemaIdKind { absent, schemaLess, builtInTypes, named }
+
+final class ExiSchemaId {
+  const ExiSchemaId._(this.kind, [this.value]);
+
+  const ExiSchemaId.named(String schemaId) : assert(schemaId != ''), kind = ExiSchemaIdKind.named, value = schemaId;
+
+  static const absent = ExiSchemaId._(ExiSchemaIdKind.absent);
+  static const schemaLess = ExiSchemaId._(ExiSchemaIdKind.schemaLess);
+  static const builtInTypes = ExiSchemaId._(ExiSchemaIdKind.builtInTypes, '');
+
+  final ExiSchemaIdKind kind;
+  final String? value;
+
+  @override
+  bool operator ==(Object other) => other is ExiSchemaId && other.kind == kind && other.value == value;
+
+  @override
+  int get hashCode => Object.hash(kind, value);
+}
+
 final class ExiFidelityOptions {
   const ExiFidelityOptions({
     this.comments = false,
@@ -27,6 +48,7 @@ final class ExiOptions {
     this.blockSize = 1000000,
     this.valueMaxLength,
     this.valuePartitionCapacity,
+    this.schemaId = ExiSchemaId.absent,
   });
 
   final ExiAlignment alignment;
@@ -38,4 +60,5 @@ final class ExiOptions {
   final int blockSize;
   final int? valueMaxLength;
   final int? valuePartitionCapacity;
+  final ExiSchemaId schemaId;
 }

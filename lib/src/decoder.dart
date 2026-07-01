@@ -4,25 +4,46 @@ import 'bit_input.dart';
 import 'header_options.dart';
 import 'model.dart';
 import 'options.dart';
+import 'schema.dart';
 import 'string_table.dart';
 
 const _cookie = [0x24, 0x45, 0x58, 0x49];
 
 final class ExiDecoder {
-  ExiDecoder({this.options = const ExiOptions()}) {
+  ExiDecoder({this.options = const ExiOptions(), this.schemaResolver}) {
     _validateOptions(options);
   }
 
   final ExiOptions options;
+  final ExiSchemaResolver? schemaResolver;
 
   ExiDocument decode(Uint8List bytes) {
     final hasCookie = bytes.length >= _cookie.length && _matchesCookie(bytes);
     final input = BitInput(bytes, byteOffset: hasCookie ? _cookie.length : 0);
     final parsedHeader = _readHeader(input, hasCookie: hasCookie);
     _validateOptions(parsedHeader.options);
-    final state = _DecoderState(input, parsedHeader.options);
+    final schema = _resolveSchema(parsedHeader.options.schemaId);
+    if (schema != null && !parsedHeader.options.strict) {
+      throw UnsupportedError('Non-strict schema-informed grammars are not supported yet');
+    }
+    if (schema != null && parsedHeader.options.fragment) {
+      throw UnsupportedError('Schema-informed fragments are not supported yet');
+    }
+    final state = _DecoderState(input, parsedHeader.options, schema);
     final events = state.decode();
     return ExiDocument(header: parsedHeader.header, events: events, options: parsedHeader.options);
+  }
+
+  ExiSchema? _resolveSchema(ExiSchemaId schemaId) {
+    if (schemaId.kind != ExiSchemaIdKind.named) {
+      return null;
+    }
+    final id = schemaId.value!;
+    final schema = schemaResolver?.call(id);
+    if (schema == null) {
+      throw ExiSchemaNotFoundException(id);
+    }
+    return schema;
   }
 
   bool _matchesCookie(Uint8List bytes) {
@@ -104,7 +125,7 @@ void _validateOptions(ExiOptions options) {
 }
 
 final class _DecoderState {
-  _DecoderState(this.input, this.options)
+  _DecoderState(this.input, this.options, this.schema)
     : strings = ExiStringTable(
         preservePrefixes: options.fidelity.prefixes,
         valueMaxLength: options.valueMaxLength,
@@ -113,6 +134,7 @@ final class _DecoderState {
 
   final BitInput input;
   final ExiOptions options;
+  final ExiSchema? schema;
   final ExiStringTable strings;
   final Map<ExiQName, _ElementGrammar> grammars = {};
   final List<_Production> _fragmentElements = [];
@@ -130,6 +152,26 @@ final class _DecoderState {
   }
 
   void _decodeDocument() {
+    final currentSchema = schema;
+    if (currentSchema != null) {
+      final globals = [...currentSchema.globalElements]
+        ..sort((left, right) {
+          final localNameOrder = left.name.localName.compareTo(right.name.localName);
+          return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
+        });
+      final selected = input.readNBitUnsigned(_bitWidth(globals.length + 1));
+      if (selected > globals.length) {
+        throw const FormatException('Invalid schema-informed document event code');
+      }
+      if (selected < globals.length) {
+        _decodeElement(globals[selected].name, declaration: globals[selected]);
+      } else {
+        _decodeElement(strings.readQName(input));
+      }
+      _decodeDocumentEnd();
+      return;
+    }
+
     while (true) {
       final production = _readDocumentContent();
       switch (production.type) {
@@ -185,10 +227,17 @@ final class _DecoderState {
     }
   }
 
-  void _decodeElement(ExiQName initialName) {
+  void _decodeElement(ExiQName initialName, {ExiElementDeclaration? declaration}) {
     var elementName = initialName;
     final startEventIndex = events.length;
     events.add(ExiStartElement(elementName));
+    if (declaration != null) {
+      for (final child in declaration.children) {
+        _decodeElement(child.name, declaration: child);
+      }
+      events.add(ExiEndElement(elementName));
+      return;
+    }
 
     final grammar = grammars.putIfAbsent(elementName, () => _ElementGrammar(options));
     var current = grammar.startTag;
@@ -207,7 +256,8 @@ final class _DecoderState {
         case _EventType.startElement:
           final name = production.name ?? strings.readQName(input);
           current.learn(_Production(_EventType.startElement, name));
-          _decodeElement(name);
+          final globalDeclaration = schema?.globalElements.where((element) => element.name == name).firstOrNull;
+          _decodeElement(name, declaration: globalDeclaration);
           current = grammar.elementContent;
         case _EventType.characters:
           current.learn(production);

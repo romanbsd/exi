@@ -24,6 +24,7 @@ final class HeaderOptionsDecoder {
   var _blockSize = 1000000;
   int? _valueMaxLength;
   int? _valuePartitionCapacity;
+  var _schemaId = ExiSchemaId.absent;
 
   ExiOptions decode() {
     // The strict schema-informed document grammar contains SE(header) and the
@@ -49,6 +50,7 @@ final class HeaderOptionsDecoder {
       blockSize: _blockSize,
       valueMaxLength: _valueMaxLength,
       valuePartitionCapacity: _valuePartitionCapacity,
+      schemaId: _schemaId,
     );
   }
 
@@ -122,7 +124,7 @@ final class HeaderOptionsDecoder {
       case _OptionElement.fragment:
         _fragment = true;
       case _OptionElement.schemaId:
-        throw UnsupportedError('In-band schemaId is not supported yet');
+        _readSchemaId();
       default:
         throw StateError('Invalid common child: $element');
     }
@@ -156,6 +158,38 @@ final class HeaderOptionsDecoder {
       throw FormatException('$name must be at least $minimum');
     }
     return result;
+  }
+
+  void _readSchemaId() {
+    final eventCode = _input.readBits(1);
+    if (eventCode == 1) {
+      final isNilled = _input.readBit() == 1;
+      if (!isNilled) {
+        throw UnsupportedError('A false xsi:nil schemaId followed by content is not supported yet');
+      }
+      _schemaId = ExiSchemaId.schemaLess;
+      return;
+    }
+
+    final marker = _input.readUnsignedInteger();
+    if (marker < BigInt.two || marker > BigInt.from(0x7fffffff)) {
+      throw const FormatException('Invalid schemaId string representation');
+    }
+    final length = marker.toInt() - 2;
+    final codePoints = <int>[];
+    for (var index = 0; index < length; index++) {
+      final codePoint = _input.readUnsignedInteger();
+      if (codePoint > BigInt.from(0x10ffff)) {
+        throw const FormatException('Invalid Unicode code point in schemaId');
+      }
+      final value = codePoint.toInt();
+      if (value >= 0xd800 && value <= 0xdfff) {
+        throw const FormatException('Unicode surrogate is not valid in schemaId');
+      }
+      codePoints.add(value);
+    }
+    final value = String.fromCharCodes(codePoints);
+    _schemaId = value.isEmpty ? ExiSchemaId.builtInTypes : ExiSchemaId.named(value);
   }
 }
 

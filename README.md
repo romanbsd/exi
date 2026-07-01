@@ -13,14 +13,19 @@ The current decoder stage supports:
 - in-band EXI options for strict mode, fragments, fidelity preservation, and
   value-table limits;
 - bit-packed and byte-aligned event/content decoding, including header padding;
+- absent, schema-less, built-in-types, and named schema IDs with resolver-based
+  schema selection;
+- strict compiled schemas containing global empty elements and fixed child
+  sequences;
 - URI, local-name, and value string-table partitions;
 - start/end document, start/end element, attribute, character, namespace,
   comment, processing-instruction, document-type, and entity-reference events;
 - XML reconstruction, including preserved namespace declarations.
 
-In-band schema identifiers, datatype representation maps, and user metadata
-remain unsupported. Schema-informed body grammars, self-contained elements,
-pre-compression, and compression are also not yet available.
+Datatype representation maps and user metadata remain unsupported. XSD
+compilation, non-strict and more general schema-informed grammars,
+self-contained elements, pre-compression, and compression are also not yet
+available.
 
 ```dart
 import 'dart:typed_data';
