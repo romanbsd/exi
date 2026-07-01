@@ -29,6 +29,9 @@ final class _Compiler {
   final bool localAttributesAreQualified;
 
   late final Map<String, XmlElement> _complexTypes = _collectComplexTypes();
+  late final Map<String, XmlElement> _globalElementNodes = _collectGlobalElements();
+  final Map<String, ExiElementDeclaration> _compiledGlobalElements = {};
+  final Set<String> _compilingGlobalElements = {};
 
   Map<String, XmlElement> _collectComplexTypes() {
     final result = <String, XmlElement>{};
@@ -41,21 +44,54 @@ final class _Compiler {
     return result;
   }
 
-  ExiSchema compile() {
-    final globals = <ExiElementDeclaration>[];
+  Map<String, XmlElement> _collectGlobalElements() {
+    final result = <String, XmlElement>{};
     for (final element in _children(root, 'element')) {
       _requireGlobalOccurrence(element);
-      globals.add(_compileElement(element, global: true));
+      final name = element.getAttribute('name');
+      if (name == null || name.isEmpty) {
+        throw const FormatException('Global XSD element declaration is missing a name');
+      }
+      if (result.containsKey(name)) {
+        throw FormatException('Duplicate global XSD element "$name"');
+      }
+      result[name] = element;
     }
-    if (globals.isEmpty) {
+    return result;
+  }
+
+  ExiSchema compile() {
+    if (_globalElementNodes.isEmpty) {
       throw const FormatException('XML Schema contains no global elements');
     }
-    return ExiSchema(id: id, globalElements: globals);
+    return ExiSchema(
+      id: id,
+      globalElements: [for (final name in _globalElementNodes.keys) _compileGlobalElement(name)],
+    );
+  }
+
+  ExiElementDeclaration _compileGlobalElement(String localName) {
+    final cached = _compiledGlobalElements[localName];
+    if (cached != null) {
+      return cached;
+    }
+    final element = _globalElementNodes[localName];
+    if (element == null) {
+      throw FormatException('Unknown global XSD element "$localName"');
+    }
+    if (!_compilingGlobalElements.add(localName)) {
+      throw UnsupportedError('Recursive XSD element reference "$localName" is not supported yet');
+    }
+    try {
+      return _compiledGlobalElements[localName] = _compileElement(element, global: true);
+    } finally {
+      _compilingGlobalElements.remove(localName);
+    }
   }
 
   ExiElementDeclaration _compileElement(XmlElement element, {required bool global}) {
     if (element.getAttribute('ref') != null) {
-      throw UnsupportedError('XSD element references are not supported yet');
+      throw const FormatException('Global XSD elements cannot use ref');
     }
     final localName = element.getAttribute('name');
     if (localName == null || localName.isEmpty) {
@@ -134,7 +170,10 @@ final class _Compiler {
   }
 
   ExiParticle _compileElementParticle(XmlElement element) {
-    final declaration = _compileElement(element, global: false);
+    final reference = element.getAttribute('ref');
+    final declaration = reference == null
+        ? _compileElement(element, global: false)
+        : _resolveElementReference(element, reference);
     final minOccurs = _occurs(element, 'minOccurs', defaultValue: 1);
     final maxValue = element.getAttribute('maxOccurs') ?? '1';
     final maxOccurs = maxValue == 'unbounded' ? null : int.tryParse(maxValue);
@@ -142,6 +181,40 @@ final class _Compiler {
       throw const FormatException('Invalid XSD element occurrence range');
     }
     return ExiElementParticle(declaration, minOccurs: minOccurs, maxOccurs: maxOccurs);
+  }
+
+  ExiElementDeclaration _resolveElementReference(XmlElement element, String reference) {
+    if (element.getAttribute('name') != null ||
+        element.getAttribute('type') != null ||
+        _children(element, 'complexType').isNotEmpty ||
+        _children(element, 'simpleType').isNotEmpty) {
+      throw const FormatException('An XSD element reference cannot declare a name or type');
+    }
+    final separator = reference.indexOf(':');
+    if (separator != reference.lastIndexOf(':')) {
+      throw FormatException('Invalid XSD element reference "$reference"');
+    }
+    final prefix = separator == -1 ? '' : reference.substring(0, separator);
+    final localName = separator == -1 ? reference : reference.substring(separator + 1);
+    if (localName.isEmpty || (separator != -1 && prefix.isEmpty)) {
+      throw FormatException('Invalid XSD element reference "$reference"');
+    }
+
+    String? namespaceUri;
+    for (final namespace in element.namespaces) {
+      if (namespace.prefix == prefix) {
+        namespaceUri = namespace.uri;
+        break;
+      }
+    }
+    if (prefix.isNotEmpty && namespaceUri == null) {
+      throw FormatException('Unknown namespace prefix "$prefix" in XSD element reference');
+    }
+    namespaceUri ??= '';
+    if (namespaceUri != targetNamespace) {
+      throw UnsupportedError('References to elements in external XSD namespaces are not supported yet');
+    }
+    return _compileGlobalElement(localName);
   }
 
   ExiAttributeDeclaration _compileAttribute(XmlElement attribute) {

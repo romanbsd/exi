@@ -67,6 +67,93 @@ void main() {
       expect(schema.globalElements.single.content, isA<ExiChoiceParticle>());
     });
 
+    test('resolves a local particle reference to a global element', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'references.xsd',
+        source: '''
+          <xs:schema
+              xmlns:xs="http://www.w3.org/2001/XMLSchema"
+              xmlns:tns="urn:example"
+              targetNamespace="urn:example">
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:sequence>
+                  <xs:element ref="tns:item" minOccurs="0" maxOccurs="2"/>
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
+            <xs:element name="item" type="xs:boolean"/>
+          </xs:schema>
+        ''',
+      );
+
+      final root = schema.globalElements.first;
+      final particle = (root.content as ExiSequenceParticle).particles.single as ExiElementParticle;
+      expect(particle.element.name, const ExiQName(uri: 'urn:example', localName: 'item'));
+      expect(particle.element.datatype, ExiDatatype.boolean);
+      expect(particle.minOccurs, 0);
+      expect(particle.maxOccurs, 2);
+    });
+
+    test('rejects unresolved element references', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'missing-reference.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:element name="root">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element ref="missing"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:schema>
+          ''',
+        ),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects recursive and external element references', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'recursive-reference.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:element name="node">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element ref="node"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:schema>
+          ''',
+        ),
+        throwsUnsupportedError,
+      );
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'external-reference.xsd',
+          source: '''
+            <xs:schema
+                xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                xmlns:external="urn:external">
+              <xs:element name="root">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element ref="external:item"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:schema>
+          ''',
+        ),
+        throwsUnsupportedError,
+      );
+    });
+
     test('resolves arbitrary XML Schema prefixes and bounded byte types', () {
       final schema = ExiSchemaCompiler.compile(
         id: 'prefix.xsd',

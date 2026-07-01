@@ -58,6 +58,24 @@ void main() {
 
       expect(document.toXmlString(), '<root><right/></root>');
     });
+
+    test('decodes a particle that references a global element', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element ref="item"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="item"/>
+      ''');
+
+      // Global element events are QName-sorted: item=00, root=01, wildcard=10.
+      final document = _decode(schema, '01');
+
+      expect(document.toXmlString(), '<root><item/></root>');
+    });
   });
 
   test('decodes required and optional schema attributes', () {
