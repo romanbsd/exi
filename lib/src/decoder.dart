@@ -55,6 +55,12 @@ final class ExiDecoder {
       throw UnsupportedError('EXI version $version is not supported');
     }
     final effectiveOptions = hasOptions ? HeaderOptionsDecoder(input).decode() : options;
+    if (effectiveOptions.compression || effectiveOptions.alignment != ExiAlignment.bitPacked) {
+      input.alignToByte();
+    }
+    if (effectiveOptions.alignment == ExiAlignment.byteAligned) {
+      input.useByteAlignment();
+    }
     return (
       header: ExiHeader(hasCookie: hasCookie, hasOptions: hasOptions, isPreview: isPreview, version: version),
       options: effectiveOptions,
@@ -73,7 +79,7 @@ void _validateOptions(ExiOptions options) {
   if (options.compression) {
     throw UnsupportedError('EXI compression is not supported yet');
   }
-  if (options.alignment != ExiAlignment.bitPacked) {
+  if (options.alignment == ExiAlignment.preCompression) {
     throw UnsupportedError('${options.alignment.name} alignment is not supported yet');
   }
   if (options.selfContained) {
@@ -210,7 +216,7 @@ final class _DecoderState {
         case _EventType.namespaceDeclaration:
           final uri = strings.readString(input);
           final prefix = strings.readString(input);
-          final localElementNamespace = input.readBit() == 1;
+          final localElementNamespace = input.readNBitUnsigned(1) == 1;
           strings.addPrefix(uri, prefix);
           if (localElementNamespace) {
             if (uri != elementName.uri) {
@@ -252,7 +258,7 @@ final class _DecoderState {
 
   _Production _readDocumentContent() {
     final hasOther = options.fidelity.dtd || options.fidelity.comments || options.fidelity.processingInstructions;
-    final first = input.readBits(_bitWidth(hasOther ? 2 : 1));
+    final first = input.readNBitUnsigned(_bitWidth(hasOther ? 2 : 1));
     if (first == 0) {
       return const _Production(_EventType.startElement);
     }
@@ -262,7 +268,7 @@ final class _DecoderState {
 
     final hasCommentOrPi = options.fidelity.comments || options.fidelity.processingInstructions;
     final secondCount = (options.fidelity.dtd ? 1 : 0) + (hasCommentOrPi ? 1 : 0);
-    final second = input.readBits(_bitWidth(secondCount));
+    final second = input.readNBitUnsigned(_bitWidth(secondCount));
     if (options.fidelity.dtd && second == 0) {
       return const _Production(_EventType.documentType);
     }
@@ -271,7 +277,7 @@ final class _DecoderState {
 
   _Production _readDocumentEnd() {
     final hasCommentOrPi = options.fidelity.comments || options.fidelity.processingInstructions;
-    final first = input.readBits(_bitWidth(hasCommentOrPi ? 2 : 1));
+    final first = input.readNBitUnsigned(_bitWidth(hasCommentOrPi ? 2 : 1));
     if (first == 0) {
       return const _Production(_EventType.endDocument);
     }
@@ -281,7 +287,7 @@ final class _DecoderState {
   _Production _readFragmentContent() {
     final hasCommentOrPi = options.fidelity.comments || options.fidelity.processingInstructions;
     final firstCount = _fragmentElements.length + 2 + (hasCommentOrPi ? 1 : 0);
-    final first = input.readBits(_bitWidth(firstCount));
+    final first = input.readNBitUnsigned(_bitWidth(firstCount));
     if (first >= firstCount) {
       throw const FormatException('Invalid fragment event code');
     }
@@ -305,7 +311,7 @@ final class _DecoderState {
     if (choices.isEmpty) {
       throw const FormatException('Comment/PI event is disabled');
     }
-    final selected = input.readBits(_bitWidth(choices.length));
+    final selected = input.readNBitUnsigned(_bitWidth(choices.length));
     if (selected >= choices.length) {
       throw const FormatException('Invalid comment/PI event code');
     }
@@ -346,7 +352,7 @@ final class _GrammarState {
 
   _Production readProduction(BitInput input) {
     final firstPartCount = _learned.length + (kind == _GrammarStateKind.startTag ? 1 : 2);
-    final firstPart = input.readBits(_bitWidth(firstPartCount));
+    final firstPart = input.readNBitUnsigned(_bitWidth(firstPartCount));
     if (firstPart >= firstPartCount) {
       throw const FormatException('Invalid EXI event-code first part');
     }
@@ -370,7 +376,7 @@ final class _GrammarState {
       if (options.fidelity.dtd) const _Production(_EventType.entityReference),
       if (hasCommentOrPi) null,
     ];
-    final secondPart = input.readBits(_bitWidth(undeclared.length));
+    final secondPart = input.readNBitUnsigned(_bitWidth(undeclared.length));
     if (secondPart >= undeclared.length) {
       throw const FormatException('Invalid EXI event-code second part');
     }
@@ -383,7 +389,7 @@ final class _GrammarState {
       if (options.fidelity.comments) const _Production(_EventType.comment),
       if (options.fidelity.processingInstructions) const _Production(_EventType.processingInstruction),
     ];
-    final thirdPart = input.readBits(_bitWidth(commentOrPi.length));
+    final thirdPart = input.readNBitUnsigned(_bitWidth(commentOrPi.length));
     if (thirdPart >= commentOrPi.length) {
       throw const FormatException('Invalid EXI event-code third part');
     }

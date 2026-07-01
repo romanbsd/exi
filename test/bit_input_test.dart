@@ -33,5 +33,22 @@ void main() {
 
       expect(() => input.readBit(), throwsA(isA<FormatException>()));
     });
+
+    test('reads byte-aligned bounded integers least-significant byte first', () {
+      final input = BitInput(Uint8List.fromList([0x34, 0x02]));
+      input.useByteAlignment();
+
+      expect(input.readNBitUnsigned(12), 0x234);
+      expect(input.isAtEnd, isTrue);
+    });
+
+    test('skips header padding to the next byte boundary', () {
+      final input = BitInput(Uint8List.fromList([0xbf, 0x2a]));
+      expect(input.readBits(3), 5);
+
+      input.alignToByte();
+
+      expect(input.readBits(8), 0x2a);
+    });
   });
 }

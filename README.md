@@ -12,6 +12,7 @@ The current decoder stage supports:
   instructions, DTD/entity events, and namespace prefixes;
 - in-band EXI options for strict mode, fragments, fidelity preservation, and
   value-table limits;
+- bit-packed and byte-aligned event/content decoding, including header padding;
 - URI, local-name, and value string-table partitions;
 - start/end document, start/end element, attribute, character, namespace,
   comment, processing-instruction, document-type, and entity-reference events;
@@ -19,7 +20,7 @@ The current decoder stage supports:
 
 In-band schema identifiers, datatype representation maps, and user metadata
 remain unsupported. Schema-informed body grammars, self-contained elements,
-byte alignment, pre-compression, and compression are also not yet available.
+pre-compression, and compression are also not yet available.
 
 ```dart
 import 'dart:typed_data';

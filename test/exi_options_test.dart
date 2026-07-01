@@ -118,10 +118,10 @@ void main() {
     });
   });
 
-  test('rejects unsupported self-contained and non-bit-packed options', () {
+  test('rejects unsupported self-contained and pre-compression options', () {
     expect(() => ExiDecoder(options: const ExiOptions(selfContained: true)), throwsA(isA<UnsupportedError>()));
     expect(
-      () => ExiDecoder(options: const ExiOptions(alignment: ExiAlignment.byteAligned)),
+      () => ExiDecoder(options: const ExiOptions(alignment: ExiAlignment.preCompression)),
       throwsA(isA<UnsupportedError>()),
     );
   });

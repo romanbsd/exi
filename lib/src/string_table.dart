@@ -30,7 +30,7 @@ final class ExiStringTable {
     String? prefix;
     if (preservePrefixes) {
       final partition = _prefixes.putIfAbsent(uri, () => []);
-      final compactId = input.readBits(_bitWidth(partition.isEmpty ? 1 : partition.length));
+      final compactId = input.readNBitUnsigned(_bitWidth(partition.isEmpty ? 1 : partition.length));
       if (partition.isNotEmpty) {
         if (compactId >= partition.length) {
           throw const FormatException('Invalid EXI prefix compact identifier');
@@ -61,7 +61,7 @@ final class ExiStringTable {
       if (_globalValues.isEmpty) {
         throw const FormatException('Compact identifier used with empty global value partition');
       }
-      final compactId = input.readBits(_bitWidth(_globalValues.length));
+      final compactId = input.readNBitUnsigned(_bitWidth(_globalValues.length));
       if (compactId >= _globalValues.length || _globalValues[compactId] == null) {
         throw const FormatException('Invalid global value compact identifier');
       }
@@ -98,7 +98,7 @@ final class ExiStringTable {
   }
 
   String _readCompactOptimized(BitInput input, List<String> partition) {
-    final encoded = input.readBits(_bitWidth(partition.length + 1));
+    final encoded = input.readNBitUnsigned(_bitWidth(partition.length + 1));
     if (encoded == 0) {
       final value = _readString(input);
       partition.add(value);
@@ -145,7 +145,7 @@ final class ExiStringTable {
     if (partition.isEmpty) {
       throw FormatException('Compact identifier used with empty $partitionName partition');
     }
-    final compactId = input.readBits(_bitWidth(partition.length));
+    final compactId = input.readNBitUnsigned(_bitWidth(partition.length));
     if (compactId >= partition.length || partition[compactId] == null) {
       throw FormatException('Invalid $partitionName compact identifier');
     }

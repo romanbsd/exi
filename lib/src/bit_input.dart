@@ -10,12 +10,49 @@ final class BitInput {
 
   final Uint8List _bytes;
   int _bitOffset;
+  var _byteAligned = false;
 
   int get bitOffset => _bitOffset;
 
   bool get isAtEnd => _bitOffset == _bytes.length * 8;
 
   int readBit() => readBits(1);
+
+  void alignToByte() {
+    final remainder = _bitOffset & 7;
+    if (remainder != 0) {
+      _bitOffset += 8 - remainder;
+    }
+  }
+
+  void useByteAlignment() {
+    if (_bitOffset & 7 != 0) {
+      throw StateError('Byte-aligned EXI input must start on a byte boundary');
+    }
+    _byteAligned = true;
+  }
+
+  int readNBitUnsigned(int bitCount) {
+    if (!_byteAligned) {
+      return readBits(bitCount);
+    }
+    if (bitCount < 0 || bitCount > 63) {
+      throw RangeError.range(bitCount, 0, 63, 'bitCount');
+    }
+    if (bitCount == 0) {
+      return 0;
+    }
+
+    final byteCount = (bitCount + 7) >> 3;
+    var value = 0;
+    for (var index = 0; index < byteCount; index++) {
+      value |= readBits(8) << (index * 8);
+    }
+    if (value >= 1 << bitCount) {
+      throw const FormatException('Byte-aligned bounded integer exceeds its bit width');
+    }
+    return value;
+  }
 
   int readBits(int count) {
     if (count < 0 || count > 63) {
