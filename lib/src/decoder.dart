@@ -160,11 +160,15 @@ final class _DecoderState {
           final localNameOrder = left.name.localName.compareTo(right.name.localName);
           return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
         });
-      final selected = input.readNBitUnsigned(_bitWidth(globals.length));
-      if (selected >= globals.length) {
+      final selected = input.readNBitUnsigned(_bitWidth(globals.length + 1));
+      if (selected > globals.length) {
         throw const FormatException('Invalid schema-informed document event code');
       }
-      _decodeElement(globals[selected].name, declaration: globals[selected]);
+      if (selected < globals.length) {
+        _decodeElement(globals[selected].name, declaration: globals[selected]);
+      } else {
+        _decodeElement(strings.readQName(input));
+      }
       _decodeDocumentEnd();
       return;
     }
@@ -229,17 +233,7 @@ final class _DecoderState {
     final startEventIndex = events.length;
     events.add(ExiStartElement(elementName));
     if (declaration != null) {
-      final datatype = declaration.datatype;
-      if (datatype != null) {
-        if (input.readNBitUnsigned(1) != 0) {
-          throw const FormatException('Invalid schema-typed character event code');
-        }
-        events.add(ExiCharacters(ExiValueDecoder(input, strings).read(datatype, elementName)));
-      }
-      for (final child in declaration.children) {
-        _decodeElement(child.name, declaration: child);
-      }
-      events.add(ExiEndElement(elementName));
+      _decodeDeclaredContent(elementName, declaration);
       return;
     }
 
@@ -291,6 +285,72 @@ final class _DecoderState {
           current = grammar.elementContent;
         default:
           throw StateError('Invalid element production');
+      }
+    }
+  }
+
+  void _decodeDeclaredContent(ExiQName elementName, ExiElementDeclaration declaration) {
+    final datatype = declaration.datatype;
+    if (datatype != null) {
+      events.add(ExiCharacters(ExiValueDecoder(input, strings).read(datatype, elementName)));
+      events.add(ExiEndElement(elementName));
+      return;
+    }
+
+    final attributes = [...declaration.attributes]
+      ..sort((left, right) {
+        final localNameOrder = left.name.localName.compareTo(right.name.localName);
+        return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
+      });
+    var attributeIndex = 0;
+    var content = declaration.content ?? _legacyContent(declaration.children);
+
+    while (true) {
+      final candidates = <_DeclaredEvent>[];
+      var contentIsReachable = true;
+      for (var index = attributeIndex; index < attributes.length; index++) {
+        final attribute = attributes[index];
+        candidates.add(_DeclaredEvent.attribute(index, attribute));
+        if (attribute.required) {
+          contentIsReachable = false;
+          break;
+        }
+      }
+      if (contentIsReachable) {
+        for (final child in _leadingElements(content)) {
+          candidates.add(_DeclaredEvent.element(child));
+        }
+        if (_isNullable(content)) {
+          candidates.add(const _DeclaredEvent.end());
+        }
+      }
+      if (candidates.isEmpty) {
+        throw const FormatException('Schema grammar has no valid next event');
+      }
+
+      final selected = input.readNBitUnsigned(_bitWidth(candidates.length));
+      if (selected >= candidates.length) {
+        throw const FormatException('Invalid schema-informed element event code');
+      }
+      final event = candidates[selected];
+      switch (event.kind) {
+        case _DeclaredEventKind.attribute:
+          final attribute = event.attribute!;
+          attributeIndex = event.attributeIndex! + 1;
+          final value = ExiValueDecoder(input, strings).read(attribute.datatype, attribute.name);
+          events.add(ExiAttribute(attribute.name, value));
+        case _DeclaredEventKind.element:
+          attributeIndex = attributes.length;
+          final child = event.element!;
+          final derivative = _derive(content, child);
+          if (derivative == null) {
+            throw const FormatException('Element does not match the schema particle');
+          }
+          content = derivative;
+          _decodeElement(child.name, declaration: child);
+        case _DeclaredEventKind.end:
+          events.add(ExiEndElement(elementName));
+          return;
       }
     }
   }
@@ -371,6 +431,142 @@ final class _DecoderState {
     }
     return choices[selected];
   }
+}
+
+enum _DeclaredEventKind { attribute, element, end }
+
+final class _DeclaredEvent {
+  const _DeclaredEvent.attribute(this.attributeIndex, this.attribute)
+    : kind = _DeclaredEventKind.attribute,
+      element = null;
+
+  const _DeclaredEvent.element(this.element)
+    : kind = _DeclaredEventKind.element,
+      attributeIndex = null,
+      attribute = null;
+
+  const _DeclaredEvent.end() : kind = _DeclaredEventKind.end, attributeIndex = null, attribute = null, element = null;
+
+  final _DeclaredEventKind kind;
+  final int? attributeIndex;
+  final ExiAttributeDeclaration? attribute;
+  final ExiElementDeclaration? element;
+}
+
+ExiParticle _legacyContent(List<ExiElementDeclaration> children) {
+  if (children.isEmpty) {
+    return const ExiEmptyParticle();
+  }
+  return ExiSequenceParticle([for (final child in children) ExiElementParticle(child)]);
+}
+
+bool _isNullable(ExiParticle particle) {
+  return switch (particle) {
+    ExiEmptyParticle() => true,
+    ExiElementParticle(:final minOccurs) => minOccurs == 0,
+    ExiSequenceParticle(:final particles) => particles.every(_isNullable),
+    ExiChoiceParticle(:final particles) => particles.any(_isNullable),
+  };
+}
+
+List<ExiElementDeclaration> _leadingElements(ExiParticle particle) {
+  final result = <ExiElementDeclaration>[];
+  void collect(ExiParticle current) {
+    switch (current) {
+      case ExiEmptyParticle():
+        return;
+      case ExiElementParticle(:final element, :final maxOccurs):
+        if (maxOccurs != 0) {
+          if (result.any((candidate) => candidate.name == element.name)) {
+            throw UnsupportedError('Ambiguous schema particles with the same leading QName are not supported yet');
+          }
+          result.add(element);
+        }
+      case ExiSequenceParticle(:final particles):
+        for (final child in particles) {
+          collect(child);
+          if (!_isNullable(child)) {
+            break;
+          }
+        }
+      case ExiChoiceParticle(:final particles):
+        for (final child in particles) {
+          collect(child);
+        }
+    }
+  }
+
+  collect(particle);
+  return result;
+}
+
+ExiParticle? _derive(ExiParticle particle, ExiElementDeclaration selected) {
+  switch (particle) {
+    case ExiEmptyParticle():
+      return null;
+    case ExiElementParticle(:final element, :final minOccurs, :final maxOccurs):
+      if (!identical(element, selected)) {
+        return null;
+      }
+      final remainingMin = minOccurs > 0 ? minOccurs - 1 : 0;
+      final remainingMax = maxOccurs == null ? null : maxOccurs - 1;
+      if (remainingMax == 0) {
+        return const ExiEmptyParticle();
+      }
+      return ExiElementParticle(element, minOccurs: remainingMin, maxOccurs: remainingMax);
+    case ExiSequenceParticle(:final particles):
+      final alternatives = <ExiParticle>[];
+      for (var index = 0; index < particles.length; index++) {
+        final derivative = _derive(particles[index], selected);
+        if (derivative != null) {
+          alternatives.add(_sequence([derivative, ...particles.skip(index + 1)]));
+        }
+        if (!_isNullable(particles[index])) {
+          break;
+        }
+      }
+      return _choice(alternatives);
+    case ExiChoiceParticle(:final particles):
+      final alternatives = <ExiParticle>[];
+      for (final child in particles) {
+        final derivative = _derive(child, selected);
+        if (derivative != null) {
+          alternatives.add(derivative);
+        }
+      }
+      return _choice(alternatives);
+  }
+}
+
+ExiParticle _sequence(List<ExiParticle> particles) {
+  final flattened = <ExiParticle>[];
+  for (final particle in particles) {
+    switch (particle) {
+      case ExiEmptyParticle():
+        break;
+      case ExiSequenceParticle(:final particles):
+        flattened.addAll(particles);
+      default:
+        flattened.add(particle);
+    }
+  }
+  if (flattened.isEmpty) {
+    return const ExiEmptyParticle();
+  }
+  if (flattened.length == 1) {
+    return flattened.single;
+  }
+  return ExiSequenceParticle(flattened);
+}
+
+ExiParticle? _choice(List<ExiParticle> particles) {
+  if (particles.isEmpty) {
+    return null;
+  }
+  if (particles.length == 1) {
+    return particles.single;
+  }
+  return ExiChoiceParticle(particles);
 }
 
 enum _EventType {

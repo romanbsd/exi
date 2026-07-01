@@ -17,17 +17,13 @@ void main() {
       ],
     );
     final bits = StringBuffer('10000000')
-      // First schema-typed CH event (the sole global root uses zero bits).
+      // Schema document root selection.
       ..write('0')
-      // boolean true
-      ..write('1')
-      // integer CH event
-      ..write('0')
+      // boolean true (two-bit lexical-value representation)
+      ..write('10')
       // integer -3: negative sign and magnitude minus one.
       ..write('1')
       ..write(_unsigned(2))
-      // decimal CH event
-      ..write('0')
       // decimal -12.034: sign, integral, reversed fractional 430.
       ..write('1')
       ..write(_unsigned(12))

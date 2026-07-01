@@ -14,7 +14,7 @@ final class ExiValueDecoder {
   String read(ExiDatatype datatype, ExiQName context) {
     return switch (datatype) {
       ExiDatatype.string => strings.readValue(input, context),
-      ExiDatatype.boolean => input.readNBitUnsigned(1) == 0 ? 'false' : 'true',
+      ExiDatatype.boolean => input.readNBitUnsigned(2) < 2 ? 'false' : 'true',
       ExiDatatype.decimal => _readDecimal(),
       ExiDatatype.float => _readFloat(),
       ExiDatatype.integer => _readInteger().toString(),

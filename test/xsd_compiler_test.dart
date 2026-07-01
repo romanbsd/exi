@@ -47,24 +47,24 @@ void main() {
       expect(schema.globalElements[1].datatype, ExiDatatype.string);
     });
 
-    test('rejects occurrence ranges outside the supported grammar subset', () {
-      expect(
-        () => ExiSchemaCompiler.compile(
-          id: 'repeated.xsd',
-          source: '''
+    test('compiles occurrence ranges and choices into particle models', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'repeated.xsd',
+        source: '''
             <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
               <xs:element name="root">
                 <xs:complexType>
-                  <xs:sequence>
+                  <xs:choice>
                     <xs:element name="item" maxOccurs="unbounded"/>
-                  </xs:sequence>
+                    <xs:element name="other" minOccurs="0"/>
+                  </xs:choice>
                 </xs:complexType>
               </xs:element>
             </xs:schema>
           ''',
-        ),
-        throwsA(isA<UnsupportedError>()),
       );
+
+      expect(schema.globalElements.single.content, isA<ExiChoiceParticle>());
     });
 
     test('resolves arbitrary XML Schema prefixes and bounded byte types', () {
@@ -80,6 +80,42 @@ void main() {
 
       expect(schema.globalElements[0].datatype, ExiDatatype.byte);
       expect(schema.globalElements[1].datatype, ExiDatatype.unsignedByte);
+    });
+
+    test('rejects mixed complex content', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'mixed.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:element name="root">
+                <xs:complexType mixed="true"/>
+              </xs:element>
+            </xs:schema>
+          ''',
+        ),
+        throwsUnsupportedError,
+      );
+    });
+
+    test('rejects occurrence constraints on compositors', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'compositor-occurs.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:element name="root">
+                <xs:complexType>
+                  <xs:sequence minOccurs="0">
+                    <xs:element name="child"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:schema>
+          ''',
+        ),
+        throwsUnsupportedError,
+      );
     });
   });
 }
