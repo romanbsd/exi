@@ -67,6 +67,26 @@ void main() {
       expect(schema.globalElements.single.content, isA<ExiChoiceParticle>());
     });
 
+    test('rejects an invalid maximum occurrence', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'invalid-occurrence.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:element name="root">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="item" maxOccurs="many"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:schema>
+          ''',
+        ),
+        throwsFormatException,
+      );
+    });
+
     test('resolves a local particle reference to a global element', () {
       final schema = ExiSchemaCompiler.compile(
         id: 'references.xsd',
@@ -151,6 +171,48 @@ void main() {
           ''',
         ),
         throwsUnsupportedError,
+      );
+    });
+
+    test('resolves a required attribute reference to a global attribute', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'attribute-reference.xsd',
+        source: '''
+          <xs:schema
+              xmlns:xs="http://www.w3.org/2001/XMLSchema"
+              xmlns:tns="urn:example"
+              targetNamespace="urn:example">
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:attribute ref="tns:code" use="required"/>
+              </xs:complexType>
+            </xs:element>
+            <xs:attribute name="code" type="xs:integer"/>
+          </xs:schema>
+        ''',
+      );
+
+      final attribute = schema.globalElements.single.attributes.single;
+      expect(attribute.name, const ExiQName(uri: 'urn:example', localName: 'code'));
+      expect(attribute.datatype, ExiDatatype.integer);
+      expect(attribute.required, isTrue);
+    });
+
+    test('rejects unresolved attribute references', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'missing-attribute.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:element name="root">
+                <xs:complexType>
+                  <xs:attribute ref="missing"/>
+                </xs:complexType>
+              </xs:element>
+            </xs:schema>
+          ''',
+        ),
+        throwsFormatException,
       );
     });
 

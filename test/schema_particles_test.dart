@@ -99,6 +99,25 @@ void main() {
     expect(document.toXmlString(), '<root id="7"/>');
   });
 
+  test('decodes a referenced global schema attribute', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:attribute ref="code" use="required"/>
+        </xs:complexType>
+      </xs:element>
+      <xs:attribute name="code" type="xs:string"/>
+    ''');
+    final bits = StringBuffer()
+      // Schema document root selection; the required attribute is implicit.
+      ..write('0')
+      ..write(_value('7'));
+
+    final document = _decode(schema, bits.toString());
+
+    expect(document.toXmlString(), '<root code="7"/>');
+  });
+
   test('matches an OpenEXI strict schema-attribute vector', () {
     final schema = _compile('''
       <xs:element name="root">

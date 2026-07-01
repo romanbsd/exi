@@ -30,7 +30,9 @@ final class _Compiler {
 
   late final Map<String, XmlElement> _complexTypes = _collectComplexTypes();
   late final Map<String, XmlElement> _globalElementNodes = _collectGlobalElements();
+  late final Map<String, XmlElement> _globalAttributeNodes = _collectGlobalAttributes();
   final Map<String, ExiElementDeclaration> _compiledGlobalElements = {};
+  final Map<String, ExiAttributeDeclaration> _compiledGlobalAttributes = {};
   final Set<String> _compilingGlobalElements = {};
 
   Map<String, XmlElement> _collectComplexTypes() {
@@ -40,6 +42,21 @@ final class _Compiler {
       if (name != null) {
         result[name] = element;
       }
+    }
+    return result;
+  }
+
+  Map<String, XmlElement> _collectGlobalAttributes() {
+    final result = <String, XmlElement>{};
+    for (final attribute in _children(root, 'attribute')) {
+      final name = attribute.getAttribute('name');
+      if (name == null || name.isEmpty) {
+        throw const FormatException('Global XSD attribute declaration is missing a name');
+      }
+      if (result.containsKey(name)) {
+        throw FormatException('Duplicate global XSD attribute "$name"');
+      }
+      result[name] = attribute;
     }
     return result;
   }
@@ -176,7 +193,9 @@ final class _Compiler {
         : _resolveElementReference(element, reference);
     final minOccurs = _occurs(element, 'minOccurs', defaultValue: 1);
     final maxValue = element.getAttribute('maxOccurs') ?? '1';
-    final maxOccurs = maxValue == 'unbounded' ? null : int.tryParse(maxValue);
+    final maxOccurs = maxValue == 'unbounded'
+        ? null
+        : int.tryParse(maxValue) ?? (throw FormatException('Invalid XSD maxOccurs value "$maxValue"'));
     if (maxOccurs != null && (maxOccurs < minOccurs || maxOccurs < 0)) {
       throw const FormatException('Invalid XSD element occurrence range');
     }
@@ -190,36 +209,51 @@ final class _Compiler {
         _children(element, 'simpleType').isNotEmpty) {
       throw const FormatException('An XSD element reference cannot declare a name or type');
     }
+    return _compileGlobalElement(_resolveLocalReference(element, reference, 'element'));
+  }
+
+  String _resolveLocalReference(XmlElement context, String reference, String kind) {
     final separator = reference.indexOf(':');
     if (separator != reference.lastIndexOf(':')) {
-      throw FormatException('Invalid XSD element reference "$reference"');
+      throw FormatException('Invalid XSD $kind reference "$reference"');
     }
     final prefix = separator == -1 ? '' : reference.substring(0, separator);
     final localName = separator == -1 ? reference : reference.substring(separator + 1);
     if (localName.isEmpty || (separator != -1 && prefix.isEmpty)) {
-      throw FormatException('Invalid XSD element reference "$reference"');
+      throw FormatException('Invalid XSD $kind reference "$reference"');
     }
 
     String? namespaceUri;
-    for (final namespace in element.namespaces) {
+    for (final namespace in context.namespaces) {
       if (namespace.prefix == prefix) {
         namespaceUri = namespace.uri;
         break;
       }
     }
     if (prefix.isNotEmpty && namespaceUri == null) {
-      throw FormatException('Unknown namespace prefix "$prefix" in XSD element reference');
+      throw FormatException('Unknown namespace prefix "$prefix" in XSD $kind reference');
     }
     namespaceUri ??= '';
     if (namespaceUri != targetNamespace) {
-      throw UnsupportedError('References to elements in external XSD namespaces are not supported yet');
+      throw UnsupportedError('References to $kind declarations in external XSD namespaces are not supported yet');
     }
-    return _compileGlobalElement(localName);
+    return localName;
   }
 
   ExiAttributeDeclaration _compileAttribute(XmlElement attribute) {
-    if (attribute.getAttribute('ref') != null) {
-      throw UnsupportedError('XSD attribute references are not supported yet');
+    final reference = attribute.getAttribute('ref');
+    if (reference != null) {
+      if (attribute.getAttribute('name') != null ||
+          attribute.getAttribute('type') != null ||
+          _children(attribute, 'simpleType').isNotEmpty) {
+        throw const FormatException('An XSD attribute reference cannot declare a name or type');
+      }
+      final declaration = _compileGlobalAttribute(_resolveLocalReference(attribute, reference, 'attribute'));
+      return ExiAttributeDeclaration(
+        name: declaration.name,
+        datatype: declaration.datatype,
+        required: _isRequiredAttribute(attribute),
+      );
     }
     final localName = attribute.getAttribute('name');
     if (localName == null || localName.isEmpty) {
@@ -238,8 +272,45 @@ final class _Compiler {
     return ExiAttributeDeclaration(
       name: ExiQName(uri: localAttributesAreQualified ? targetNamespace : '', localName: localName),
       datatype: datatype,
-      required: attribute.getAttribute('use') == 'required',
+      required: _isRequiredAttribute(attribute),
     );
+  }
+
+  ExiAttributeDeclaration _compileGlobalAttribute(String localName) {
+    final cached = _compiledGlobalAttributes[localName];
+    if (cached != null) {
+      return cached;
+    }
+    final attribute = _globalAttributeNodes[localName];
+    if (attribute == null) {
+      throw FormatException('Unknown global XSD attribute "$localName"');
+    }
+    if (attribute.getAttribute('ref') != null || attribute.getAttribute('use') != null) {
+      throw const FormatException('Global XSD attributes cannot specify ref or use');
+    }
+    final typeName = attribute.getAttribute('type');
+    final inlineSimple = _children(attribute, 'simpleType').firstOrNull;
+    final datatype = typeName != null
+        ? _builtinDatatype(typeName)
+        : inlineSimple != null
+        ? _compileSimpleType(inlineSimple)
+        : ExiDatatype.string;
+    if (datatype == null) {
+      throw UnsupportedError('Unsupported XSD attribute type "$typeName"');
+    }
+    return _compiledGlobalAttributes[localName] = ExiAttributeDeclaration(
+      name: ExiQName(uri: targetNamespace, localName: localName),
+      datatype: datatype,
+    );
+  }
+
+  bool _isRequiredAttribute(XmlElement attribute) {
+    return switch (attribute.getAttribute('use')) {
+      null || 'optional' => false,
+      'required' => true,
+      'prohibited' => throw UnsupportedError('Prohibited XSD attributes are not supported yet'),
+      final value => throw FormatException('Invalid XSD attribute use "$value"'),
+    };
   }
 
   ExiDatatype _compileSimpleType(XmlElement simpleType) {
