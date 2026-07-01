@@ -17,15 +17,19 @@ The current decoder stage supports:
   schema selection;
 - strict compiled schemas containing global empty elements and fixed child
   sequences;
+- XSD compilation for global elements, named/inline complex types, required
+  sequences, empty content, and primitive simple types;
+- schema-typed string, boolean, integer, decimal, float, binary, date, time,
+  and date-time values;
 - URI, local-name, and value string-table partitions;
 - start/end document, start/end element, attribute, character, namespace,
   comment, processing-instruction, document-type, and entity-reference events;
 - XML reconstruction, including preserved namespace declarations.
 
 Datatype representation maps and user metadata remain unsupported. XSD
-compilation, non-strict and more general schema-informed grammars,
-self-contained elements, pre-compression, and compression are also not yet
-available.
+attributes, occurrence ranges, choices, references, non-strict and more general
+schema-informed grammars, self-contained elements, pre-compression, and
+compression are also not yet available.
 
 ```dart
 import 'dart:typed_data';

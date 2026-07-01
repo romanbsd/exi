@@ -2,6 +2,22 @@ import 'model.dart';
 
 typedef ExiSchemaResolver = ExiSchema? Function(String schemaId);
 
+enum ExiDatatype {
+  string,
+  boolean,
+  decimal,
+  float,
+  integer,
+  unsignedInteger,
+  byte,
+  unsignedByte,
+  base64Binary,
+  hexBinary,
+  dateTime,
+  date,
+  time,
+}
+
 final class ExiSchema {
   const ExiSchema({required this.id, required this.globalElements});
 
@@ -10,12 +26,15 @@ final class ExiSchema {
 }
 
 final class ExiElementDeclaration {
-  const ExiElementDeclaration.empty(this.name) : children = const [];
+  const ExiElementDeclaration.empty(this.name) : children = const [], datatype = null;
 
-  const ExiElementDeclaration.sequence(this.name, this.children);
+  const ExiElementDeclaration.sequence(this.name, this.children) : datatype = null;
+
+  const ExiElementDeclaration.value(this.name, this.datatype) : children = const [];
 
   final ExiQName name;
   final List<ExiElementDeclaration> children;
+  final ExiDatatype? datatype;
 }
 
 final class ExiSchemaNotFoundException implements Exception {

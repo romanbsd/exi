@@ -6,6 +6,7 @@ import 'model.dart';
 import 'options.dart';
 import 'schema.dart';
 import 'string_table.dart';
+import 'value_decoder.dart';
 
 const _cookie = [0x24, 0x45, 0x58, 0x49];
 
@@ -159,15 +160,11 @@ final class _DecoderState {
           final localNameOrder = left.name.localName.compareTo(right.name.localName);
           return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
         });
-      final selected = input.readNBitUnsigned(_bitWidth(globals.length + 1));
-      if (selected > globals.length) {
+      final selected = input.readNBitUnsigned(_bitWidth(globals.length));
+      if (selected >= globals.length) {
         throw const FormatException('Invalid schema-informed document event code');
       }
-      if (selected < globals.length) {
-        _decodeElement(globals[selected].name, declaration: globals[selected]);
-      } else {
-        _decodeElement(strings.readQName(input));
-      }
+      _decodeElement(globals[selected].name, declaration: globals[selected]);
       _decodeDocumentEnd();
       return;
     }
@@ -232,6 +229,13 @@ final class _DecoderState {
     final startEventIndex = events.length;
     events.add(ExiStartElement(elementName));
     if (declaration != null) {
+      final datatype = declaration.datatype;
+      if (datatype != null) {
+        if (input.readNBitUnsigned(1) != 0) {
+          throw const FormatException('Invalid schema-typed character event code');
+        }
+        events.add(ExiCharacters(ExiValueDecoder(input, strings).read(datatype, elementName)));
+      }
       for (final child in declaration.children) {
         _decodeElement(child.name, declaration: child);
       }

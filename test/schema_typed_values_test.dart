@@ -1,0 +1,115 @@
+import 'dart:typed_data';
+
+import 'package:exi/exi.dart';
+import 'package:test/test.dart';
+
+void main() {
+  test('decodes boolean, integer, and decimal schema values', () {
+    const schemaId = 'values';
+    const schema = ExiSchema(
+      id: schemaId,
+      globalElements: [
+        ExiElementDeclaration.sequence(ExiQName(localName: 'root'), [
+          ExiElementDeclaration.value(ExiQName(localName: 'flag'), ExiDatatype.boolean),
+          ExiElementDeclaration.value(ExiQName(localName: 'count'), ExiDatatype.integer),
+          ExiElementDeclaration.value(ExiQName(localName: 'amount'), ExiDatatype.decimal),
+        ]),
+      ],
+    );
+    final bits = StringBuffer('10000000')
+      // First schema-typed CH event (the sole global root uses zero bits).
+      ..write('0')
+      // boolean true
+      ..write('1')
+      // integer CH event
+      ..write('0')
+      // integer -3: negative sign and magnitude minus one.
+      ..write('1')
+      ..write(_unsigned(2))
+      // decimal CH event
+      ..write('0')
+      // decimal -12.034: sign, integral, reversed fractional 430.
+      ..write('1')
+      ..write(_unsigned(12))
+      ..write(_unsigned(430));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root><flag>true</flag><count>-3</count><amount>-12.034</amount></root>');
+  });
+
+  test('decodes a dateTime schema value', () {
+    const schemaId = 'date-time';
+    const schema = ExiSchema(
+      id: schemaId,
+      globalElements: [ExiElementDeclaration.value(ExiQName(localName: 'when'), ExiDatatype.dateTime)],
+    );
+    final encodedTime = ((12 * 64) + 34) * 64 + 56;
+    final bits = StringBuffer('10000000')
+      ..write('0')
+      // Year 2024, month/day 07-01, time 12:34:56.
+      ..write('0')
+      ..write(_unsigned(24))
+      ..write((7 * 32 + 1).toRadixString(2).padLeft(9, '0'))
+      ..write(encodedTime.toRadixString(2).padLeft(17, '0'))
+      // Fraction .25 (digits reversed), timezone +02:30.
+      ..write('1')
+      ..write(_unsigned(52))
+      ..write('1')
+      ..write((896 + 2 * 64 + 30).toRadixString(2).padLeft(11, '0'));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<when>2024-07-01T12:34:56.25+02:30</when>');
+  });
+
+  test('matches an OpenEXI strict schema-typed vector', () {
+    const schemaId = 'openexi';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="flag" type="xs:boolean"/>
+                <xs:element name="count" type="xs:integer"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(Uint8List.fromList([0x80, 0x50, 0x20]));
+
+    expect(document.toXmlString(), '<root><flag>true</flag><count>-3</count></root>');
+  });
+}
+
+String _unsigned(int value) {
+  final bits = StringBuffer();
+  var remainder = value;
+  do {
+    final group = remainder & 0x7f;
+    remainder >>= 7;
+    bits.write((group | (remainder == 0 ? 0 : 0x80)).toRadixString(2).padLeft(8, '0'));
+  } while (remainder != 0);
+  return bits.toString();
+}
+
+Uint8List _pack(String bits) {
+  final padded = bits.padRight((bits.length + 7) ~/ 8 * 8, '0');
+  return Uint8List.fromList([
+    for (var offset = 0; offset < padded.length; offset += 8) int.parse(padded.substring(offset, offset + 8), radix: 2),
+  ]);
+}
