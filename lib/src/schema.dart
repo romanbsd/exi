@@ -30,19 +30,22 @@ final class ExiElementDeclaration {
     : children = const [],
       datatype = null,
       attributes = const [],
-      content = null;
+      content = null,
+      mixed = false;
 
   const ExiElementDeclaration.sequence(this.name, this.children)
     : datatype = null,
       attributes = const [],
-      content = null;
+      content = null,
+      mixed = false;
 
   const ExiElementDeclaration.value(this.name, this.datatype)
     : children = const [],
       attributes = const [],
-      content = null;
+      content = null,
+      mixed = false;
 
-  const ExiElementDeclaration.complex(this.name, {this.attributes = const [], this.content})
+  const ExiElementDeclaration.complex(this.name, {this.attributes = const [], this.content, this.mixed = false})
     : children = const [],
       datatype = null;
 
@@ -51,6 +54,7 @@ final class ExiElementDeclaration {
   final ExiDatatype? datatype;
   final List<ExiAttributeDeclaration> attributes;
   final ExiParticle? content;
+  final bool mixed;
 }
 
 final class ExiAttributeDeclaration {

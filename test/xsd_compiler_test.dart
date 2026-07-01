@@ -358,19 +358,40 @@ void main() {
       expect(schema.globalElements[1].datatype, ExiDatatype.unsignedByte);
     });
 
-    test('rejects mixed complex content', () {
+    test('compiles mixed complex content', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'mixed.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="root">
+              <xs:complexType mixed="true">
+                <xs:sequence>
+                  <xs:element name="child"/>
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
+          </xs:schema>
+        ''',
+      );
+
+      final root = schema.globalElements.single;
+      expect(root.mixed, isTrue);
+      expect(root.content, isA<ExiSequenceParticle>());
+    });
+
+    test('rejects an invalid mixed-content flag', () {
       expect(
         () => ExiSchemaCompiler.compile(
-          id: 'mixed.xsd',
+          id: 'invalid-mixed.xsd',
           source: '''
             <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
               <xs:element name="root">
-                <xs:complexType mixed="true"/>
+                <xs:complexType mixed="sometimes"/>
               </xs:element>
             </xs:schema>
           ''',
         ),
-        throwsUnsupportedError,
+        throwsFormatException,
       );
     });
 

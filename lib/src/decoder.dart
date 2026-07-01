@@ -323,6 +323,9 @@ final class _DecoderState {
         if (_isNullable(content)) {
           candidates.add(const _DeclaredEvent.end());
         }
+        if (declaration.mixed) {
+          candidates.add(const _DeclaredEvent.characters());
+        }
       }
       if (candidates.isEmpty) {
         throw const FormatException('Schema grammar has no valid next event');
@@ -348,6 +351,9 @@ final class _DecoderState {
           }
           content = derivative;
           _decodeElement(child.name, declaration: child);
+        case _DeclaredEventKind.characters:
+          attributeIndex = attributes.length;
+          events.add(ExiCharacters(strings.readValue(input, elementName)));
         case _DeclaredEventKind.end:
           events.add(ExiEndElement(elementName));
           return;
@@ -433,7 +439,7 @@ final class _DecoderState {
   }
 }
 
-enum _DeclaredEventKind { attribute, element, end }
+enum _DeclaredEventKind { attribute, element, end, characters }
 
 final class _DeclaredEvent {
   const _DeclaredEvent.attribute(this.attributeIndex, this.attribute)
@@ -446,6 +452,12 @@ final class _DeclaredEvent {
       attribute = null;
 
   const _DeclaredEvent.end() : kind = _DeclaredEventKind.end, attributeIndex = null, attribute = null, element = null;
+
+  const _DeclaredEvent.characters()
+    : kind = _DeclaredEventKind.characters,
+      attributeIndex = null,
+      attribute = null,
+      element = null;
 
   final _DeclaredEventKind kind;
   final int? attributeIndex;

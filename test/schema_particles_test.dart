@@ -212,6 +212,46 @@ void main() {
     expect(document.toXmlString(), '<root id="7"/>');
   });
 
+  test('decodes characters in empty mixed content', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType mixed="true"/>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Root=0; CH=1; untyped string; EE=0.
+      ..write('01')
+      ..write(_value('hello'))
+      ..write('0');
+
+    final document = _decode(schema, bits.toString());
+
+    expect(document.toXmlString(), '<root>hello</root>');
+  });
+
+  test('decodes mixed characters around a declared child', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType mixed="true">
+          <xs:sequence>
+            <xs:element name="child"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Root=0; CH=1; child=0; CH=1; EE=0.
+      ..write('01')
+      ..write(_value('before'))
+      ..write('01')
+      ..write(_value('after'))
+      ..write('0');
+
+    final document = _decode(schema, bits.toString());
+
+    expect(document.toXmlString(), '<root>before<child/>after</root>');
+  });
+
   test('decodes a referenced global schema attribute', () {
     final schema = _compile('''
       <xs:element name="root">

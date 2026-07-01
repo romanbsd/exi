@@ -159,12 +159,11 @@ final class _Compiler {
   }
 
   ExiElementDeclaration _compileComplexType(ExiQName name, XmlElement complexType) {
-    if (switch (complexType.getAttribute('mixed')) {
+    final mixed = switch (complexType.getAttribute('mixed')) {
+      null || 'false' || '0' => false,
       'true' || '1' => true,
-      _ => false,
-    }) {
-      throw UnsupportedError('Mixed XSD complex content is not supported yet');
-    }
+      final value => throw FormatException('Invalid XSD mixed value "$value"'),
+    };
     final attributes = [for (final attribute in _children(complexType, 'attribute')) _compileAttribute(attribute)]
       ..sort((left, right) {
         final localNameOrder = left.name.localName.compareTo(right.name.localName);
@@ -180,8 +179,8 @@ final class _Compiler {
       throw UnsupportedError('A complex type with multiple compositors is not supported');
     }
     if (compositors.isEmpty) {
-      if (attributes.isNotEmpty) {
-        return ExiElementDeclaration.complex(name, attributes: attributes);
+      if (attributes.isNotEmpty || mixed) {
+        return ExiElementDeclaration.complex(name, attributes: attributes, mixed: mixed);
       }
       return ExiElementDeclaration.empty(name);
     }
@@ -190,6 +189,7 @@ final class _Compiler {
     final particles = content is ExiSequenceParticle ? content.particles : const <ExiParticle>[];
     final isFixedSequence =
         attributes.isEmpty &&
+        !mixed &&
         compositor.name.local == 'sequence' &&
         content is ExiSequenceParticle &&
         particles.every(
@@ -200,7 +200,7 @@ final class _Compiler {
         for (final particle in particles.cast<ExiElementParticle>()) particle.element,
       ]);
     }
-    return ExiElementDeclaration.complex(name, attributes: attributes, content: content);
+    return ExiElementDeclaration.complex(name, attributes: attributes, content: content, mixed: mixed);
   }
 
   ExiParticle _compileParticle(XmlElement particle) {
