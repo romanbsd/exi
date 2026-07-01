@@ -87,6 +87,92 @@ void main() {
       );
     });
 
+    test('compiles nested sequence and choice compositors', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'nested-compositors.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:sequence>
+                  <xs:element name="first"/>
+                  <xs:choice>
+                    <xs:element name="left"/>
+                    <xs:element name="right"/>
+                  </xs:choice>
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
+          </xs:schema>
+        ''',
+      );
+
+      final sequence = schema.globalElements.single.content as ExiSequenceParticle;
+      expect(sequence.particles, hasLength(2));
+      expect(sequence.particles.last, isA<ExiChoiceParticle>());
+    });
+
+    test('resolves a named model-group reference', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'groups.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:group name="pair">
+              <xs:sequence>
+                <xs:element name="first"/>
+                <xs:element name="second"/>
+              </xs:sequence>
+            </xs:group>
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:group ref="pair"/>
+              </xs:complexType>
+            </xs:element>
+          </xs:schema>
+        ''',
+      );
+
+      expect(schema.globalElements.single.content, isA<ExiSequenceParticle>());
+    });
+
+    test('rejects unresolved and recursive model-group references', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'missing-group.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:element name="root">
+                <xs:complexType>
+                  <xs:group ref="missing"/>
+                </xs:complexType>
+              </xs:element>
+            </xs:schema>
+          ''',
+        ),
+        throwsFormatException,
+      );
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'recursive-group.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:group name="recursive">
+                <xs:sequence>
+                  <xs:group ref="recursive"/>
+                </xs:sequence>
+              </xs:group>
+              <xs:element name="root">
+                <xs:complexType>
+                  <xs:group ref="recursive"/>
+                </xs:complexType>
+              </xs:element>
+            </xs:schema>
+          ''',
+        ),
+        throwsUnsupportedError,
+      );
+    });
+
     test('resolves a local particle reference to a global element', () {
       final schema = ExiSchemaCompiler.compile(
         id: 'references.xsd',

@@ -29,11 +29,14 @@ final class _Compiler {
   final bool localAttributesAreQualified;
 
   late final Map<String, XmlElement> _complexTypes = _collectComplexTypes();
+  late final Map<String, XmlElement> _modelGroups = _collectModelGroups();
   late final Map<String, XmlElement> _globalElementNodes = _collectGlobalElements();
   late final Map<String, XmlElement> _globalAttributeNodes = _collectGlobalAttributes();
   final Map<String, ExiElementDeclaration> _compiledGlobalElements = {};
   final Map<String, ExiAttributeDeclaration> _compiledGlobalAttributes = {};
+  final Map<String, ExiParticle> _compiledModelGroups = {};
   final Set<String> _compilingGlobalElements = {};
+  final Set<String> _compilingModelGroups = {};
 
   Map<String, XmlElement> _collectComplexTypes() {
     final result = <String, XmlElement>{};
@@ -57,6 +60,21 @@ final class _Compiler {
         throw FormatException('Duplicate global XSD attribute "$name"');
       }
       result[name] = attribute;
+    }
+    return result;
+  }
+
+  Map<String, XmlElement> _collectModelGroups() {
+    final result = <String, XmlElement>{};
+    for (final group in _children(root, 'group')) {
+      final name = group.getAttribute('name');
+      if (name == null || name.isEmpty) {
+        throw const FormatException('Global XSD model group is missing a name');
+      }
+      if (result.containsKey(name)) {
+        throw FormatException('Duplicate global XSD model group "$name"');
+      }
+      result[name] = group;
     }
     return result;
   }
@@ -155,26 +173,26 @@ final class _Compiler {
         final localNameOrder = left.name.localName.compareTo(right.name.localName);
         return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
       });
-    final sequence = _children(complexType, 'sequence').firstOrNull;
-    final choice = _children(complexType, 'choice').firstOrNull;
-    if (sequence != null && choice != null) {
+    final compositors = [
+      ..._children(complexType, 'sequence'),
+      ..._children(complexType, 'choice'),
+      ..._children(complexType, 'group'),
+    ];
+    if (compositors.length > 1) {
       throw UnsupportedError('A complex type with multiple compositors is not supported');
     }
-    if (sequence == null && choice == null) {
+    if (compositors.isEmpty) {
       if (attributes.isNotEmpty) {
         return ExiElementDeclaration.complex(name, attributes: attributes);
       }
       return ExiElementDeclaration.empty(name);
     }
-    final compositor = sequence ?? choice!;
-    if ((compositor.getAttribute('minOccurs') ?? '1') != '1' || (compositor.getAttribute('maxOccurs') ?? '1') != '1') {
-      throw UnsupportedError('Occurrence constraints on XSD compositors are not supported yet');
-    }
-    final particles = [for (final child in _children(compositor, 'element')) _compileElementParticle(child)];
-    final content = sequence != null ? ExiSequenceParticle(particles) : ExiChoiceParticle(particles);
+    final compositor = compositors.single;
+    final content = _compileParticle(compositor);
+    final particles = content is ExiSequenceParticle ? content.particles : const <ExiParticle>[];
     final isFixedSequence =
         attributes.isEmpty &&
-        sequence != null &&
+        compositor.name.local == 'sequence' &&
         particles.every(
           (particle) => particle is ExiElementParticle && particle.minOccurs == 1 && particle.maxOccurs == 1,
         );
@@ -184,6 +202,68 @@ final class _Compiler {
       ]);
     }
     return ExiElementDeclaration.complex(name, attributes: attributes, content: content);
+  }
+
+  ExiParticle _compileParticle(XmlElement particle) {
+    switch (particle.name.local) {
+      case 'element':
+        return _compileElementParticle(particle);
+      case 'sequence':
+      case 'choice':
+        _requireSingleCompositorOccurrence(particle);
+        final children = <ExiParticle>[];
+        for (final child in particle.children.whereType<XmlElement>()) {
+          if (child.name.namespaceUri != _xsdUri || child.name.local == 'annotation') {
+            continue;
+          }
+          if (child.name.local == 'all') {
+            throw UnsupportedError('The XSD all compositor is not supported yet');
+          }
+          if (!const {'element', 'sequence', 'choice', 'group'}.contains(child.name.local)) {
+            throw UnsupportedError('Unsupported XSD particle "${child.name.local}"');
+          }
+          children.add(_compileParticle(child));
+        }
+        return particle.name.local == 'sequence' ? ExiSequenceParticle(children) : ExiChoiceParticle(children);
+      case 'group':
+        _requireSingleCompositorOccurrence(particle);
+        final reference = particle.getAttribute('ref');
+        if (reference == null || reference.isEmpty) {
+          throw const FormatException('An XSD model-group particle must specify ref');
+        }
+        return _compileModelGroup(_resolveLocalReference(particle, reference, 'model-group'));
+      default:
+        throw UnsupportedError('Unsupported XSD particle "${particle.name.local}"');
+    }
+  }
+
+  ExiParticle _compileModelGroup(String localName) {
+    final cached = _compiledModelGroups[localName];
+    if (cached != null) {
+      return cached;
+    }
+    final group = _modelGroups[localName];
+    if (group == null) {
+      throw FormatException('Unknown global XSD model group "$localName"');
+    }
+    if (!_compilingModelGroups.add(localName)) {
+      throw UnsupportedError('Recursive XSD model group "$localName" is not supported yet');
+    }
+    try {
+      final compositors = [..._children(group, 'sequence'), ..._children(group, 'choice')];
+      if (compositors.length != 1) {
+        throw const FormatException('A global XSD model group must contain one sequence or choice');
+      }
+      return _compiledModelGroups[localName] = _compileParticle(compositors.single);
+    } finally {
+      _compilingModelGroups.remove(localName);
+    }
+  }
+
+  void _requireSingleCompositorOccurrence(XmlElement compositor) {
+    if ((compositor.getAttribute('minOccurs') ?? '1') != '1' || (compositor.getAttribute('maxOccurs') ?? '1') != '1') {
+      throw UnsupportedError('Occurrence constraints on XSD compositors are not supported yet');
+    }
   }
 
   ExiParticle _compileElementParticle(XmlElement element) {

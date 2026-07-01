@@ -18,8 +18,9 @@ The current decoder stage supports:
 - strict compiled schemas containing global elements, attributes, sequences,
   choices, and optional, bounded, or unbounded child particles;
 - XSD compilation for global elements, named/inline complex types, attributes,
-  global element and attribute references, sequences, choices, empty content,
-  occurrence ranges on elements, and primitive simple types;
+  global element and attribute references, named model groups, nested sequences
+  and choices, empty content, occurrence ranges on elements, and primitive
+  simple types;
 - schema-typed string, boolean, integer, decimal, float, binary, date, time,
   and date-time values;
 - URI, local-name, and value string-table partitions;
@@ -28,10 +29,9 @@ The current decoder stage supports:
 - XML reconstruction, including preserved namespace declarations.
 
 Datatype representation maps and user metadata remain unsupported. XSD
-model-group references, imports/includes, `all`, mixed content, occurrence
-ranges on compositors, non-strict and more general schema-informed grammars,
-self-contained elements, pre-compression, and compression are also not yet
-available.
+imports/includes, `all`, mixed content, occurrence ranges on compositors,
+non-strict and more general schema-informed grammars, self-contained elements,
+pre-compression, and compression are also not yet available.
 
 ```dart
 import 'dart:typed_data';

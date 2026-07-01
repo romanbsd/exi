@@ -76,6 +76,48 @@ void main() {
 
       expect(document.toXmlString(), '<root><item/></root>');
     });
+
+    test('decodes nested sequence and choice particles', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="first"/>
+              <xs:choice>
+                <xs:element name="left"/>
+                <xs:element name="right"/>
+              </xs:choice>
+              <xs:element name="last"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      // Root is 0; first is implicit; right is 1; last is implicit.
+      final document = _decode(schema, '01');
+
+      expect(document.toXmlString(), '<root><first/><right/><last/></root>');
+    });
+
+    test('decodes a referenced named model group', () {
+      final schema = _compile('''
+        <xs:group name="pair">
+          <xs:sequence>
+            <xs:element name="first"/>
+            <xs:element name="second"/>
+          </xs:sequence>
+        </xs:group>
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:group ref="pair"/>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      final document = _decode(schema, '0');
+
+      expect(document.toXmlString(), '<root><first/><second/></root>');
+    });
   });
 
   test('decodes required and optional schema attributes', () {
