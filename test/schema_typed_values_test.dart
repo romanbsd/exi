@@ -91,6 +91,70 @@ void main() {
     expect(document.toXmlString(), '<count>7</count>');
   });
 
+  test('decodes typed simple content after a required attribute', () {
+    const schemaId = 'simple-content';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="label">
+            <xs:complexType>
+              <xs:simpleContent>
+                <xs:extension base="xs:string">
+                  <xs:attribute name="id" type="xs:string" use="required"/>
+                </xs:extension>
+              </xs:simpleContent>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Root selection; required id and typed CH productions are implicit.
+      ..write('0')
+      ..write(_value('7'))
+      ..write(_value('hello'));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<label id="7">hello</label>');
+  });
+
+  test('applies the empty grammar to nilled simple content', () {
+    const schemaId = 'nilled-simple-content';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="label" nillable="true">
+            <xs:complexType>
+              <xs:simpleContent>
+                <xs:extension base="xs:string">
+                  <xs:attribute name="id" type="xs:string" use="required"/>
+                </xs:extension>
+              </xs:simpleContent>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Root=0; xsi:nil escape=1; true=10; required id remains implicit.
+      ..write('0110')
+      ..write(_value('7'));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.events.whereType<ExiAttribute>().map((event) => event.value), ['true', '7']);
+    expect(document.events.whereType<ExiCharacters>(), isEmpty);
+  });
+
   test('matches an OpenEXI strict schema-typed vector', () {
     const schemaId = 'openexi';
     final schema = ExiSchemaCompiler.compile(
@@ -127,6 +191,11 @@ String _unsigned(int value) {
     bits.write((group | (remainder == 0 ? 0 : 0x80)).toRadixString(2).padLeft(8, '0'));
   } while (remainder != 0);
   return bits.toString();
+}
+
+String _value(String value) {
+  final codePoints = value.runes.toList();
+  return '${_unsigned(codePoints.length + 2)}${codePoints.map(_unsigned).join()}';
 }
 
 Uint8List _pack(String bits) {

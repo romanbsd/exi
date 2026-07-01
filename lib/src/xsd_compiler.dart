@@ -187,6 +187,13 @@ final class _Compiler {
       'true' || '1' => true,
       final value => throw FormatException('Invalid XSD mixed value "$value"'),
     };
+    final simpleContent = _children(complexType, 'simpleContent').firstOrNull;
+    if (simpleContent != null) {
+      if (mixed) {
+        throw const FormatException('XSD simple content cannot be mixed');
+      }
+      return _compileSimpleContent(name, simpleContent, nillable: nillable);
+    }
     final attributes = [for (final attribute in _children(complexType, 'attribute')) _compileAttribute(attribute)]
       ..sort((left, right) {
         final localNameOrder = left.name.localName.compareTo(right.name.localName);
@@ -230,6 +237,31 @@ final class _Compiler {
       mixed: mixed,
       nillable: nillable,
     );
+  }
+
+  ExiElementDeclaration _compileSimpleContent(ExiQName name, XmlElement simpleContent, {required bool nillable}) {
+    final derivations = [..._children(simpleContent, 'extension'), ..._children(simpleContent, 'restriction')];
+    if (derivations.length != 1) {
+      throw const FormatException('XSD simple content must contain one extension or restriction');
+    }
+    final derivation = derivations.single;
+    final base = derivation.getAttribute('base');
+    if (base == null) {
+      throw const FormatException('XSD simple-content derivation is missing its base type');
+    }
+    final datatype =
+        _resolveSimpleDatatype(base) ?? (throw UnsupportedError('Unsupported XSD simple-content base "$base"'));
+    for (final child in derivation.children.whereType<XmlElement>()) {
+      if (child.name.namespaceUri == _xsdUri && child.name.local != 'annotation' && child.name.local != 'attribute') {
+        throw UnsupportedError('Unsupported XSD simple-content component "${child.name.local}"');
+      }
+    }
+    final attributes = [for (final attribute in _children(derivation, 'attribute')) _compileAttribute(attribute)]
+      ..sort((left, right) {
+        final localNameOrder = left.name.localName.compareTo(right.name.localName);
+        return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
+      });
+    return ExiElementDeclaration.simpleContent(name, datatype, attributes: attributes, nillable: nillable);
   }
 
   ExiParticle _compileParticle(XmlElement particle) {

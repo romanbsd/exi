@@ -292,20 +292,6 @@ final class _DecoderState {
 
   void _decodeDeclaredContent(ExiQName elementName, ExiElementDeclaration declaration) {
     final datatype = declaration.datatype;
-    if (datatype != null) {
-      if (declaration.nillable && input.readNBitUnsigned(1) == 1) {
-        final value = ExiValueDecoder(input, strings).read(ExiDatatype.boolean, _xsiNilName);
-        events.add(ExiAttribute(_xsiNilName, value));
-        if (value == 'true') {
-          events.add(ExiEndElement(elementName));
-          return;
-        }
-      }
-      events.add(ExiCharacters(ExiValueDecoder(input, strings).read(datatype, elementName)));
-      events.add(ExiEndElement(elementName));
-      return;
-    }
-
     final attributes = [...declaration.attributes]
       ..sort((left, right) {
         final localNameOrder = left.name.localName.compareTo(right.name.localName);
@@ -329,14 +315,18 @@ final class _DecoderState {
         }
       }
       if (contentIsReachable) {
-        for (final child in _leadingElements(content)) {
-          candidates.add(_DeclaredEvent.element(child));
-        }
-        if (_isNullable(content)) {
-          candidates.add(const _DeclaredEvent.end());
-        }
-        if (declaration.mixed && !nilled) {
-          candidates.add(const _DeclaredEvent.characters());
+        if (datatype != null) {
+          candidates.add(nilled ? const _DeclaredEvent.end() : const _DeclaredEvent.typedCharacters());
+        } else {
+          for (final child in _leadingElements(content)) {
+            candidates.add(_DeclaredEvent.element(child));
+          }
+          if (_isNullable(content)) {
+            candidates.add(const _DeclaredEvent.end());
+          }
+          if (declaration.mixed && !nilled) {
+            candidates.add(const _DeclaredEvent.characters());
+          }
         }
       }
       final canReadNil = declaration.nillable && !nilSeen && specialAttributesAllowed;
@@ -381,6 +371,11 @@ final class _DecoderState {
           specialAttributesAllowed = false;
           attributeIndex = attributes.length;
           events.add(ExiCharacters(strings.readValue(input, elementName)));
+        case _DeclaredEventKind.typedCharacters:
+          specialAttributesAllowed = false;
+          events.add(ExiCharacters(ExiValueDecoder(input, strings).read(datatype!, elementName)));
+          events.add(ExiEndElement(elementName));
+          return;
         case _DeclaredEventKind.end:
           specialAttributesAllowed = false;
           events.add(ExiEndElement(elementName));
@@ -467,7 +462,7 @@ final class _DecoderState {
   }
 }
 
-enum _DeclaredEventKind { attribute, element, end, characters }
+enum _DeclaredEventKind { attribute, element, end, characters, typedCharacters }
 
 final class _DeclaredEvent {
   const _DeclaredEvent.attribute(this.attributeIndex, this.attribute)
@@ -483,6 +478,12 @@ final class _DeclaredEvent {
 
   const _DeclaredEvent.characters()
     : kind = _DeclaredEventKind.characters,
+      attributeIndex = null,
+      attribute = null,
+      element = null;
+
+  const _DeclaredEvent.typedCharacters()
+    : kind = _DeclaredEventKind.typedCharacters,
       attributeIndex = null,
       attribute = null,
       element = null;

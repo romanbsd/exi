@@ -45,6 +45,15 @@ final class ExiElementDeclaration {
       content = null,
       mixed = false;
 
+  const ExiElementDeclaration.simpleContent(
+    this.name,
+    this.datatype, {
+    this.attributes = const [],
+    this.nillable = false,
+  }) : children = const [],
+       content = null,
+       mixed = false;
+
   const ExiElementDeclaration.complex(
     this.name, {
     this.attributes = const [],

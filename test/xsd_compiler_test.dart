@@ -66,6 +66,29 @@ void main() {
       expect(schema.globalElements.single.datatype, ExiDatatype.integer);
     });
 
+    test('compiles simple content with attributes', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'simple-content.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:complexType name="ValueWithUnit">
+              <xs:simpleContent>
+                <xs:extension base="xs:decimal">
+                  <xs:attribute name="unit" type="xs:string" use="required"/>
+                </xs:extension>
+              </xs:simpleContent>
+            </xs:complexType>
+            <xs:element name="value" type="ValueWithUnit"/>
+          </xs:schema>
+        ''',
+      );
+
+      final value = schema.globalElements.single;
+      expect(value.datatype, ExiDatatype.decimal);
+      expect(value.attributes.single.name.localName, 'unit');
+      expect(value.attributes.single.required, isTrue);
+    });
+
     test('rejects unsupported simple type facets', () {
       expect(
         () => ExiSchemaCompiler.compile(
