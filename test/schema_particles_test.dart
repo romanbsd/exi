@@ -212,6 +212,37 @@ void main() {
     expect(document.toXmlString(), '<root id="7"/>');
   });
 
+  test('decodes inherited complex-type attributes and particles', () {
+    final schema = _compile('''
+      <xs:complexType name="Base">
+        <xs:sequence>
+          <xs:element name="first"/>
+        </xs:sequence>
+        <xs:attribute name="id" use="required"/>
+      </xs:complexType>
+      <xs:complexType name="Derived">
+        <xs:complexContent>
+          <xs:extension base="Base">
+            <xs:sequence>
+              <xs:element name="second"/>
+            </xs:sequence>
+            <xs:attribute name="kind" use="required"/>
+          </xs:extension>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:element name="root" type="Derived"/>
+    ''');
+    final bits = StringBuffer()
+      // Root and both required attribute productions are implicit.
+      ..write('0')
+      ..write(_value('7'))
+      ..write(_value('example'));
+
+    final document = _decode(schema, bits.toString());
+
+    expect(document.toXmlString(), '<root id="7" kind="example"><first/><second/></root>');
+  });
+
   test('decodes characters in empty mixed content', () {
     final schema = _compile('''
       <xs:element name="root">

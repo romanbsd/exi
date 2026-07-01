@@ -37,6 +37,7 @@ final class _Compiler {
   final Map<String, ExiAttributeDeclaration> _compiledGlobalAttributes = {};
   final Map<String, ExiParticle> _compiledModelGroups = {};
   final Map<String, ExiDatatype> _compiledSimpleTypes = {};
+  final Set<String> _compilingComplexTypes = {};
   final Set<String> _compilingGlobalElements = {};
   final Set<String> _compilingModelGroups = {};
   final Set<String> _compilingSimpleTypes = {};
@@ -167,7 +168,7 @@ final class _Compiler {
       if (complexType == null) {
         throw UnsupportedError('Unknown or unsupported XSD type "$typeName"');
       }
-      return _compileComplexType(name, complexType, nillable: nillable);
+      return _compileNamedComplexType(name, _localPart(typeName), nillable: nillable);
     }
 
     final inlineComplex = _children(element, 'complexType').firstOrNull;
@@ -181,6 +182,21 @@ final class _Compiler {
     return ExiElementDeclaration.empty(name, nillable: nillable);
   }
 
+  ExiElementDeclaration _compileNamedComplexType(ExiQName name, String typeName, {required bool nillable}) {
+    final complexType = _complexTypes[typeName];
+    if (complexType == null) {
+      throw FormatException('Unknown global XSD complex type "$typeName"');
+    }
+    if (!_compilingComplexTypes.add(typeName)) {
+      throw UnsupportedError('Recursive XSD complex type "$typeName" is not supported');
+    }
+    try {
+      return _compileComplexType(name, complexType, nillable: nillable);
+    } finally {
+      _compilingComplexTypes.remove(typeName);
+    }
+  }
+
   ExiElementDeclaration _compileComplexType(ExiQName name, XmlElement complexType, {required bool nillable}) {
     final mixed = switch (complexType.getAttribute('mixed')) {
       null || 'false' || '0' => false,
@@ -188,11 +204,18 @@ final class _Compiler {
       final value => throw FormatException('Invalid XSD mixed value "$value"'),
     };
     final simpleContent = _children(complexType, 'simpleContent').firstOrNull;
+    final complexContent = _children(complexType, 'complexContent').firstOrNull;
+    if (simpleContent != null && complexContent != null) {
+      throw const FormatException('An XSD complex type cannot have both simple and complex content');
+    }
     if (simpleContent != null) {
       if (mixed) {
         throw const FormatException('XSD simple content cannot be mixed');
       }
       return _compileSimpleContent(name, simpleContent, nillable: nillable);
+    }
+    if (complexContent != null) {
+      return _compileComplexContent(name, complexContent, mixed: mixed, nillable: nillable);
     }
     final attributes = [for (final attribute in _children(complexType, 'attribute')) _compileAttribute(attribute)]
       ..sort((left, right) {
@@ -237,6 +260,93 @@ final class _Compiler {
       mixed: mixed,
       nillable: nillable,
     );
+  }
+
+  ExiElementDeclaration _compileComplexContent(
+    ExiQName name,
+    XmlElement complexContent, {
+    required bool mixed,
+    required bool nillable,
+  }) {
+    final extension = _children(complexContent, 'extension').firstOrNull;
+    if (extension == null || _children(complexContent, 'restriction').isNotEmpty) {
+      throw UnsupportedError('Only XSD complex-content extension is supported');
+    }
+    final baseName = extension.getAttribute('base');
+    if (baseName == null) {
+      throw const FormatException('XSD complex-content extension is missing its base type');
+    }
+    final base = _compileNamedComplexType(name, _localPart(baseName), nillable: nillable);
+    if (base.datatype != null) {
+      throw UnsupportedError('XSD complex content cannot extend simple content');
+    }
+
+    final attributes =
+        [...base.attributes, for (final attribute in _children(extension, 'attribute')) _compileAttribute(attribute)]
+          ..sort((left, right) {
+            final localNameOrder = left.name.localName.compareTo(right.name.localName);
+            return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
+          });
+    for (var index = 1; index < attributes.length; index++) {
+      if (attributes[index - 1].name == attributes[index].name) {
+        throw FormatException('Duplicate inherited XSD attribute "${attributes[index].name.localName}"');
+      }
+    }
+
+    final compositors = [
+      ..._children(extension, 'sequence'),
+      ..._children(extension, 'choice'),
+      ..._children(extension, 'all'),
+      ..._children(extension, 'group'),
+    ];
+    for (final child in extension.children.whereType<XmlElement>()) {
+      if (child.name.namespaceUri == _xsdUri &&
+          !const {'annotation', 'sequence', 'choice', 'all', 'group', 'attribute'}.contains(child.name.local)) {
+        throw UnsupportedError('Unsupported XSD complex-content component "${child.name.local}"');
+      }
+    }
+    if (compositors.length > 1) {
+      throw UnsupportedError('A complex-content extension with multiple compositors is not supported');
+    }
+    final extensionContent = compositors.isEmpty ? const ExiEmptyParticle() : _compileParticle(compositors.single);
+    final content = _concatenateParticles(_declarationContent(base), extensionContent);
+    final contentMixed = switch (complexContent.getAttribute('mixed')) {
+      null || 'false' || '0' => false,
+      'true' || '1' => true,
+      final value => throw FormatException('Invalid XSD mixed value "$value"'),
+    };
+    return ExiElementDeclaration.complex(
+      name,
+      attributes: attributes,
+      content: content,
+      mixed: mixed || contentMixed || base.mixed,
+      nillable: nillable,
+    );
+  }
+
+  ExiParticle _declarationContent(ExiElementDeclaration declaration) {
+    return declaration.content ??
+        (declaration.children.isEmpty
+            ? const ExiEmptyParticle()
+            : ExiSequenceParticle([for (final child in declaration.children) ExiElementParticle(child)]));
+  }
+
+  ExiParticle _concatenateParticles(ExiParticle left, ExiParticle right) {
+    final particles = <ExiParticle>[];
+    for (final particle in [left, right]) {
+      switch (particle) {
+        case ExiEmptyParticle():
+          break;
+        case ExiSequenceParticle(particles: final nested):
+          particles.addAll(nested);
+        default:
+          particles.add(particle);
+      }
+    }
+    if (particles.isEmpty) {
+      return const ExiEmptyParticle();
+    }
+    return particles.length == 1 ? particles.single : ExiSequenceParticle(particles);
   }
 
   ExiElementDeclaration _compileSimpleContent(ExiQName name, XmlElement simpleContent, {required bool nillable}) {

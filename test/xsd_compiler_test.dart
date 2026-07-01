@@ -26,6 +26,65 @@ void main() {
       expect(root.children[1].datatype, ExiDatatype.integer);
     });
 
+    test('extends named complex types with attributes and particles', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'complex-extension.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:complexType name="Base">
+              <xs:sequence>
+                <xs:element name="first"/>
+              </xs:sequence>
+              <xs:attribute name="id" use="required"/>
+            </xs:complexType>
+            <xs:complexType name="Derived">
+              <xs:complexContent>
+                <xs:extension base="Base">
+                  <xs:sequence>
+                    <xs:element name="second"/>
+                  </xs:sequence>
+                  <xs:attribute name="kind" use="required"/>
+                </xs:extension>
+              </xs:complexContent>
+            </xs:complexType>
+            <xs:element name="root" type="Derived"/>
+          </xs:schema>
+        ''',
+      );
+
+      final root = schema.globalElements.single;
+      expect(root.attributes.map((attribute) => attribute.name.localName), ['id', 'kind']);
+      final content = root.content as ExiSequenceParticle;
+      expect(content.particles.cast<ExiElementParticle>().map((particle) => particle.element.name.localName), [
+        'first',
+        'second',
+      ]);
+    });
+
+    test('rejects recursive complex type inheritance', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'recursive-complex.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:complexType name="First">
+                <xs:complexContent>
+                  <xs:extension base="Second"/>
+                </xs:complexContent>
+              </xs:complexType>
+              <xs:complexType name="Second">
+                <xs:complexContent>
+                  <xs:extension base="First"/>
+                </xs:complexContent>
+              </xs:complexType>
+              <xs:element name="root" type="First"/>
+            </xs:schema>
+          ''',
+        ),
+        throwsUnsupportedError,
+      );
+    });
+
     test('compiles inline empty and simple type declarations', () {
       final schema = ExiSchemaCompiler.compile(
         id: 'inline.xsd',
