@@ -133,32 +133,37 @@ final class _Compiler {
       throw const FormatException('XSD element declaration is missing a name');
     }
     final name = ExiQName(uri: global || localElementsAreQualified ? targetNamespace : '', localName: localName);
+    final nillable = switch (element.getAttribute('nillable')) {
+      null || 'false' || '0' => false,
+      'true' || '1' => true,
+      final value => throw FormatException('Invalid XSD nillable value "$value"'),
+    };
 
     final typeName = element.getAttribute('type');
     if (typeName != null) {
       final builtin = _builtinDatatype(typeName);
       if (builtin != null) {
-        return ExiElementDeclaration.value(name, builtin);
+        return ExiElementDeclaration.value(name, builtin, nillable: nillable);
       }
       final complexType = _complexTypes[_localPart(typeName)];
       if (complexType == null) {
         throw UnsupportedError('Unknown or unsupported XSD type "$typeName"');
       }
-      return _compileComplexType(name, complexType);
+      return _compileComplexType(name, complexType, nillable: nillable);
     }
 
     final inlineComplex = _children(element, 'complexType').firstOrNull;
     if (inlineComplex != null) {
-      return _compileComplexType(name, inlineComplex);
+      return _compileComplexType(name, inlineComplex, nillable: nillable);
     }
     final inlineSimple = _children(element, 'simpleType').firstOrNull;
     if (inlineSimple != null) {
-      return ExiElementDeclaration.value(name, _compileSimpleType(inlineSimple));
+      return ExiElementDeclaration.value(name, _compileSimpleType(inlineSimple), nillable: nillable);
     }
-    return ExiElementDeclaration.empty(name);
+    return ExiElementDeclaration.empty(name, nillable: nillable);
   }
 
-  ExiElementDeclaration _compileComplexType(ExiQName name, XmlElement complexType) {
+  ExiElementDeclaration _compileComplexType(ExiQName name, XmlElement complexType, {required bool nillable}) {
     final mixed = switch (complexType.getAttribute('mixed')) {
       null || 'false' || '0' => false,
       'true' || '1' => true,
@@ -180,9 +185,9 @@ final class _Compiler {
     }
     if (compositors.isEmpty) {
       if (attributes.isNotEmpty || mixed) {
-        return ExiElementDeclaration.complex(name, attributes: attributes, mixed: mixed);
+        return ExiElementDeclaration.complex(name, attributes: attributes, mixed: mixed, nillable: nillable);
       }
-      return ExiElementDeclaration.empty(name);
+      return ExiElementDeclaration.empty(name, nillable: nillable);
     }
     final compositor = compositors.single;
     final content = _compileParticle(compositor);
@@ -198,9 +203,15 @@ final class _Compiler {
     if (isFixedSequence) {
       return ExiElementDeclaration.sequence(name, [
         for (final particle in particles.cast<ExiElementParticle>()) particle.element,
-      ]);
+      ], nillable: nillable);
     }
-    return ExiElementDeclaration.complex(name, attributes: attributes, content: content, mixed: mixed);
+    return ExiElementDeclaration.complex(
+      name,
+      attributes: attributes,
+      content: content,
+      mixed: mixed,
+      nillable: nillable,
+    );
   }
 
   ExiParticle _compileParticle(XmlElement particle) {
@@ -333,9 +344,10 @@ final class _Compiler {
   ExiElementDeclaration _resolveElementReference(XmlElement element, String reference) {
     if (element.getAttribute('name') != null ||
         element.getAttribute('type') != null ||
+        element.getAttribute('nillable') != null ||
         _children(element, 'complexType').isNotEmpty ||
         _children(element, 'simpleType').isNotEmpty) {
-      throw const FormatException('An XSD element reference cannot declare a name or type');
+      throw const FormatException('An XSD element reference cannot declare a name, type, or nillability');
     }
     return _compileGlobalElement(_resolveLocalReference(element, reference, 'element'));
   }

@@ -26,28 +26,33 @@ final class ExiSchema {
 }
 
 final class ExiElementDeclaration {
-  const ExiElementDeclaration.empty(this.name)
+  const ExiElementDeclaration.empty(this.name, {this.nillable = false})
     : children = const [],
       datatype = null,
       attributes = const [],
       content = null,
       mixed = false;
 
-  const ExiElementDeclaration.sequence(this.name, this.children)
+  const ExiElementDeclaration.sequence(this.name, this.children, {this.nillable = false})
     : datatype = null,
       attributes = const [],
       content = null,
       mixed = false;
 
-  const ExiElementDeclaration.value(this.name, this.datatype)
+  const ExiElementDeclaration.value(this.name, this.datatype, {this.nillable = false})
     : children = const [],
       attributes = const [],
       content = null,
       mixed = false;
 
-  const ExiElementDeclaration.complex(this.name, {this.attributes = const [], this.content, this.mixed = false})
-    : children = const [],
-      datatype = null;
+  const ExiElementDeclaration.complex(
+    this.name, {
+    this.attributes = const [],
+    this.content,
+    this.mixed = false,
+    this.nillable = false,
+  }) : children = const [],
+       datatype = null;
 
   final ExiQName name;
   final List<ExiElementDeclaration> children;
@@ -55,6 +60,7 @@ final class ExiElementDeclaration {
   final List<ExiAttributeDeclaration> attributes;
   final ExiParticle? content;
   final bool mixed;
+  final bool nillable;
 }
 
 final class ExiAttributeDeclaration {

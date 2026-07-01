@@ -9,6 +9,7 @@ import 'string_table.dart';
 import 'value_decoder.dart';
 
 const _cookie = [0x24, 0x45, 0x58, 0x49];
+const _xsiNilName = ExiQName(uri: 'http://www.w3.org/2001/XMLSchema-instance', localName: 'nil', prefix: 'xsi');
 
 final class ExiDecoder {
   ExiDecoder({this.options = const ExiOptions(), this.schemaResolver}) {
@@ -292,6 +293,14 @@ final class _DecoderState {
   void _decodeDeclaredContent(ExiQName elementName, ExiElementDeclaration declaration) {
     final datatype = declaration.datatype;
     if (datatype != null) {
+      if (declaration.nillable && input.readNBitUnsigned(1) == 1) {
+        final value = ExiValueDecoder(input, strings).read(ExiDatatype.boolean, _xsiNilName);
+        events.add(ExiAttribute(_xsiNilName, value));
+        if (value == 'true') {
+          events.add(ExiEndElement(elementName));
+          return;
+        }
+      }
       events.add(ExiCharacters(ExiValueDecoder(input, strings).read(datatype, elementName)));
       events.add(ExiEndElement(elementName));
       return;
@@ -304,6 +313,9 @@ final class _DecoderState {
       });
     var attributeIndex = 0;
     var content = declaration.content ?? _legacyContent(declaration.children);
+    var nilSeen = false;
+    var nilled = false;
+    var specialAttributesAllowed = true;
 
     while (true) {
       final candidates = <_DeclaredEvent>[];
@@ -323,26 +335,40 @@ final class _DecoderState {
         if (_isNullable(content)) {
           candidates.add(const _DeclaredEvent.end());
         }
-        if (declaration.mixed) {
+        if (declaration.mixed && !nilled) {
           candidates.add(const _DeclaredEvent.characters());
         }
       }
-      if (candidates.isEmpty) {
+      final canReadNil = declaration.nillable && !nilSeen && specialAttributesAllowed;
+      final candidateCount = candidates.length + (canReadNil ? 1 : 0);
+      if (candidateCount == 0) {
         throw const FormatException('Schema grammar has no valid next event');
       }
 
-      final selected = input.readNBitUnsigned(_bitWidth(candidates.length));
+      final selected = input.readNBitUnsigned(_bitWidth(candidateCount));
+      if (canReadNil && selected == candidates.length) {
+        final value = ExiValueDecoder(input, strings).read(ExiDatatype.boolean, _xsiNilName);
+        events.add(ExiAttribute(_xsiNilName, value));
+        nilSeen = true;
+        if (value == 'true') {
+          content = const ExiEmptyParticle();
+          nilled = true;
+        }
+        continue;
+      }
       if (selected >= candidates.length) {
         throw const FormatException('Invalid schema-informed element event code');
       }
       final event = candidates[selected];
       switch (event.kind) {
         case _DeclaredEventKind.attribute:
+          specialAttributesAllowed = false;
           final attribute = event.attribute!;
           attributeIndex = event.attributeIndex! + 1;
           final value = ExiValueDecoder(input, strings).read(attribute.datatype, attribute.name);
           events.add(ExiAttribute(attribute.name, value));
         case _DeclaredEventKind.element:
+          specialAttributesAllowed = false;
           attributeIndex = attributes.length;
           final child = event.element!;
           final derivative = _derive(content, child);
@@ -352,9 +378,11 @@ final class _DecoderState {
           content = derivative;
           _decodeElement(child.name, declaration: child);
         case _DeclaredEventKind.characters:
+          specialAttributesAllowed = false;
           attributeIndex = attributes.length;
           events.add(ExiCharacters(strings.readValue(input, elementName)));
         case _DeclaredEventKind.end:
+          specialAttributesAllowed = false;
           events.add(ExiEndElement(elementName));
           return;
       }

@@ -229,6 +229,44 @@ void main() {
     expect(document.toXmlString(), '<root>hello</root>');
   });
 
+  test('decodes xsi:nil true using the empty type grammar', () {
+    final schema = _compile('''
+      <xs:element name="root" nillable="true">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="required"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    ''');
+
+    // Root=0; xsi:nil escape=1; Boolean true=10; EE is implicit.
+    final document = _decode(schema, '0110');
+    final nil = document.events.whereType<ExiAttribute>().single;
+
+    expect(nil.name.uri, 'http://www.w3.org/2001/XMLSchema-instance');
+    expect(nil.name.localName, 'nil');
+    expect(nil.value, 'true');
+    expect(document.events.whereType<ExiStartElement>().map((event) => event.name.localName), ['root']);
+  });
+
+  test('continues with normal content after xsi:nil false', () {
+    final schema = _compile('''
+      <xs:element name="root" nillable="true">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="required"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    ''');
+
+    // Root=0; xsi:nil escape=1; Boolean false=00; required child is implicit.
+    final document = _decode(schema, '0100');
+
+    expect(document.events.whereType<ExiStartElement>().map((event) => event.name.localName), ['root', 'required']);
+  });
+
   test('decodes mixed characters around a declared child', () {
     final schema = _compile('''
       <xs:element name="root">

@@ -47,6 +47,33 @@ void main() {
       expect(schema.globalElements[1].datatype, ExiDatatype.string);
     });
 
+    test('compiles nillable element declarations', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'nillable.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="root" nillable="true"/>
+          </xs:schema>
+        ''',
+      );
+
+      expect(schema.globalElements.single.nillable, isTrue);
+    });
+
+    test('rejects an invalid nillable flag', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'invalid-nillable.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:element name="root" nillable="sometimes"/>
+            </xs:schema>
+          ''',
+        ),
+        throwsFormatException,
+      );
+    });
+
     test('compiles occurrence ranges and choices into particle models', () {
       final schema = ExiSchemaCompiler.compile(
         id: 'repeated.xsd',
