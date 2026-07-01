@@ -29,14 +29,17 @@ final class _Compiler {
   final bool localAttributesAreQualified;
 
   late final Map<String, XmlElement> _complexTypes = _collectComplexTypes();
+  late final Map<String, XmlElement> _simpleTypes = _collectSimpleTypes();
   late final Map<String, XmlElement> _modelGroups = _collectModelGroups();
   late final Map<String, XmlElement> _globalElementNodes = _collectGlobalElements();
   late final Map<String, XmlElement> _globalAttributeNodes = _collectGlobalAttributes();
   final Map<String, ExiElementDeclaration> _compiledGlobalElements = {};
   final Map<String, ExiAttributeDeclaration> _compiledGlobalAttributes = {};
   final Map<String, ExiParticle> _compiledModelGroups = {};
+  final Map<String, ExiDatatype> _compiledSimpleTypes = {};
   final Set<String> _compilingGlobalElements = {};
   final Set<String> _compilingModelGroups = {};
+  final Set<String> _compilingSimpleTypes = {};
 
   Map<String, XmlElement> _collectComplexTypes() {
     final result = <String, XmlElement>{};
@@ -45,6 +48,21 @@ final class _Compiler {
       if (name != null) {
         result[name] = element;
       }
+    }
+    return result;
+  }
+
+  Map<String, XmlElement> _collectSimpleTypes() {
+    final result = <String, XmlElement>{};
+    for (final element in _children(root, 'simpleType')) {
+      final name = element.getAttribute('name');
+      if (name == null || name.isEmpty) {
+        throw const FormatException('Global XSD simple type is missing a name');
+      }
+      if (result.containsKey(name)) {
+        throw FormatException('Duplicate global XSD simple type "$name"');
+      }
+      result[name] = element;
     }
     return result;
   }
@@ -141,9 +159,9 @@ final class _Compiler {
 
     final typeName = element.getAttribute('type');
     if (typeName != null) {
-      final builtin = _builtinDatatype(typeName);
-      if (builtin != null) {
-        return ExiElementDeclaration.value(name, builtin, nillable: nillable);
+      final simpleDatatype = _resolveSimpleDatatype(typeName);
+      if (simpleDatatype != null) {
+        return ExiElementDeclaration.value(name, simpleDatatype, nillable: nillable);
       }
       final complexType = _complexTypes[_localPart(typeName)];
       if (complexType == null) {
@@ -402,7 +420,7 @@ final class _Compiler {
     final typeName = attribute.getAttribute('type');
     final inlineSimple = _children(attribute, 'simpleType').firstOrNull;
     final datatype = typeName != null
-        ? _builtinDatatype(typeName)
+        ? _resolveSimpleDatatype(typeName)
         : inlineSimple != null
         ? _compileSimpleType(inlineSimple)
         : ExiDatatype.string;
@@ -431,7 +449,7 @@ final class _Compiler {
     final typeName = attribute.getAttribute('type');
     final inlineSimple = _children(attribute, 'simpleType').firstOrNull;
     final datatype = typeName != null
-        ? _builtinDatatype(typeName)
+        ? _resolveSimpleDatatype(typeName)
         : inlineSimple != null
         ? _compileSimpleType(inlineSimple)
         : ExiDatatype.string;
@@ -459,7 +477,44 @@ final class _Compiler {
     if (base == null) {
       throw UnsupportedError('Only XSD simple-type restrictions are supported');
     }
-    return _builtinDatatype(base) ?? (throw UnsupportedError('Unsupported XSD simple type "$base"'));
+    final facets = restriction!.children.whereType<XmlElement>().where(
+      (child) => child.name.namespaceUri == _xsdUri && child.name.local != 'annotation',
+    );
+    if (facets.isNotEmpty) {
+      throw UnsupportedError('XSD simple-type facets are not supported yet');
+    }
+    return _resolveSimpleDatatype(base) ?? (throw UnsupportedError('Unsupported XSD simple type "$base"'));
+  }
+
+  ExiDatatype? _resolveSimpleDatatype(String qualifiedName) {
+    final builtin = _builtinDatatype(qualifiedName);
+    if (builtin != null) {
+      return builtin;
+    }
+    final localName = _localPart(qualifiedName);
+    if (!_simpleTypes.containsKey(localName)) {
+      return null;
+    }
+    return _compileNamedSimpleType(localName);
+  }
+
+  ExiDatatype _compileNamedSimpleType(String localName) {
+    final cached = _compiledSimpleTypes[localName];
+    if (cached != null) {
+      return cached;
+    }
+    final simpleType = _simpleTypes[localName];
+    if (simpleType == null) {
+      throw FormatException('Unknown global XSD simple type "$localName"');
+    }
+    if (!_compilingSimpleTypes.add(localName)) {
+      throw UnsupportedError('Recursive XSD simple type "$localName" is not supported');
+    }
+    try {
+      return _compiledSimpleTypes[localName] = _compileSimpleType(simpleType);
+    } finally {
+      _compilingSimpleTypes.remove(localName);
+    }
   }
 
   void _requireGlobalOccurrence(XmlElement element) {

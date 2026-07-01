@@ -47,6 +47,64 @@ void main() {
       expect(schema.globalElements[1].datatype, ExiDatatype.string);
     });
 
+    test('compiles named and chained simple type restrictions', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'named-simple.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:simpleType name="BaseCount">
+              <xs:restriction base="xs:integer"/>
+            </xs:simpleType>
+            <xs:simpleType name="Count">
+              <xs:restriction base="BaseCount"/>
+            </xs:simpleType>
+            <xs:element name="count" type="Count"/>
+          </xs:schema>
+        ''',
+      );
+
+      expect(schema.globalElements.single.datatype, ExiDatatype.integer);
+    });
+
+    test('rejects unsupported simple type facets', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'facets.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:simpleType name="Code">
+                <xs:restriction base="xs:string">
+                  <xs:enumeration value="A"/>
+                </xs:restriction>
+              </xs:simpleType>
+              <xs:element name="code" type="Code"/>
+            </xs:schema>
+          ''',
+        ),
+        throwsUnsupportedError,
+      );
+    });
+
+    test('rejects recursive simple type restrictions', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'recursive-simple.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:simpleType name="First">
+                <xs:restriction base="Second"/>
+              </xs:simpleType>
+              <xs:simpleType name="Second">
+                <xs:restriction base="First"/>
+              </xs:simpleType>
+              <xs:element name="value" type="First"/>
+            </xs:schema>
+          ''',
+        ),
+        throwsUnsupportedError,
+      );
+    });
+
     test('compiles nillable element declarations', () {
       final schema = ExiSchemaCompiler.compile(
         id: 'nillable.xsd',

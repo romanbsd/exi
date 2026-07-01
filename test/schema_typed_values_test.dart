@@ -65,6 +65,32 @@ void main() {
     expect(document.toXmlString(), '<when>2024-07-01T12:34:56.25+02:30</when>');
   });
 
+  test('decodes a value declared through a named simple type', () {
+    const schemaId = 'named-simple';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Count">
+            <xs:restriction base="xs:integer"/>
+          </xs:simpleType>
+          <xs:element name="count" type="Count"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Root selection, positive integer sign, then magnitude 7.
+      ..write('00')
+      ..write(_unsigned(7));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<count>7</count>');
+  });
+
   test('matches an OpenEXI strict schema-typed vector', () {
     const schemaId = 'openexi';
     final schema = ExiSchemaCompiler.compile(
