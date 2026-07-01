@@ -570,6 +570,57 @@ void main() {
       expect(schema.globalElements[1].datatype, ExiDatatype.unsignedByte);
     });
 
+    test('applies local element and attribute form overrides', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'forms.xsd',
+        source: '''
+          <xs:schema
+              xmlns:xs="http://www.w3.org/2001/XMLSchema"
+              targetNamespace="urn:example"
+              elementFormDefault="unqualified"
+              attributeFormDefault="qualified">
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:sequence>
+                  <xs:element name="qualifiedChild" form="qualified"/>
+                  <xs:element name="plainChild"/>
+                </xs:sequence>
+                <xs:attribute name="plain" form="unqualified"/>
+                <xs:attribute name="qualified"/>
+              </xs:complexType>
+            </xs:element>
+          </xs:schema>
+        ''',
+      );
+
+      final root = schema.globalElements.single;
+      final particles = (root.content as ExiSequenceParticle).particles.cast<ExiElementParticle>().toList();
+      expect(particles[0].element.name.uri, 'urn:example');
+      expect(particles[1].element.name.uri, isEmpty);
+      expect(root.attributes[0].name, const ExiQName(localName: 'plain'));
+      expect(root.attributes[1].name, const ExiQName(uri: 'urn:example', localName: 'qualified'));
+    });
+
+    test('rejects invalid namespace form values', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'invalid-form.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:element name="root">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="child" form="sometimes"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:schema>
+          ''',
+        ),
+        throwsFormatException,
+      );
+    });
+
     test('compiles mixed complex content', () {
       final schema = ExiSchemaCompiler.compile(
         id: 'mixed.xsd',

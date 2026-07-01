@@ -363,6 +363,37 @@ void main() {
     expect(document.toXmlString(), '<root id="7" kind="example"/>');
   });
 
+  test('decodes qualified local names from schema form overrides', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'forms',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:example">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="child" form="qualified"/>
+              </xs:sequence>
+              <xs:attribute name="id" form="qualified" use="required"/>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer()
+      // Root and required attribute/child productions are schema-declared.
+      ..write('0')
+      ..write(_value('7'));
+
+    final document = _decode(schema, bits.toString());
+    final attribute = document.events.whereType<ExiAttribute>().single;
+    final elements = document.events.whereType<ExiStartElement>().toList();
+
+    expect(attribute.name, const ExiQName(uri: 'urn:example', localName: 'id'));
+    expect(elements[1].name, const ExiQName(uri: 'urn:example', localName: 'child'));
+  });
+
   test('matches an OpenEXI strict schema-attribute vector', () {
     final schema = _compile('''
       <xs:element name="root">

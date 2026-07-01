@@ -169,7 +169,13 @@ final class _Compiler {
     if (localName == null || localName.isEmpty) {
       throw const FormatException('XSD element declaration is missing a name');
     }
-    final name = ExiQName(uri: global || localElementsAreQualified ? targetNamespace : '', localName: localName);
+    final qualified = global
+        ? element.getAttribute('form') == null
+        : _isQualifiedForm(element, defaultQualified: localElementsAreQualified, kind: 'element');
+    if (global && element.getAttribute('form') != null) {
+      throw const FormatException('Global XSD elements cannot specify form');
+    }
+    final name = ExiQName(uri: qualified ? targetNamespace : '', localName: localName);
     final nillable = switch (element.getAttribute('nillable')) {
       null || 'false' || '0' => false,
       'true' || '1' => true,
@@ -521,9 +527,10 @@ final class _Compiler {
     if (element.getAttribute('name') != null ||
         element.getAttribute('type') != null ||
         element.getAttribute('nillable') != null ||
+        element.getAttribute('form') != null ||
         _children(element, 'complexType').isNotEmpty ||
         _children(element, 'simpleType').isNotEmpty) {
-      throw const FormatException('An XSD element reference cannot declare a name, type, or nillability');
+      throw const FormatException('An XSD element reference cannot declare a name, type, nillability, or form');
     }
     return _compileGlobalElement(_resolveLocalReference(element, reference, 'element'));
   }
@@ -611,8 +618,9 @@ final class _Compiler {
     if (reference != null) {
       if (attribute.getAttribute('name') != null ||
           attribute.getAttribute('type') != null ||
+          attribute.getAttribute('form') != null ||
           _children(attribute, 'simpleType').isNotEmpty) {
-        throw const FormatException('An XSD attribute reference cannot declare a name or type');
+        throw const FormatException('An XSD attribute reference cannot declare a name, type, or form');
       }
       final declaration = _compileGlobalAttribute(_resolveLocalReference(attribute, reference, 'attribute'));
       return ExiAttributeDeclaration(
@@ -636,10 +644,24 @@ final class _Compiler {
       throw UnsupportedError('Unsupported XSD attribute type "$typeName"');
     }
     return ExiAttributeDeclaration(
-      name: ExiQName(uri: localAttributesAreQualified ? targetNamespace : '', localName: localName),
+      name: ExiQName(
+        uri: _isQualifiedForm(attribute, defaultQualified: localAttributesAreQualified, kind: 'attribute')
+            ? targetNamespace
+            : '',
+        localName: localName,
+      ),
       datatype: datatype,
       required: _isRequiredAttribute(attribute),
     );
+  }
+
+  bool _isQualifiedForm(XmlElement declaration, {required bool defaultQualified, required String kind}) {
+    return switch (declaration.getAttribute('form')) {
+      null => defaultQualified,
+      'qualified' => true,
+      'unqualified' => false,
+      final value => throw FormatException('Invalid XSD $kind form "$value"'),
+    };
   }
 
   ExiAttributeDeclaration _compileGlobalAttribute(String localName) {
@@ -651,8 +673,10 @@ final class _Compiler {
     if (attribute == null) {
       throw FormatException('Unknown global XSD attribute "$localName"');
     }
-    if (attribute.getAttribute('ref') != null || attribute.getAttribute('use') != null) {
-      throw const FormatException('Global XSD attributes cannot specify ref or use');
+    if (attribute.getAttribute('ref') != null ||
+        attribute.getAttribute('use') != null ||
+        attribute.getAttribute('form') != null) {
+      throw const FormatException('Global XSD attributes cannot specify ref, use, or form');
     }
     final typeName = attribute.getAttribute('type');
     final inlineSimple = _children(attribute, 'simpleType').firstOrNull;

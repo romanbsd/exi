@@ -21,8 +21,9 @@ The current decoder stage supports:
 - XSD compilation for global elements, named/inline complex types, attributes,
   global element and attribute references, named model and attribute groups,
   nested sequences and choices, `all` compositors, empty content, occurrence
-  ranges, and primitive, named, and chained base-only simple types, plus
-  attributed `simpleContent` and `complexContent` extension;
+  ranges, local namespace form overrides, and primitive, named, and chained
+  base-only simple types, plus attributed `simpleContent` and
+  `complexContent` extension;
 - schema-typed string, boolean, integer, decimal, float, binary, date, time,
   and date-time values;
 - URI, local-name, and value string-table partitions;
