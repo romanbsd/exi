@@ -492,6 +492,51 @@ void main() {
       expect(attribute.required, isTrue);
     });
 
+    test('resolves nested named attribute groups', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'attribute-groups.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:attributeGroup name="identity">
+              <xs:attribute name="id" use="required"/>
+            </xs:attributeGroup>
+            <xs:attributeGroup name="metadata">
+              <xs:attributeGroup ref="identity"/>
+              <xs:attribute name="kind"/>
+            </xs:attributeGroup>
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:attributeGroup ref="metadata"/>
+              </xs:complexType>
+            </xs:element>
+          </xs:schema>
+        ''',
+      );
+
+      expect(schema.globalElements.single.attributes.map((attribute) => attribute.name.localName), ['id', 'kind']);
+    });
+
+    test('rejects recursive attribute groups', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'recursive-attribute-group.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:attributeGroup name="recursive">
+                <xs:attributeGroup ref="recursive"/>
+              </xs:attributeGroup>
+              <xs:element name="root">
+                <xs:complexType>
+                  <xs:attributeGroup ref="recursive"/>
+                </xs:complexType>
+              </xs:element>
+            </xs:schema>
+          ''',
+        ),
+        throwsUnsupportedError,
+      );
+    });
+
     test('rejects unresolved attribute references', () {
       expect(
         () => ExiSchemaCompiler.compile(

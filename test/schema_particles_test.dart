@@ -340,6 +340,29 @@ void main() {
     expect(document.toXmlString(), '<root code="7"/>');
   });
 
+  test('decodes attributes expanded from a named attribute group', () {
+    final schema = _compile('''
+      <xs:attributeGroup name="metadata">
+        <xs:attribute name="id" use="required"/>
+        <xs:attribute name="kind" use="required"/>
+      </xs:attributeGroup>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:attributeGroup ref="metadata"/>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Root and both required attribute events are implicit.
+      ..write('0')
+      ..write(_value('7'))
+      ..write(_value('example'));
+
+    final document = _decode(schema, bits.toString());
+
+    expect(document.toXmlString(), '<root id="7" kind="example"/>');
+  });
+
   test('matches an OpenEXI strict schema-attribute vector', () {
     final schema = _compile('''
       <xs:element name="root">

@@ -31,16 +31,19 @@ final class _Compiler {
   late final Map<String, XmlElement> _complexTypes = _collectComplexTypes();
   late final Map<String, XmlElement> _simpleTypes = _collectSimpleTypes();
   late final Map<String, XmlElement> _modelGroups = _collectModelGroups();
+  late final Map<String, XmlElement> _attributeGroups = _collectAttributeGroups();
   late final Map<String, XmlElement> _globalElementNodes = _collectGlobalElements();
   late final Map<String, XmlElement> _globalAttributeNodes = _collectGlobalAttributes();
   final Map<String, ExiElementDeclaration> _compiledGlobalElements = {};
   final Map<String, ExiAttributeDeclaration> _compiledGlobalAttributes = {};
   final Map<String, ExiParticle> _compiledModelGroups = {};
   final Map<String, ExiDatatype> _compiledSimpleTypes = {};
+  final Map<String, List<ExiAttributeDeclaration>> _compiledAttributeGroups = {};
   final Set<String> _compilingComplexTypes = {};
   final Set<String> _compilingGlobalElements = {};
   final Set<String> _compilingModelGroups = {};
   final Set<String> _compilingSimpleTypes = {};
+  final Set<String> _compilingAttributeGroups = {};
 
   Map<String, XmlElement> _collectComplexTypes() {
     final result = <String, XmlElement>{};
@@ -64,6 +67,21 @@ final class _Compiler {
         throw FormatException('Duplicate global XSD simple type "$name"');
       }
       result[name] = element;
+    }
+    return result;
+  }
+
+  Map<String, XmlElement> _collectAttributeGroups() {
+    final result = <String, XmlElement>{};
+    for (final group in _children(root, 'attributeGroup')) {
+      final name = group.getAttribute('name');
+      if (name == null || name.isEmpty) {
+        throw const FormatException('Global XSD attribute group is missing a name');
+      }
+      if (result.containsKey(name)) {
+        throw FormatException('Duplicate global XSD attribute group "$name"');
+      }
+      result[name] = group;
     }
     return result;
   }
@@ -217,11 +235,7 @@ final class _Compiler {
     if (complexContent != null) {
       return _compileComplexContent(name, complexContent, mixed: mixed, nillable: nillable);
     }
-    final attributes = [for (final attribute in _children(complexType, 'attribute')) _compileAttribute(attribute)]
-      ..sort((left, right) {
-        final localNameOrder = left.name.localName.compareTo(right.name.localName);
-        return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
-      });
+    final attributes = _compileAttributes(complexType);
     final compositors = [
       ..._children(complexType, 'sequence'),
       ..._children(complexType, 'choice'),
@@ -281,12 +295,7 @@ final class _Compiler {
       throw UnsupportedError('XSD complex content cannot extend simple content');
     }
 
-    final attributes =
-        [...base.attributes, for (final attribute in _children(extension, 'attribute')) _compileAttribute(attribute)]
-          ..sort((left, right) {
-            final localNameOrder = left.name.localName.compareTo(right.name.localName);
-            return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
-          });
+    final attributes = [...base.attributes, ..._compileAttributes(extension)]..sort(_compareAttributes);
     for (var index = 1; index < attributes.length; index++) {
       if (attributes[index - 1].name == attributes[index].name) {
         throw FormatException('Duplicate inherited XSD attribute "${attributes[index].name.localName}"');
@@ -301,7 +310,15 @@ final class _Compiler {
     ];
     for (final child in extension.children.whereType<XmlElement>()) {
       if (child.name.namespaceUri == _xsdUri &&
-          !const {'annotation', 'sequence', 'choice', 'all', 'group', 'attribute'}.contains(child.name.local)) {
+          !const {
+            'annotation',
+            'sequence',
+            'choice',
+            'all',
+            'group',
+            'attribute',
+            'attributeGroup',
+          }.contains(child.name.local)) {
         throw UnsupportedError('Unsupported XSD complex-content component "${child.name.local}"');
       }
     }
@@ -362,15 +379,14 @@ final class _Compiler {
     final datatype =
         _resolveSimpleDatatype(base) ?? (throw UnsupportedError('Unsupported XSD simple-content base "$base"'));
     for (final child in derivation.children.whereType<XmlElement>()) {
-      if (child.name.namespaceUri == _xsdUri && child.name.local != 'annotation' && child.name.local != 'attribute') {
+      if (child.name.namespaceUri == _xsdUri &&
+          child.name.local != 'annotation' &&
+          child.name.local != 'attribute' &&
+          child.name.local != 'attributeGroup') {
         throw UnsupportedError('Unsupported XSD simple-content component "${child.name.local}"');
       }
     }
-    final attributes = [for (final attribute in _children(derivation, 'attribute')) _compileAttribute(attribute)]
-      ..sort((left, right) {
-        final localNameOrder = left.name.localName.compareTo(right.name.localName);
-        return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
-      });
+    final attributes = _compileAttributes(derivation);
     return ExiElementDeclaration.simpleContent(name, datatype, attributes: attributes, nillable: nillable);
   }
 
@@ -538,6 +554,56 @@ final class _Compiler {
       throw UnsupportedError('References to $kind declarations in external XSD namespaces are not supported yet');
     }
     return localName;
+  }
+
+  List<ExiAttributeDeclaration> _compileAttributes(XmlElement container) {
+    final attributes = <ExiAttributeDeclaration>[
+      for (final attribute in _children(container, 'attribute')) _compileAttribute(attribute),
+    ];
+    for (final reference in _children(container, 'attributeGroup')) {
+      final name = reference.getAttribute('ref');
+      if (name == null || name.isEmpty || reference.getAttribute('name') != null) {
+        throw const FormatException('An XSD attribute-group reference must specify only ref');
+      }
+      attributes.addAll(_compileAttributeGroup(_resolveLocalReference(reference, name, 'attribute-group')));
+    }
+    attributes.sort(_compareAttributes);
+    for (var index = 1; index < attributes.length; index++) {
+      if (attributes[index - 1].name == attributes[index].name) {
+        throw FormatException('Duplicate XSD attribute "${attributes[index].name.localName}"');
+      }
+    }
+    return attributes;
+  }
+
+  List<ExiAttributeDeclaration> _compileAttributeGroup(String localName) {
+    final cached = _compiledAttributeGroups[localName];
+    if (cached != null) {
+      return cached;
+    }
+    final group = _attributeGroups[localName];
+    if (group == null) {
+      throw FormatException('Unknown global XSD attribute group "$localName"');
+    }
+    if (!_compilingAttributeGroups.add(localName)) {
+      throw UnsupportedError('Recursive XSD attribute group "$localName" is not supported');
+    }
+    try {
+      for (final child in group.children.whereType<XmlElement>()) {
+        if (child.name.namespaceUri == _xsdUri &&
+            !const {'annotation', 'attribute', 'attributeGroup'}.contains(child.name.local)) {
+          throw UnsupportedError('Unsupported XSD attribute-group component "${child.name.local}"');
+        }
+      }
+      return _compiledAttributeGroups[localName] = List.unmodifiable(_compileAttributes(group));
+    } finally {
+      _compilingAttributeGroups.remove(localName);
+    }
+  }
+
+  int _compareAttributes(ExiAttributeDeclaration left, ExiAttributeDeclaration right) {
+    final localNameOrder = left.name.localName.compareTo(right.name.localName);
+    return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
   }
 
   ExiAttributeDeclaration _compileAttribute(XmlElement attribute) {
