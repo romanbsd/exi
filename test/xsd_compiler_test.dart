@@ -112,6 +112,47 @@ void main() {
       expect(sequence.particles.last, isA<ExiChoiceParticle>());
     });
 
+    test('compiles an all compositor as unordered particles', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'all.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:all>
+                  <xs:element name="first"/>
+                  <xs:element name="second" minOccurs="0"/>
+                </xs:all>
+              </xs:complexType>
+            </xs:element>
+          </xs:schema>
+        ''',
+      );
+
+      final all = schema.globalElements.single.content as ExiAllParticle;
+      expect(all.particles, hasLength(2));
+    });
+
+    test('rejects repeated children in an all compositor', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'invalid-all.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:element name="root">
+                <xs:complexType>
+                  <xs:all>
+                    <xs:element name="child" maxOccurs="2"/>
+                  </xs:all>
+                </xs:complexType>
+              </xs:element>
+            </xs:schema>
+          ''',
+        ),
+        throwsFormatException,
+      );
+    });
+
     test('resolves a named model-group reference', () {
       final schema = ExiSchemaCompiler.compile(
         id: 'groups.xsd',

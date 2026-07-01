@@ -165,9 +165,6 @@ final class _Compiler {
     }) {
       throw UnsupportedError('Mixed XSD complex content is not supported yet');
     }
-    if (_children(complexType, 'all').isNotEmpty) {
-      throw UnsupportedError('The XSD all compositor is not supported yet');
-    }
     final attributes = [for (final attribute in _children(complexType, 'attribute')) _compileAttribute(attribute)]
       ..sort((left, right) {
         final localNameOrder = left.name.localName.compareTo(right.name.localName);
@@ -176,6 +173,7 @@ final class _Compiler {
     final compositors = [
       ..._children(complexType, 'sequence'),
       ..._children(complexType, 'choice'),
+      ..._children(complexType, 'all'),
       ..._children(complexType, 'group'),
     ];
     if (compositors.length > 1) {
@@ -216,10 +214,7 @@ final class _Compiler {
           if (child.name.namespaceUri != _xsdUri || child.name.local == 'annotation') {
             continue;
           }
-          if (child.name.local == 'all') {
-            throw UnsupportedError('The XSD all compositor is not supported yet');
-          }
-          if (!const {'element', 'sequence', 'choice', 'group'}.contains(child.name.local)) {
+          if (!const {'element', 'sequence', 'choice', 'all', 'group'}.contains(child.name.local)) {
             throw UnsupportedError('Unsupported XSD particle "${child.name.local}"');
           }
           children.add(_compileParticle(child));
@@ -228,6 +223,27 @@ final class _Compiler {
             ? ExiSequenceParticle(children)
             : ExiChoiceParticle(children);
         return _applyParticleOccurrences(particle, compositor);
+      case 'all':
+        final children = <ExiParticle>[];
+        for (final child in particle.children.whereType<XmlElement>()) {
+          if (child.name.namespaceUri != _xsdUri || child.name.local == 'annotation') {
+            continue;
+          }
+          if (child.name.local != 'element') {
+            throw UnsupportedError('An XSD all compositor can contain only element particles');
+          }
+          final minOccurs = _occurs(child, 'minOccurs', defaultValue: 1);
+          final maxOccurs = _occurs(child, 'maxOccurs', defaultValue: 1);
+          if (minOccurs > 1 || maxOccurs > 1) {
+            throw const FormatException('Children of an XSD all compositor can occur at most once');
+          }
+          children.add(_compileElementParticle(child));
+        }
+        final maxOccurs = _occurs(particle, 'maxOccurs', defaultValue: 1);
+        if (maxOccurs > 1) {
+          throw const FormatException('An XSD all compositor can occur at most once');
+        }
+        return _applyParticleOccurrences(particle, ExiAllParticle(children));
       case 'group':
         final reference = particle.getAttribute('ref');
         if (reference == null || reference.isEmpty) {
@@ -279,6 +295,9 @@ final class _Compiler {
       return const ExiEmptyParticle();
     }
     if (_particleIsNullable(particle)) {
+      if (minOccurs == 0 && maxOccurs == 1) {
+        return particle;
+      }
       throw UnsupportedError('Occurrence constraints on nullable XSD compositors are not supported yet');
     }
     return ExiRepeatedParticle(particle, minOccurs: minOccurs, maxOccurs: maxOccurs);
@@ -290,6 +309,7 @@ final class _Compiler {
       ExiElementParticle(:final minOccurs) => minOccurs == 0,
       ExiSequenceParticle(:final particles) => particles.every(_particleIsNullable),
       ExiChoiceParticle(:final particles) => particles.any(_particleIsNullable),
+      ExiAllParticle(:final particles) => particles.every(_particleIsNullable),
       ExiRepeatedParticle(:final particle, :final minOccurs) => minOccurs == 0 || _particleIsNullable(particle),
     };
   }

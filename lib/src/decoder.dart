@@ -466,6 +466,7 @@ bool _isNullable(ExiParticle particle) {
     ExiElementParticle(:final minOccurs) => minOccurs == 0,
     ExiSequenceParticle(:final particles) => particles.every(_isNullable),
     ExiChoiceParticle(:final particles) => particles.any(_isNullable),
+    ExiAllParticle(:final particles) => particles.every(_isNullable),
     ExiRepeatedParticle(:final particle, :final minOccurs) => minOccurs == 0 || _isNullable(particle),
   };
 }
@@ -491,6 +492,10 @@ List<ExiElementDeclaration> _leadingElements(ExiParticle particle) {
           }
         }
       case ExiChoiceParticle(:final particles):
+        for (final child in particles) {
+          collect(child);
+        }
+      case ExiAllParticle(:final particles):
         for (final child in particles) {
           collect(child);
         }
@@ -540,6 +545,21 @@ ExiParticle? _derive(ExiParticle particle, ExiElementDeclaration selected) {
         }
       }
       return _choice(alternatives);
+    case ExiAllParticle(:final particles):
+      for (var index = 0; index < particles.length; index++) {
+        final derivative = _derive(particles[index], selected);
+        if (derivative == null) {
+          continue;
+        }
+        final remaining = [...particles];
+        if (derivative is ExiEmptyParticle) {
+          remaining.removeAt(index);
+        } else {
+          remaining[index] = derivative;
+        }
+        return ExiAllParticle(remaining);
+      }
+      return null;
     case ExiRepeatedParticle(:final particle, :final minOccurs, :final maxOccurs):
       if (maxOccurs == 0) {
         return null;

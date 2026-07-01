@@ -89,6 +89,12 @@ final class ExiChoiceParticle extends ExiParticle {
   final List<ExiParticle> particles;
 }
 
+final class ExiAllParticle extends ExiParticle {
+  const ExiAllParticle(this.particles);
+
+  final List<ExiParticle> particles;
+}
+
 final class ExiRepeatedParticle extends ExiParticle {
   const ExiRepeatedParticle(this.particle, {required this.minOccurs, required this.maxOccurs})
     : assert(minOccurs >= 0),

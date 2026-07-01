@@ -99,6 +99,42 @@ void main() {
       expect(document.toXmlString(), '<root><first/><right/><last/></root>');
     });
 
+    test('decodes all-compositor children out of declaration order', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:all>
+              <xs:element name="first"/>
+              <xs:element name="second"/>
+            </xs:all>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      // Root=0; second is event 1; first is then implicit.
+      final document = _decode(schema, '01');
+
+      expect(document.toXmlString(), '<root><second/><first/></root>');
+    });
+
+    test('allows an optional all-compositor child to be absent', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:all>
+              <xs:element name="first"/>
+              <xs:element name="second" minOccurs="0"/>
+            </xs:all>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      // Root=0; first=0; EE=1 after the required child is consumed.
+      final document = _decode(schema, '001');
+
+      expect(document.toXmlString(), '<root><first/></root>');
+    });
+
     test('decodes a referenced named model group', () {
       final schema = _compile('''
         <xs:group name="pair">
