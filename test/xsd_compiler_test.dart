@@ -601,6 +601,50 @@ void main() {
       expect(root.attributes[1].name, const ExiQName(uri: 'urn:example', localName: 'qualified'));
     });
 
+    test('resolves target-namespace named type QNames', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'qualified-types.xsd',
+        source: '''
+          <xs:schema
+              xmlns:xs="http://www.w3.org/2001/XMLSchema"
+              xmlns:tns="urn:example"
+              targetNamespace="urn:example">
+            <xs:simpleType name="Code">
+              <xs:restriction base="xs:string"/>
+            </xs:simpleType>
+            <xs:complexType name="Container">
+              <xs:sequence>
+                <xs:element name="code" type="tns:Code"/>
+              </xs:sequence>
+            </xs:complexType>
+            <xs:element name="root" type="tns:Container"/>
+          </xs:schema>
+        ''',
+      );
+
+      expect(schema.globalElements.single.children.single.datatype, ExiDatatype.string);
+    });
+
+    test('rejects external and undeclared type prefixes', () {
+      for (final typeName in ['external:Local', 'missing:Local']) {
+        expect(
+          () => ExiSchemaCompiler.compile(
+            id: 'invalid-type-prefix.xsd',
+            source:
+                '''
+              <xs:schema
+                  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                  xmlns:external="urn:external">
+                <xs:complexType name="Local"/>
+                <xs:element name="root" type="$typeName"/>
+              </xs:schema>
+            ''',
+          ),
+          anyOf(throwsFormatException, throwsUnsupportedError),
+        );
+      }
+    });
+
     test('rejects invalid namespace form values', () {
       expect(
         () => ExiSchemaCompiler.compile(

@@ -184,15 +184,16 @@ final class _Compiler {
 
     final typeName = element.getAttribute('type');
     if (typeName != null) {
-      final simpleDatatype = _resolveSimpleDatatype(typeName);
+      final simpleDatatype = _resolveSimpleDatatype(element, typeName);
       if (simpleDatatype != null) {
         return ExiElementDeclaration.value(name, simpleDatatype, nillable: nillable);
       }
-      final complexType = _complexTypes[_localPart(typeName)];
+      final complexTypeName = _resolveNamedTypeLocalName(element, typeName);
+      final complexType = _complexTypes[complexTypeName];
       if (complexType == null) {
         throw UnsupportedError('Unknown or unsupported XSD type "$typeName"');
       }
-      return _compileNamedComplexType(name, _localPart(typeName), nillable: nillable);
+      return _compileNamedComplexType(name, complexTypeName, nillable: nillable);
     }
 
     final inlineComplex = _children(element, 'complexType').firstOrNull;
@@ -296,7 +297,7 @@ final class _Compiler {
     if (baseName == null) {
       throw const FormatException('XSD complex-content extension is missing its base type');
     }
-    final base = _compileNamedComplexType(name, _localPart(baseName), nillable: nillable);
+    final base = _compileNamedComplexType(name, _resolveNamedTypeLocalName(extension, baseName), nillable: nillable);
     if (base.datatype != null) {
       throw UnsupportedError('XSD complex content cannot extend simple content');
     }
@@ -383,7 +384,8 @@ final class _Compiler {
       throw const FormatException('XSD simple-content derivation is missing its base type');
     }
     final datatype =
-        _resolveSimpleDatatype(base) ?? (throw UnsupportedError('Unsupported XSD simple-content base "$base"'));
+        _resolveSimpleDatatype(derivation, base) ??
+        (throw UnsupportedError('Unsupported XSD simple-content base "$base"'));
     for (final child in derivation.children.whereType<XmlElement>()) {
       if (child.name.namespaceUri == _xsdUri &&
           child.name.local != 'annotation' &&
@@ -636,7 +638,7 @@ final class _Compiler {
     final typeName = attribute.getAttribute('type');
     final inlineSimple = _children(attribute, 'simpleType').firstOrNull;
     final datatype = typeName != null
-        ? _resolveSimpleDatatype(typeName)
+        ? _resolveSimpleDatatype(attribute, typeName)
         : inlineSimple != null
         ? _compileSimpleType(inlineSimple)
         : ExiDatatype.string;
@@ -681,7 +683,7 @@ final class _Compiler {
     final typeName = attribute.getAttribute('type');
     final inlineSimple = _children(attribute, 'simpleType').firstOrNull;
     final datatype = typeName != null
-        ? _resolveSimpleDatatype(typeName)
+        ? _resolveSimpleDatatype(attribute, typeName)
         : inlineSimple != null
         ? _compileSimpleType(inlineSimple)
         : ExiDatatype.string;
@@ -715,19 +717,47 @@ final class _Compiler {
     if (facets.isNotEmpty) {
       throw UnsupportedError('XSD simple-type facets are not supported yet');
     }
-    return _resolveSimpleDatatype(base) ?? (throw UnsupportedError('Unsupported XSD simple type "$base"'));
+    return _resolveSimpleDatatype(restriction, base) ?? (throw UnsupportedError('Unsupported XSD simple type "$base"'));
   }
 
-  ExiDatatype? _resolveSimpleDatatype(String qualifiedName) {
+  ExiDatatype? _resolveSimpleDatatype(XmlElement context, String qualifiedName) {
     final builtin = _builtinDatatype(qualifiedName);
     if (builtin != null) {
       return builtin;
     }
-    final localName = _localPart(qualifiedName);
+    final localName = _resolveNamedTypeLocalName(context, qualifiedName);
     if (!_simpleTypes.containsKey(localName)) {
       return null;
     }
     return _compileNamedSimpleType(localName);
+  }
+
+  String _resolveNamedTypeLocalName(XmlElement context, String qualifiedName) {
+    final separator = qualifiedName.indexOf(':');
+    if (separator != qualifiedName.lastIndexOf(':')) {
+      throw FormatException('Invalid XSD type QName "$qualifiedName"');
+    }
+    final prefix = separator == -1 ? '' : qualifiedName.substring(0, separator);
+    final localName = separator == -1 ? qualifiedName : qualifiedName.substring(separator + 1);
+    if (localName.isEmpty || (separator != -1 && prefix.isEmpty)) {
+      throw FormatException('Invalid XSD type QName "$qualifiedName"');
+    }
+
+    String? namespaceUri;
+    for (final namespace in context.namespaces) {
+      if (namespace.prefix == prefix) {
+        namespaceUri = namespace.uri;
+        break;
+      }
+    }
+    if (prefix.isNotEmpty && namespaceUri == null) {
+      throw FormatException('Unknown namespace prefix "$prefix" in XSD type QName');
+    }
+    namespaceUri ??= '';
+    if (namespaceUri != targetNamespace) {
+      throw UnsupportedError('References to types in external XSD namespaces are not supported yet');
+    }
+    return localName;
   }
 
   ExiDatatype _compileNamedSimpleType(String localName) {
