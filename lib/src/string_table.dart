@@ -5,9 +5,11 @@ const _xmlUri = 'http://www.w3.org/XML/1998/namespace';
 const _xsiUri = 'http://www.w3.org/2001/XMLSchema-instance';
 
 final class ExiStringTable {
-  ExiStringTable({this.preservePrefixes = false});
+  ExiStringTable({this.preservePrefixes = false, this.valueMaxLength, this.valuePartitionCapacity});
 
   final bool preservePrefixes;
+  final int? valueMaxLength;
+  final int? valuePartitionCapacity;
   final List<String> _uris = ['', _xmlUri, _xsiUri];
   final Map<String, List<String>> _prefixes = {
     '': [''],
@@ -18,8 +20,9 @@ final class ExiStringTable {
     _xmlUri: ['base', 'id', 'lang', 'space'],
     _xsiUri: ['nil', 'type'],
   };
-  final List<String?> _globalValues = [];
+  final List<_GlobalValue?> _globalValues = [];
   final Map<ExiQName, List<String?>> _localValues = {};
+  var _globalId = 0;
 
   ExiQName readQName(BitInput input) {
     final uri = _readCompactOptimized(input, _uris);
@@ -55,13 +58,41 @@ final class ExiStringTable {
       return _readAssigned(input, local, 'local value');
     }
     if (marker == 1) {
-      return _readAssigned(input, _globalValues, 'global value');
+      if (_globalValues.isEmpty) {
+        throw const FormatException('Compact identifier used with empty global value partition');
+      }
+      final compactId = input.readBits(_bitWidth(_globalValues.length));
+      if (compactId >= _globalValues.length || _globalValues[compactId] == null) {
+        throw const FormatException('Invalid global value compact identifier');
+      }
+      return _globalValues[compactId]!.value;
     }
 
     final value = _readCharacters(input, marker - 2);
-    if (value.isNotEmpty) {
+    if (value.isNotEmpty &&
+        (valueMaxLength == null || value.runes.length <= valueMaxLength!) &&
+        valuePartitionCapacity != 0) {
+      final localId = local.length;
       local.add(value);
-      _globalValues.add(value);
+      final entry = _GlobalValue(value, context, localId);
+      final capacity = valuePartitionCapacity;
+      if (capacity == null) {
+        _globalValues.add(entry);
+      } else {
+        if (_globalId < _globalValues.length) {
+          final replaced = _globalValues[_globalId];
+          if (replaced != null) {
+            _localValues[replaced.context]![replaced.localId] = null;
+          }
+          _globalValues[_globalId] = entry;
+        } else {
+          _globalValues.add(entry);
+        }
+        _globalId++;
+        if (_globalId == capacity) {
+          _globalId = 0;
+        }
+      }
     }
     return value;
   }
@@ -128,6 +159,14 @@ final class ExiStringTable {
     }
     return value.toInt();
   }
+}
+
+final class _GlobalValue {
+  const _GlobalValue(this.value, this.context, this.localId);
+
+  final String value;
+  final ExiQName context;
+  final int localId;
 }
 
 int _bitWidth(int valueCount) {

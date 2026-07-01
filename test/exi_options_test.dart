@@ -125,6 +125,20 @@ void main() {
       throwsA(isA<UnsupportedError>()),
     );
   });
+
+  test('enforces a zero value-partition capacity', () {
+    final bits = StringBuffer('10000000')
+      ..write(_qName('', 'root'))
+      ..write('11')
+      ..write(_value('x'))
+      ..write('11')
+      ..write(_unsigned(0));
+
+    expect(
+      () => ExiDecoder(options: const ExiOptions(valuePartitionCapacity: 0)).decode(_pack(bits.toString())),
+      throwsA(isA<FormatException>()),
+    );
+  });
 }
 
 String _qName(String uri, String localName) {
@@ -133,6 +147,8 @@ String _qName(String uri, String localName) {
 }
 
 String _rawString(String value) => _literal(value, lengthOffset: 0);
+
+String _value(String value) => _literal(value, lengthOffset: 2);
 
 String _literal(String value, {required int lengthOffset}) {
   final codePoints = value.runes.toList();

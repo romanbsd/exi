@@ -10,15 +10,16 @@ The current decoder stage supports:
 - schema-less fragments with dynamic top-level QName learning;
 - configurable out-of-band fidelity options for comments, processing
   instructions, DTD/entity events, and namespace prefixes;
+- in-band EXI options for strict mode, fragments, fidelity preservation, and
+  value-table limits;
 - URI, local-name, and value string-table partitions;
 - start/end document, start/end element, attribute, character, namespace,
   comment, processing-instruction, document-type, and entity-reference events;
 - XML reconstruction, including preserved namespace declarations.
 
-In-band EXI options require the schema-informed grammar engine prescribed by
-section 5.4 of the specification and remain explicitly rejected until that
-stage. Schema-informed body grammars, self-contained elements, byte alignment,
-pre-compression, and compression are also not yet available.
+In-band schema identifiers, datatype representation maps, and user metadata
+remain unsupported. Schema-informed body grammars, self-contained elements,
+byte alignment, pre-compression, and compression are also not yet available.
 
 ```dart
 import 'dart:typed_data';

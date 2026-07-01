@@ -24,8 +24,8 @@ void main() {
       expect(() => ExiDecoder().decode(Uint8List.fromList([0x81])), throwsA(isA<UnsupportedError>()));
     });
 
-    test('rejects in-band EXI options in this stage', () {
-      expect(() => ExiDecoder().decode(Uint8List.fromList([0xa0])), throwsA(isA<UnsupportedError>()));
+    test('rejects a truncated in-band options document', () {
+      expect(() => ExiDecoder().decode(Uint8List.fromList([0xa0])), throwsA(isA<FormatException>()));
     });
   });
 

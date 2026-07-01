@@ -1,3 +1,5 @@
+import 'options.dart';
+
 /// The qualified name carried by an EXI start-element or attribute event.
 final class ExiQName {
   const ExiQName({this.uri = '', required this.localName, this.prefix});
@@ -117,10 +119,12 @@ final class ExiHeader {
 }
 
 final class ExiDocument {
-  ExiDocument({required this.header, required List<ExiEvent> events}) : events = List.unmodifiable(events);
+  ExiDocument({required this.header, required List<ExiEvent> events, this.options = const ExiOptions()})
+    : events = List.unmodifiable(events);
 
   final ExiHeader header;
   final List<ExiEvent> events;
+  final ExiOptions options;
 
   String toXmlString() {
     final output = StringBuffer();

@@ -24,6 +24,9 @@ final class ExiOptions {
     this.strict = false,
     this.selfContained = false,
     this.fidelity = const ExiFidelityOptions(),
+    this.blockSize = 1000000,
+    this.valueMaxLength,
+    this.valuePartitionCapacity,
   });
 
   final ExiAlignment alignment;
@@ -32,4 +35,7 @@ final class ExiOptions {
   final bool strict;
   final bool selfContained;
   final ExiFidelityOptions fidelity;
+  final int blockSize;
+  final int? valueMaxLength;
+  final int? valuePartitionCapacity;
 }

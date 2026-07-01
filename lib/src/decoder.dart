@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'bit_input.dart';
+import 'header_options.dart';
 import 'model.dart';
 import 'options.dart';
 import 'string_table.dart';
@@ -9,22 +10,7 @@ const _cookie = [0x24, 0x45, 0x58, 0x49];
 
 final class ExiDecoder {
   ExiDecoder({this.options = const ExiOptions()}) {
-    if (options.compression) {
-      throw UnsupportedError('EXI compression is not supported yet');
-    }
-    if (options.alignment != ExiAlignment.bitPacked) {
-      throw UnsupportedError('${options.alignment.name} alignment is not supported yet');
-    }
-    if (options.selfContained) {
-      throw UnsupportedError('Self-contained EXI elements are not supported yet');
-    }
-    if (options.strict &&
-        (options.fidelity.comments ||
-            options.fidelity.processingInstructions ||
-            options.fidelity.dtd ||
-            options.fidelity.prefixes)) {
-      throw ArgumentError('Strict EXI mode cannot preserve comments, PIs, DTDs, or prefixes');
-    }
+    _validateOptions(options);
   }
 
   final ExiOptions options;
@@ -32,10 +18,11 @@ final class ExiDecoder {
   ExiDocument decode(Uint8List bytes) {
     final hasCookie = bytes.length >= _cookie.length && _matchesCookie(bytes);
     final input = BitInput(bytes, byteOffset: hasCookie ? _cookie.length : 0);
-    final header = _readHeader(input, hasCookie: hasCookie);
-    final state = _DecoderState(input, options);
+    final parsedHeader = _readHeader(input, hasCookie: hasCookie);
+    _validateOptions(parsedHeader.options);
+    final state = _DecoderState(input, parsedHeader.options);
     final events = state.decode();
-    return ExiDocument(header: header, events: events);
+    return ExiDocument(header: parsedHeader.header, events: events, options: parsedHeader.options);
   }
 
   bool _matchesCookie(Uint8List bytes) {
@@ -47,7 +34,7 @@ final class ExiDecoder {
     return true;
   }
 
-  ExiHeader _readHeader(BitInput input, {required bool hasCookie}) {
+  ({ExiHeader header, ExiOptions options}) _readHeader(BitInput input, {required bool hasCookie}) {
     if (input.readBits(2) != 2) {
       throw const FormatException('Invalid EXI distinguishing bits');
     }
@@ -67,16 +54,56 @@ final class ExiDecoder {
     if (version != 1) {
       throw UnsupportedError('EXI version $version is not supported');
     }
-    if (hasOptions) {
-      throw UnsupportedError('In-band EXI options are not supported in this decoder stage');
-    }
+    final effectiveOptions = hasOptions ? HeaderOptionsDecoder(input).decode() : options;
+    return (
+      header: ExiHeader(hasCookie: hasCookie, hasOptions: hasOptions, isPreview: isPreview, version: version),
+      options: effectiveOptions,
+    );
+  }
+}
 
-    return ExiHeader(hasCookie: hasCookie, hasOptions: hasOptions, isPreview: isPreview, version: version);
+void _validateOptions(ExiOptions options) {
+  if (options.compression && options.alignment != ExiAlignment.bitPacked) {
+    throw ArgumentError('EXI compression and alignment options are mutually exclusive');
+  }
+  if (options.selfContained &&
+      (options.compression || options.alignment == ExiAlignment.preCompression || options.strict)) {
+    throw ArgumentError('Self-contained mode cannot be combined with compression, pre-compression, or strict mode');
+  }
+  if (options.compression) {
+    throw UnsupportedError('EXI compression is not supported yet');
+  }
+  if (options.alignment != ExiAlignment.bitPacked) {
+    throw UnsupportedError('${options.alignment.name} alignment is not supported yet');
+  }
+  if (options.selfContained) {
+    throw UnsupportedError('Self-contained EXI elements are not supported yet');
+  }
+  if (options.blockSize < 1) {
+    throw ArgumentError.value(options.blockSize, 'blockSize', 'must be at least 1');
+  }
+  if (options.valueMaxLength case final value? when value < 0) {
+    throw ArgumentError.value(value, 'valueMaxLength', 'must be non-negative');
+  }
+  if (options.valuePartitionCapacity case final value? when value < 0) {
+    throw ArgumentError.value(value, 'valuePartitionCapacity', 'must be non-negative');
+  }
+  if (options.strict &&
+      (options.fidelity.comments ||
+          options.fidelity.processingInstructions ||
+          options.fidelity.dtd ||
+          options.fidelity.prefixes)) {
+    throw ArgumentError('Strict EXI mode cannot preserve comments, PIs, DTDs, or prefixes');
   }
 }
 
 final class _DecoderState {
-  _DecoderState(this.input, this.options) : strings = ExiStringTable(preservePrefixes: options.fidelity.prefixes);
+  _DecoderState(this.input, this.options)
+    : strings = ExiStringTable(
+        preservePrefixes: options.fidelity.prefixes,
+        valueMaxLength: options.valueMaxLength,
+        valuePartitionCapacity: options.valuePartitionCapacity,
+      );
 
   final BitInput input;
   final ExiOptions options;
