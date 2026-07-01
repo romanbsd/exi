@@ -89,6 +89,16 @@ final class ExiChoiceParticle extends ExiParticle {
   final List<ExiParticle> particles;
 }
 
+final class ExiRepeatedParticle extends ExiParticle {
+  const ExiRepeatedParticle(this.particle, {required this.minOccurs, required this.maxOccurs})
+    : assert(minOccurs >= 0),
+      assert(maxOccurs == null || maxOccurs >= minOccurs);
+
+  final ExiParticle particle;
+  final int minOccurs;
+  final int? maxOccurs;
+}
+
 final class ExiSchemaNotFoundException implements Exception {
   const ExiSchemaNotFoundException(this.schemaId);
 

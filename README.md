@@ -16,7 +16,8 @@ The current decoder stage supports:
 - absent, schema-less, built-in-types, and named schema IDs with resolver-based
   schema selection;
 - strict compiled schemas containing global elements, attributes, sequences,
-  choices, and optional, bounded, or unbounded child particles;
+  choices, and optional, bounded, or unbounded element and compositor
+  particles;
 - XSD compilation for global elements, named/inline complex types, attributes,
   global element and attribute references, named model groups, nested sequences
   and choices, empty content, occurrence ranges on elements, and primitive
@@ -29,7 +30,7 @@ The current decoder stage supports:
 - XML reconstruction, including preserved namespace declarations.
 
 Datatype representation maps and user metadata remain unsupported. XSD
-imports/includes, `all`, mixed content, occurrence ranges on compositors,
+imports/includes, `all`, mixed content, repetition of nullable compositors,
 non-strict and more general schema-informed grammars, self-contained elements,
 pre-compression, and compression are also not yet available.
 

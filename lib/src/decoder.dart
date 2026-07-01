@@ -466,6 +466,7 @@ bool _isNullable(ExiParticle particle) {
     ExiElementParticle(:final minOccurs) => minOccurs == 0,
     ExiSequenceParticle(:final particles) => particles.every(_isNullable),
     ExiChoiceParticle(:final particles) => particles.any(_isNullable),
+    ExiRepeatedParticle(:final particle, :final minOccurs) => minOccurs == 0 || _isNullable(particle),
   };
 }
 
@@ -492,6 +493,10 @@ List<ExiElementDeclaration> _leadingElements(ExiParticle particle) {
       case ExiChoiceParticle(:final particles):
         for (final child in particles) {
           collect(child);
+        }
+      case ExiRepeatedParticle(:final particle, :final maxOccurs):
+        if (maxOccurs != 0) {
+          collect(particle);
         }
     }
   }
@@ -535,6 +540,23 @@ ExiParticle? _derive(ExiParticle particle, ExiElementDeclaration selected) {
         }
       }
       return _choice(alternatives);
+    case ExiRepeatedParticle(:final particle, :final minOccurs, :final maxOccurs):
+      if (maxOccurs == 0) {
+        return null;
+      }
+      if (_isNullable(particle)) {
+        throw UnsupportedError('Repeating a nullable schema particle is not supported yet');
+      }
+      final derivative = _derive(particle, selected);
+      if (derivative == null) {
+        return null;
+      }
+      final remainingMin = minOccurs > 0 ? minOccurs - 1 : 0;
+      final remainingMax = maxOccurs == null ? null : maxOccurs - 1;
+      final remainder = remainingMax == 0
+          ? const ExiEmptyParticle()
+          : ExiRepeatedParticle(particle, minOccurs: remainingMin, maxOccurs: remainingMax);
+      return _sequence([derivative, remainder]);
   }
 }
 

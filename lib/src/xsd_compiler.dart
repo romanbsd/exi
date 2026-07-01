@@ -193,6 +193,7 @@ final class _Compiler {
     final isFixedSequence =
         attributes.isEmpty &&
         compositor.name.local == 'sequence' &&
+        content is ExiSequenceParticle &&
         particles.every(
           (particle) => particle is ExiElementParticle && particle.minOccurs == 1 && particle.maxOccurs == 1,
         );
@@ -210,7 +211,6 @@ final class _Compiler {
         return _compileElementParticle(particle);
       case 'sequence':
       case 'choice':
-        _requireSingleCompositorOccurrence(particle);
         final children = <ExiParticle>[];
         for (final child in particle.children.whereType<XmlElement>()) {
           if (child.name.namespaceUri != _xsdUri || child.name.local == 'annotation') {
@@ -224,14 +224,17 @@ final class _Compiler {
           }
           children.add(_compileParticle(child));
         }
-        return particle.name.local == 'sequence' ? ExiSequenceParticle(children) : ExiChoiceParticle(children);
+        final compositor = particle.name.local == 'sequence'
+            ? ExiSequenceParticle(children)
+            : ExiChoiceParticle(children);
+        return _applyParticleOccurrences(particle, compositor);
       case 'group':
-        _requireSingleCompositorOccurrence(particle);
         final reference = particle.getAttribute('ref');
         if (reference == null || reference.isEmpty) {
           throw const FormatException('An XSD model-group particle must specify ref');
         }
-        return _compileModelGroup(_resolveLocalReference(particle, reference, 'model-group'));
+        final group = _compileModelGroup(_resolveLocalReference(particle, reference, 'model-group'));
+        return _applyParticleOccurrences(particle, group);
       default:
         throw UnsupportedError('Unsupported XSD particle "${particle.name.local}"');
     }
@@ -260,10 +263,35 @@ final class _Compiler {
     }
   }
 
-  void _requireSingleCompositorOccurrence(XmlElement compositor) {
-    if ((compositor.getAttribute('minOccurs') ?? '1') != '1' || (compositor.getAttribute('maxOccurs') ?? '1') != '1') {
-      throw UnsupportedError('Occurrence constraints on XSD compositors are not supported yet');
+  ExiParticle _applyParticleOccurrences(XmlElement source, ExiParticle particle) {
+    final minOccurs = _occurs(source, 'minOccurs', defaultValue: 1);
+    final maxValue = source.getAttribute('maxOccurs') ?? '1';
+    final maxOccurs = maxValue == 'unbounded'
+        ? null
+        : int.tryParse(maxValue) ?? (throw FormatException('Invalid XSD maxOccurs value "$maxValue"'));
+    if (maxOccurs != null && maxOccurs < minOccurs) {
+      throw const FormatException('Invalid XSD particle occurrence range');
     }
+    if (minOccurs == 1 && maxOccurs == 1) {
+      return particle;
+    }
+    if (maxOccurs == 0) {
+      return const ExiEmptyParticle();
+    }
+    if (_particleIsNullable(particle)) {
+      throw UnsupportedError('Occurrence constraints on nullable XSD compositors are not supported yet');
+    }
+    return ExiRepeatedParticle(particle, minOccurs: minOccurs, maxOccurs: maxOccurs);
+  }
+
+  bool _particleIsNullable(ExiParticle particle) {
+    return switch (particle) {
+      ExiEmptyParticle() => true,
+      ExiElementParticle(:final minOccurs) => minOccurs == 0,
+      ExiSequenceParticle(:final particles) => particles.every(_particleIsNullable),
+      ExiChoiceParticle(:final particles) => particles.any(_particleIsNullable),
+      ExiRepeatedParticle(:final particle, :final minOccurs) => minOccurs == 0 || _particleIsNullable(particle),
+    };
   }
 
   ExiParticle _compileElementParticle(XmlElement element) {

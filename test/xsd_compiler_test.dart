@@ -333,16 +333,62 @@ void main() {
       );
     });
 
-    test('rejects occurrence constraints on compositors', () {
+    test('compiles occurrence constraints on compositors', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'compositor-occurs.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:sequence minOccurs="0" maxOccurs="unbounded">
+                  <xs:element name="child"/>
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
+          </xs:schema>
+        ''',
+      );
+
+      final repeated = schema.globalElements.single.content as ExiRepeatedParticle;
+      expect(repeated.minOccurs, 0);
+      expect(repeated.maxOccurs, isNull);
+    });
+
+    test('applies occurrence constraints to model-group references', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'group-occurs.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:group name="pair">
+              <xs:sequence>
+                <xs:element name="first"/>
+                <xs:element name="second"/>
+              </xs:sequence>
+            </xs:group>
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:group ref="pair" minOccurs="0" maxOccurs="2"/>
+              </xs:complexType>
+            </xs:element>
+          </xs:schema>
+        ''',
+      );
+
+      final repeated = schema.globalElements.single.content as ExiRepeatedParticle;
+      expect(repeated.minOccurs, 0);
+      expect(repeated.maxOccurs, 2);
+    });
+
+    test('rejects repetition of a nullable compositor', () {
       expect(
         () => ExiSchemaCompiler.compile(
-          id: 'compositor-occurs.xsd',
+          id: 'nullable-repetition.xsd',
           source: '''
             <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
               <xs:element name="root">
                 <xs:complexType>
-                  <xs:sequence minOccurs="0">
-                    <xs:element name="child"/>
+                  <xs:sequence maxOccurs="unbounded">
+                    <xs:element name="child" minOccurs="0"/>
                   </xs:sequence>
                 </xs:complexType>
               </xs:element>

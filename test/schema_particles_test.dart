@@ -118,6 +118,41 @@ void main() {
 
       expect(document.toXmlString(), '<root><first/><second/></root>');
     });
+
+    test('decodes an optional sequence that is absent', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:sequence minOccurs="0">
+              <xs:element name="child"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      // Root is 0; EE is 1 because the repeated sequence is nullable.
+      final document = _decode(schema, '01');
+
+      expect(document.toXmlString(), '<root/>');
+    });
+
+    test('decodes an unbounded repeated sequence', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:sequence minOccurs="0" maxOccurs="unbounded">
+              <xs:element name="first"/>
+              <xs:element name="second"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      // Root=0, two leading first events=0/0, then EE=1.
+      final document = _decode(schema, '0001');
+
+      expect(document.toXmlString(), '<root><first/><second/><first/><second/></root>');
+    });
   });
 
   test('decodes required and optional schema attributes', () {
