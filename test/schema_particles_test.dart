@@ -467,6 +467,34 @@ void main() {
     expect(attribute.value, '7');
   });
 
+  test('decodes an attribute matched by an other-namespace wildcard', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'other-wildcard',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:example">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:anyAttribute namespace="##other"/>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer()
+      // Root=0; AT(*)=0; full QName in a permitted namespace.
+      ..write('00')
+      ..write(_qName('urn:other', 'code'))
+      ..write(_value('7'))
+      ..write('1');
+
+    final document = _decode(schema, bits.toString());
+    final attribute = document.events.whereType<ExiAttribute>().single;
+
+    expect(attribute.name, const ExiQName(uri: 'urn:other', localName: 'code'));
+  });
+
   test('decodes qualified local names from schema form overrides', () {
     final schema = ExiSchemaCompiler.compile(
       id: 'forms',

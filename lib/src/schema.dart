@@ -33,6 +33,7 @@ final class ExiElementDeclaration {
     this.typeAlternatives = const {},
     this.anyAttribute = false,
     this.attributeWildcardNamespaces,
+    this.attributeWildcardExcludedNamespaces,
   }) : children = const [],
        datatype = null,
        attributes = const [],
@@ -46,6 +47,7 @@ final class ExiElementDeclaration {
     this.typeAlternatives = const {},
     this.anyAttribute = false,
     this.attributeWildcardNamespaces,
+    this.attributeWildcardExcludedNamespaces,
   }) : datatype = null,
        attributes = const [],
        content = null,
@@ -58,6 +60,7 @@ final class ExiElementDeclaration {
     this.typeAlternatives = const {},
     this.anyAttribute = false,
     this.attributeWildcardNamespaces,
+    this.attributeWildcardExcludedNamespaces,
   }) : children = const [],
        attributes = const [],
        content = null,
@@ -71,6 +74,7 @@ final class ExiElementDeclaration {
     this.typeAlternatives = const {},
     this.anyAttribute = false,
     this.attributeWildcardNamespaces,
+    this.attributeWildcardExcludedNamespaces,
   }) : children = const [],
        content = null,
        mixed = false;
@@ -84,6 +88,7 @@ final class ExiElementDeclaration {
     this.typeAlternatives = const {},
     this.anyAttribute = false,
     this.attributeWildcardNamespaces,
+    this.attributeWildcardExcludedNamespaces,
   }) : children = const [],
        datatype = null;
 
@@ -97,6 +102,7 @@ final class ExiElementDeclaration {
   final Map<ExiQName, ExiElementDeclaration> typeAlternatives;
   final bool anyAttribute;
   final Set<String>? attributeWildcardNamespaces;
+  final Set<String>? attributeWildcardExcludedNamespaces;
 }
 
 final class ExiAttributeDeclaration {

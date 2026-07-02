@@ -596,6 +596,25 @@ void main() {
       expect(schema.globalElements.single.attributeWildcardNamespaces, {'', 'urn:example', 'urn:other'});
     });
 
+    test('compiles an other-namespace attribute wildcard', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'other-any-attribute.xsd',
+        source: '''
+          <xs:schema
+              xmlns:xs="http://www.w3.org/2001/XMLSchema"
+              targetNamespace="urn:example">
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:anyAttribute namespace="##other"/>
+              </xs:complexType>
+            </xs:element>
+          </xs:schema>
+        ''',
+      );
+
+      expect(schema.globalElements.single.attributeWildcardExcludedNamespaces, {'', 'urn:example'});
+    });
+
     test('exposes global attributes for wildcard datatype lookup', () {
       final schema = ExiSchemaCompiler.compile(
         id: 'global-attributes.xsd',

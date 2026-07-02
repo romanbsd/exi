@@ -262,6 +262,7 @@ final class _Compiler {
         typeAlternatives: alternatives,
         anyAttribute: declaration.anyAttribute,
         attributeWildcardNamespaces: declaration.attributeWildcardNamespaces,
+        attributeWildcardExcludedNamespaces: declaration.attributeWildcardExcludedNamespaces,
       );
     }
     if (declaration.content != null ||
@@ -277,6 +278,7 @@ final class _Compiler {
         typeAlternatives: alternatives,
         anyAttribute: declaration.anyAttribute,
         attributeWildcardNamespaces: declaration.attributeWildcardNamespaces,
+        attributeWildcardExcludedNamespaces: declaration.attributeWildcardExcludedNamespaces,
       );
     }
     if (declaration.children.isNotEmpty) {
@@ -317,6 +319,7 @@ final class _Compiler {
     final attributes = _compileAttributes(complexType);
     final anyAttribute = _hasAnyAttribute(complexType);
     final attributeWildcardNamespaces = _attributeWildcardNamespaces(complexType);
+    final attributeWildcardExcludedNamespaces = _attributeWildcardExcludedNamespaces(complexType);
     final compositors = [
       ..._children(complexType, 'sequence'),
       ..._children(complexType, 'choice'),
@@ -335,6 +338,7 @@ final class _Compiler {
           nillable: nillable,
           anyAttribute: anyAttribute,
           attributeWildcardNamespaces: attributeWildcardNamespaces,
+          attributeWildcardExcludedNamespaces: attributeWildcardExcludedNamespaces,
         );
       }
       return ExiElementDeclaration.empty(name, nillable: nillable);
@@ -363,6 +367,7 @@ final class _Compiler {
       nillable: nillable,
       anyAttribute: anyAttribute,
       attributeWildcardNamespaces: attributeWildcardNamespaces,
+      attributeWildcardExcludedNamespaces: attributeWildcardExcludedNamespaces,
     );
   }
 
@@ -423,6 +428,10 @@ final class _Compiler {
       final value => throw FormatException('Invalid XSD mixed value "$value"'),
     };
     final extensionAnyAttribute = _hasAnyAttribute(extension);
+    if ((base.attributeWildcardExcludedNamespaces != null && extensionAnyAttribute) ||
+        (_attributeWildcardExcludedNamespaces(extension) != null && base.anyAttribute)) {
+      throw UnsupportedError('Combining ##other with inherited attribute wildcards is not supported yet');
+    }
     final anyAttribute = base.anyAttribute || extensionAnyAttribute;
     final attributeWildcardNamespaces = _mergeWildcardNamespaces(
       base.anyAttribute,
@@ -438,6 +447,8 @@ final class _Compiler {
       nillable: nillable,
       anyAttribute: anyAttribute,
       attributeWildcardNamespaces: attributeWildcardNamespaces,
+      attributeWildcardExcludedNamespaces:
+          base.attributeWildcardExcludedNamespaces ?? _attributeWildcardExcludedNamespaces(extension),
     );
   }
 
@@ -495,6 +506,7 @@ final class _Compiler {
       nillable: nillable,
       anyAttribute: _hasAnyAttribute(derivation),
       attributeWildcardNamespaces: _attributeWildcardNamespaces(derivation),
+      attributeWildcardExcludedNamespaces: _attributeWildcardExcludedNamespaces(derivation),
     );
   }
 
@@ -518,6 +530,9 @@ final class _Compiler {
     if (namespace == null || namespace == '##any') {
       return null;
     }
+    if (namespace.trim() == '##other') {
+      return null;
+    }
     final result = <String>{};
     for (final token in namespace.split(RegExp(r'\s+')).where((token) => token.isNotEmpty)) {
       switch (token) {
@@ -526,12 +541,20 @@ final class _Compiler {
         case '##targetNamespace':
           result.add(targetNamespace);
         case '##other':
-          throw UnsupportedError('The XSD ##other attribute wildcard is not supported yet');
+          throw const FormatException('##other cannot be combined with other wildcard namespaces');
         default:
           result.add(token);
       }
     }
     return result;
+  }
+
+  Set<String>? _attributeWildcardExcludedNamespaces(XmlElement container) {
+    final wildcards = _children(container, 'anyAttribute');
+    if (wildcards.isEmpty || wildcards.single.getAttribute('namespace')?.trim() != '##other') {
+      return null;
+    }
+    return {'', targetNamespace};
   }
 
   Set<String>? _mergeWildcardNamespaces(bool leftEnabled, Set<String>? left, bool rightEnabled, Set<String>? right) {

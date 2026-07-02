@@ -403,6 +403,9 @@ final class _DecoderState {
           final name = wildcardUri == null
               ? strings.readQName(input)
               : ExiQName(uri: wildcardUri, localName: strings.readString(input));
+          if (declaration.attributeWildcardExcludedNamespaces?.contains(name.uri) ?? false) {
+            throw const FormatException('Attribute QName does not match the schema wildcard namespace constraint');
+          }
           if (!seenAttributes.add(name)) {
             throw const FormatException('Duplicate wildcard attribute');
           }
