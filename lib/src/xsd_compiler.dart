@@ -263,6 +263,7 @@ final class _Compiler {
         anyAttribute: declaration.anyAttribute,
         attributeWildcardNamespaces: declaration.attributeWildcardNamespaces,
         attributeWildcardExcludedNamespaces: declaration.attributeWildcardExcludedNamespaces,
+        attributeProcessContents: declaration.attributeProcessContents,
       );
     }
     if (declaration.content != null ||
@@ -279,6 +280,7 @@ final class _Compiler {
         anyAttribute: declaration.anyAttribute,
         attributeWildcardNamespaces: declaration.attributeWildcardNamespaces,
         attributeWildcardExcludedNamespaces: declaration.attributeWildcardExcludedNamespaces,
+        attributeProcessContents: declaration.attributeProcessContents,
       );
     }
     if (declaration.children.isNotEmpty) {
@@ -339,6 +341,7 @@ final class _Compiler {
           anyAttribute: anyAttribute,
           attributeWildcardNamespaces: attributeWildcardNamespaces,
           attributeWildcardExcludedNamespaces: attributeWildcardExcludedNamespaces,
+          attributeProcessContents: _attributeProcessContents(complexType),
         );
       }
       return ExiElementDeclaration.empty(name, nillable: nillable);
@@ -368,6 +371,7 @@ final class _Compiler {
       anyAttribute: anyAttribute,
       attributeWildcardNamespaces: attributeWildcardNamespaces,
       attributeWildcardExcludedNamespaces: attributeWildcardExcludedNamespaces,
+      attributeProcessContents: _attributeProcessContents(complexType),
     );
   }
 
@@ -449,6 +453,9 @@ final class _Compiler {
       attributeWildcardNamespaces: attributeWildcardNamespaces,
       attributeWildcardExcludedNamespaces:
           base.attributeWildcardExcludedNamespaces ?? _attributeWildcardExcludedNamespaces(extension),
+      attributeProcessContents: extensionAnyAttribute
+          ? _attributeProcessContents(extension)
+          : base.attributeProcessContents,
     );
   }
 
@@ -507,6 +514,7 @@ final class _Compiler {
       anyAttribute: _hasAnyAttribute(derivation),
       attributeWildcardNamespaces: _attributeWildcardNamespaces(derivation),
       attributeWildcardExcludedNamespaces: _attributeWildcardExcludedNamespaces(derivation),
+      attributeProcessContents: _attributeProcessContents(derivation),
     );
   }
 
@@ -555,6 +563,16 @@ final class _Compiler {
       return null;
     }
     return {'', targetNamespace};
+  }
+
+  ExiProcessContents _attributeProcessContents(XmlElement container) {
+    final wildcard = _children(container, 'anyAttribute').firstOrNull;
+    return switch (wildcard?.getAttribute('processContents')) {
+      null || 'strict' => ExiProcessContents.strict,
+      'lax' => ExiProcessContents.lax,
+      'skip' => ExiProcessContents.skip,
+      final value => throw FormatException('Invalid XSD processContents value "$value"'),
+    };
   }
 
   Set<String>? _mergeWildcardNamespaces(bool leftEnabled, Set<String>? left, bool rightEnabled, Set<String>? right) {

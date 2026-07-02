@@ -577,6 +577,23 @@ void main() {
       expect(schema.globalElements.single.anyAttribute, isTrue);
     });
 
+    test('compiles attribute wildcard processContents', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'skip-any-attribute.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:anyAttribute processContents="skip"/>
+              </xs:complexType>
+            </xs:element>
+          </xs:schema>
+        ''',
+      );
+
+      expect(schema.globalElements.single.attributeProcessContents, ExiProcessContents.skip);
+    });
+
     test('compiles finite attribute wildcard namespaces', () {
       final schema = ExiSchemaCompiler.compile(
         id: 'qualified-any-attribute.xsd',

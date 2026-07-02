@@ -18,6 +18,8 @@ enum ExiDatatype {
   time,
 }
 
+enum ExiProcessContents { strict, lax, skip }
+
 final class ExiSchema {
   const ExiSchema({required this.id, required this.globalElements, this.globalAttributes = const []});
 
@@ -34,6 +36,7 @@ final class ExiElementDeclaration {
     this.anyAttribute = false,
     this.attributeWildcardNamespaces,
     this.attributeWildcardExcludedNamespaces,
+    this.attributeProcessContents = ExiProcessContents.strict,
   }) : children = const [],
        datatype = null,
        attributes = const [],
@@ -48,6 +51,7 @@ final class ExiElementDeclaration {
     this.anyAttribute = false,
     this.attributeWildcardNamespaces,
     this.attributeWildcardExcludedNamespaces,
+    this.attributeProcessContents = ExiProcessContents.strict,
   }) : datatype = null,
        attributes = const [],
        content = null,
@@ -61,6 +65,7 @@ final class ExiElementDeclaration {
     this.anyAttribute = false,
     this.attributeWildcardNamespaces,
     this.attributeWildcardExcludedNamespaces,
+    this.attributeProcessContents = ExiProcessContents.strict,
   }) : children = const [],
        attributes = const [],
        content = null,
@@ -75,6 +80,7 @@ final class ExiElementDeclaration {
     this.anyAttribute = false,
     this.attributeWildcardNamespaces,
     this.attributeWildcardExcludedNamespaces,
+    this.attributeProcessContents = ExiProcessContents.strict,
   }) : children = const [],
        content = null,
        mixed = false;
@@ -89,6 +95,7 @@ final class ExiElementDeclaration {
     this.anyAttribute = false,
     this.attributeWildcardNamespaces,
     this.attributeWildcardExcludedNamespaces,
+    this.attributeProcessContents = ExiProcessContents.strict,
   }) : children = const [],
        datatype = null;
 
@@ -103,6 +110,7 @@ final class ExiElementDeclaration {
   final bool anyAttribute;
   final Set<String>? attributeWildcardNamespaces;
   final Set<String>? attributeWildcardExcludedNamespaces;
+  final ExiProcessContents attributeProcessContents;
 }
 
 final class ExiAttributeDeclaration {

@@ -396,7 +396,7 @@ void main() {
     final schema = _compile('''
       <xs:element name="root">
         <xs:complexType>
-          <xs:anyAttribute/>
+          <xs:anyAttribute processContents="lax"/>
         </xs:complexType>
       </xs:element>
     ''');
@@ -446,7 +446,7 @@ void main() {
             targetNamespace="urn:example">
           <xs:element name="root">
             <xs:complexType>
-              <xs:anyAttribute namespace="##targetNamespace"/>
+              <xs:anyAttribute namespace="##targetNamespace" processContents="lax"/>
             </xs:complexType>
           </xs:element>
         </xs:schema>
@@ -476,7 +476,7 @@ void main() {
             targetNamespace="urn:example">
           <xs:element name="root">
             <xs:complexType>
-              <xs:anyAttribute namespace="##other"/>
+              <xs:anyAttribute namespace="##other" processContents="lax"/>
             </xs:complexType>
           </xs:element>
         </xs:schema>
