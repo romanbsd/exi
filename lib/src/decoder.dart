@@ -418,17 +418,9 @@ final class _DecoderState {
             throw const FormatException('Duplicate wildcard attribute');
           }
           final globalAttribute = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
-          final value = switch (declaration.attributeProcessContents) {
-            ExiProcessContents.skip => strings.readValue(input, name),
-            ExiProcessContents.lax =>
-              globalAttribute == null
-                  ? strings.readValue(input, name)
-                  : ExiValueDecoder(input, strings).read(globalAttribute.datatype, name),
-            ExiProcessContents.strict =>
-              globalAttribute == null
-                  ? throw FormatException('No global attribute declaration for wildcard QName "${name.localName}"')
-                  : ExiValueDecoder(input, strings).read(globalAttribute.datatype, name),
-          };
+          final value = globalAttribute == null
+              ? strings.readValue(input, name)
+              : ExiValueDecoder(input, strings).read(globalAttribute.datatype, name);
           events.add(ExiAttribute(name, value));
         case _DeclaredEventKind.element:
           specialAttributesAllowed = false;

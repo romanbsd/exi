@@ -27,8 +27,8 @@ The current decoder stage supports:
   base-only simple types, plus attributed `simpleContent` and
   `complexContent` extension, unconstrained element and attribute wildcards
   with global declaration lookup, finite namespace-constrained wildcards,
-  `##other` wildcards, attribute strict/lax/skip processing, and namespace-aware
-  type resolution;
+  `##other` wildcards, wildcard datatype lookup independent of XSD
+  `processContents`, and namespace-aware type resolution;
 - schema-typed string, boolean, integer, decimal, float, binary, date, time,
   and date-time values;
 - URI, local-name, and value string-table partitions, including schema-informed
