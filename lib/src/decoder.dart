@@ -358,7 +358,7 @@ final class _DecoderState {
       if (specialCount > 0 && selected == candidates.length) {
         final special = input.readNBitUnsigned(_bitWidth(specialCount));
         if (canReadType && special == 0) {
-          final targetName = ExiQName(uri: strings.readString(input), localName: strings.readString(input));
+          final targetName = strings.readQName(input);
           final target = declaration.typeAlternatives[targetName];
           if (target == null) {
             throw FormatException('Unknown xsi:type "${targetName.localName}"');

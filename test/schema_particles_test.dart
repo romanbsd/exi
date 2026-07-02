@@ -260,15 +260,50 @@ void main() {
     final bits = StringBuffer()
       // Root=0; xsi:type uses the second-level escape=1.
       ..write('01')
-      // QName value: empty URI, local name Derived.
-      ..write(_rawString(''))
-      ..write(_rawString('Derived'));
+      // QName value uses the prepopulated empty-URI and local-name partitions.
+      ..write(_schemaQName('', 'Derived', localNames: ['Base', 'Derived', 'child', 'root']));
 
     final document = _decode(schema, bits.toString());
     final type = document.events.whereType<ExiAttribute>().single;
 
     expect(type.name.localName, 'type');
     expect(type.value, 'Derived');
+    expect(document.events.whereType<ExiStartElement>().map((event) => event.name.localName), ['root', 'child']);
+  });
+
+  test('resolves a namespace-qualified xsi:type QName', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'particles',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            xmlns:tns="urn:example"
+            targetNamespace="urn:example">
+          <xs:complexType name="Base"/>
+          <xs:complexType name="Derived">
+            <xs:complexContent>
+              <xs:extension base="tns:Base">
+                <xs:sequence>
+                  <xs:element name="child"/>
+                </xs:sequence>
+              </xs:extension>
+            </xs:complexContent>
+          </xs:complexType>
+          <xs:element name="root" type="tns:Base"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer()
+      // Root=0; xsi:type uses the second-level escape=1.
+      ..write('01')
+      ..write(
+        _schemaQName('urn:example', 'Derived', schemaUris: ['urn:example'], localNames: ['Base', 'Derived', 'root']),
+      );
+
+    final document = _decode(schema, bits.toString());
+    final type = document.events.whereType<ExiAttribute>().single;
+
+    expect(type.value, '{urn:example}Derived');
     expect(document.events.whereType<ExiStartElement>().map((event) => event.name.localName), ['root', 'child']);
   });
 

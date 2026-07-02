@@ -18,7 +18,7 @@ The current decoder stage supports:
 - strict compiled schemas containing global elements, attributes, sequences,
   choices, unordered `all` groups, and optional, bounded, or unbounded element
   and compositor particles, including mixed and nillable content and named
-  derived-type selection through `xsi:type`;
+  derived-type selection through QName-encoded `xsi:type`;
 - XSD compilation for global elements, named/inline complex types, attributes,
   global element and attribute references, named model and attribute groups,
   nested sequences and choices, `all` compositors, empty content, occurrence
