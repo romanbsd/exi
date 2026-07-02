@@ -270,6 +270,81 @@ void main() {
     );
   });
 
+  test('decodes a named list of schema-typed integers', () {
+    const schemaId = 'integer-list';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="IntegerList">
+            <xs:list itemType="xs:integer"/>
+          </xs:simpleType>
+          <xs:element name="values" type="IntegerList"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Root selection and list length.
+      ..write('0')
+      ..write(_unsigned(3))
+      // Integer items 1, -2, and 3.
+      ..write('0')
+      ..write(_unsigned(1))
+      ..write('1')
+      ..write(_unsigned(1))
+      ..write('0')
+      ..write(_unsigned(3));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(schema.globalElements.single.datatype, ExiDatatype.list);
+    expect(schema.globalElements.single.listItemDatatype, ExiDatatype.integer);
+    expect(document.toXmlString(), '<values>1 -2 3</values>');
+  });
+
+  test('decodes built-in and inline schema list types', () {
+    const schemaId = 'other-lists';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="tokens" type="xs:NMTOKENS"/>
+              </xs:sequence>
+              <xs:attribute name="flags" use="required">
+                <xs:simpleType>
+                  <xs:list itemType="xs:boolean"/>
+                </xs:simpleType>
+              </xs:attribute>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Root and required attribute are implicit; two Boolean list items.
+      ..write('0')
+      ..write(_unsigned(2))
+      ..write('10')
+      ..write('00')
+      // The tokens child is implicit; two String list items.
+      ..write(_unsigned(2))
+      ..write(_rawString('one'))
+      ..write(_rawString('two'));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root flags="true false"><tokens>one two</tokens></root>');
+  });
+
   test('decodes typed simple content after a required attribute', () {
     const schemaId = 'simple-content';
     final schema = ExiSchemaCompiler.compile(
@@ -375,6 +450,11 @@ String _unsigned(int value) {
 String _value(String value) {
   final codePoints = value.runes.toList();
   return '${_unsigned(codePoints.length + 2)}${codePoints.map(_unsigned).join()}';
+}
+
+String _rawString(String value) {
+  final codePoints = value.runes.toList();
+  return '${_unsigned(codePoints.length)}${codePoints.map(_unsigned).join()}';
 }
 
 Uint8List _pack(String bits) {

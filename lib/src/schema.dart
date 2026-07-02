@@ -21,6 +21,7 @@ enum ExiDatatype {
   gMonth,
   gMonthDay,
   gDay,
+  list,
 }
 
 enum ExiProcessContents { strict, lax, skip }
@@ -54,6 +55,7 @@ final class ExiElementDeclaration {
     this.attributeProcessContents = ExiProcessContents.strict,
   }) : children = const [],
        datatype = null,
+       listItemDatatype = null,
        attributes = const [],
        content = null,
        mixed = false;
@@ -68,6 +70,7 @@ final class ExiElementDeclaration {
     this.attributeWildcardExcludedNamespaces,
     this.attributeProcessContents = ExiProcessContents.strict,
   }) : datatype = null,
+       listItemDatatype = null,
        attributes = const [],
        content = null,
        mixed = false;
@@ -75,13 +78,15 @@ final class ExiElementDeclaration {
   const ExiElementDeclaration.value(
     this.name,
     this.datatype, {
+    this.listItemDatatype,
     this.nillable = false,
     this.typeAlternatives = const {},
     this.anyAttribute = false,
     this.attributeWildcardNamespaces,
     this.attributeWildcardExcludedNamespaces,
     this.attributeProcessContents = ExiProcessContents.strict,
-  }) : children = const [],
+  }) : assert((datatype == ExiDatatype.list) == (listItemDatatype != null)),
+       children = const [],
        attributes = const [],
        content = null,
        mixed = false;
@@ -89,6 +94,7 @@ final class ExiElementDeclaration {
   const ExiElementDeclaration.simpleContent(
     this.name,
     this.datatype, {
+    this.listItemDatatype,
     this.attributes = const [],
     this.nillable = false,
     this.typeAlternatives = const {},
@@ -96,7 +102,8 @@ final class ExiElementDeclaration {
     this.attributeWildcardNamespaces,
     this.attributeWildcardExcludedNamespaces,
     this.attributeProcessContents = ExiProcessContents.strict,
-  }) : children = const [],
+  }) : assert((datatype == ExiDatatype.list) == (listItemDatatype != null)),
+       children = const [],
        content = null,
        mixed = false;
 
@@ -112,11 +119,13 @@ final class ExiElementDeclaration {
     this.attributeWildcardExcludedNamespaces,
     this.attributeProcessContents = ExiProcessContents.strict,
   }) : children = const [],
-       datatype = null;
+       datatype = null,
+       listItemDatatype = null;
 
   final ExiQName name;
   final List<ExiElementDeclaration> children;
   final ExiDatatype? datatype;
+  final ExiDatatype? listItemDatatype;
   final List<ExiAttributeDeclaration> attributes;
   final ExiParticle? content;
   final bool mixed;
@@ -129,10 +138,16 @@ final class ExiElementDeclaration {
 }
 
 final class ExiAttributeDeclaration {
-  const ExiAttributeDeclaration({required this.name, required this.datatype, this.required = false});
+  const ExiAttributeDeclaration({
+    required this.name,
+    required this.datatype,
+    this.listItemDatatype,
+    this.required = false,
+  }) : assert((datatype == ExiDatatype.list) == (listItemDatatype != null));
 
   final ExiQName name;
   final ExiDatatype datatype;
+  final ExiDatatype? listItemDatatype;
   final bool required;
 }
 

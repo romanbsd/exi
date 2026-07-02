@@ -24,14 +24,14 @@ The current decoder stage supports:
   global element and attribute references, named model and attribute groups,
   nested sequences and choices, `all` compositors, empty content, occurrence
   ranges, local namespace form overrides, and primitive, named, and chained
-  base-only simple types, plus attributed `simpleContent` and
+  base-only simple types and typed lists, plus attributed `simpleContent` and
   `complexContent` extension, unconstrained element and attribute wildcards
   with global declaration lookup, finite namespace-constrained wildcards,
   `##other` wildcards, wildcard datatype lookup independent of XSD
   `processContents`, and namespace-aware type resolution;
 - schema-typed string, boolean, integer, decimal, float, binary, date, time,
-  date-time, and partial Gregorian calendar values, with the required String
-  fallback for duration, QName, and NOTATION schema types;
+  date-time, partial Gregorian calendar, and list values, with the required
+  String fallback for duration, QName, and NOTATION schema types;
 - URI, local-name, and value string-table partitions, including schema-informed
   URI and declared-name prepopulation;
 - start/end document, start/end element, attribute, character, namespace,
@@ -39,7 +39,7 @@ The current decoder stage supports:
 - XML reconstruction, including preserved namespace declarations.
 
 Datatype representation maps and user metadata remain unsupported. XSD
-imports/includes, simple-type facets, lists/unions, complex-content
+imports/includes, simple-type facets, unions, complex-content
 restriction, defaults and fixed values, substitution groups, abstract
 declarations and derivation controls, inherited wildcard unions involving
 `##other`, repetition of nullable compositors, non-strict and more general

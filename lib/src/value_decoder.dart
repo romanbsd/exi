@@ -11,7 +11,7 @@ final class ExiValueDecoder {
   final BitInput input;
   final ExiStringTable strings;
 
-  String read(ExiDatatype datatype, ExiQName context) {
+  String read(ExiDatatype datatype, ExiQName context, {ExiDatatype? listItemDatatype}) {
     return switch (datatype) {
       ExiDatatype.string => strings.readValue(input, context),
       ExiDatatype.boolean => input.readNBitUnsigned(2) < 2 ? 'false' : 'true',
@@ -31,7 +31,22 @@ final class ExiValueDecoder {
       ExiDatatype.gMonth => _readGregorian(ExiDatatype.gMonth),
       ExiDatatype.gMonthDay => _readGregorian(ExiDatatype.gMonthDay),
       ExiDatatype.gDay => _readGregorian(ExiDatatype.gDay),
+      ExiDatatype.list => _readList(
+        listItemDatatype ?? (throw StateError('EXI list datatype is missing its item datatype')),
+        context,
+      ),
     };
+  }
+
+  String _readList(ExiDatatype itemDatatype, ExiQName context) {
+    final encodedLength = input.readUnsignedInteger();
+    if (encodedLength > BigInt.from(0x7fffffff)) {
+      throw const FormatException('EXI list value is too large to materialize');
+    }
+    return [
+      for (var index = 0; index < encodedLength.toInt(); index++)
+        itemDatatype == ExiDatatype.string ? strings.readString(input) : read(itemDatatype, context),
+    ].join(' ');
   }
 
   BigInt _readInteger() {

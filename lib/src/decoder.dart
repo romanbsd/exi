@@ -396,7 +396,10 @@ final class _DecoderState {
           specialAttributesAllowed = false;
           final attribute = event.attribute!;
           attributeIndex = event.attributeIndex! + 1;
-          final value = ExiValueDecoder(input, strings).read(attribute.datatype, attribute.name);
+          final value = ExiValueDecoder(
+            input,
+            strings,
+          ).read(attribute.datatype, attribute.name, listItemDatatype: attribute.listItemDatatype);
           if (!seenAttributes.add(attribute.name)) {
             throw const FormatException('Duplicate schema attribute');
           }
@@ -417,7 +420,10 @@ final class _DecoderState {
           final globalAttribute = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
           final value = globalAttribute == null
               ? strings.readValue(input, name)
-              : ExiValueDecoder(input, strings).read(globalAttribute.datatype, name);
+              : ExiValueDecoder(
+                  input,
+                  strings,
+                ).read(globalAttribute.datatype, name, listItemDatatype: globalAttribute.listItemDatatype);
           events.add(ExiAttribute(name, value));
         case _DeclaredEventKind.element:
           specialAttributesAllowed = false;
@@ -453,7 +459,14 @@ final class _DecoderState {
           events.add(ExiCharacters(strings.readValue(input, elementName)));
         case _DeclaredEventKind.typedCharacters:
           specialAttributesAllowed = false;
-          events.add(ExiCharacters(ExiValueDecoder(input, strings).read(datatype!, elementName)));
+          events.add(
+            ExiCharacters(
+              ExiValueDecoder(
+                input,
+                strings,
+              ).read(datatype!, elementName, listItemDatatype: declaration.listItemDatatype),
+            ),
+          );
           events.add(ExiEndElement(elementName));
           return;
         case _DeclaredEventKind.end:
