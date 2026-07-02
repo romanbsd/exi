@@ -26,28 +26,38 @@ final class ExiSchema {
 }
 
 final class ExiElementDeclaration {
-  const ExiElementDeclaration.empty(this.name, {this.nillable = false, this.typeAlternatives = const {}})
-    : children = const [],
-      datatype = null,
-      attributes = const [],
-      content = null,
-      mixed = false;
+  const ExiElementDeclaration.empty(
+    this.name, {
+    this.nillable = false,
+    this.typeAlternatives = const {},
+    this.anyAttribute = false,
+  }) : children = const [],
+       datatype = null,
+       attributes = const [],
+       content = null,
+       mixed = false;
 
   const ExiElementDeclaration.sequence(
     this.name,
     this.children, {
     this.nillable = false,
     this.typeAlternatives = const {},
+    this.anyAttribute = false,
   }) : datatype = null,
        attributes = const [],
        content = null,
        mixed = false;
 
-  const ExiElementDeclaration.value(this.name, this.datatype, {this.nillable = false, this.typeAlternatives = const {}})
-    : children = const [],
-      attributes = const [],
-      content = null,
-      mixed = false;
+  const ExiElementDeclaration.value(
+    this.name,
+    this.datatype, {
+    this.nillable = false,
+    this.typeAlternatives = const {},
+    this.anyAttribute = false,
+  }) : children = const [],
+       attributes = const [],
+       content = null,
+       mixed = false;
 
   const ExiElementDeclaration.simpleContent(
     this.name,
@@ -55,6 +65,7 @@ final class ExiElementDeclaration {
     this.attributes = const [],
     this.nillable = false,
     this.typeAlternatives = const {},
+    this.anyAttribute = false,
   }) : children = const [],
        content = null,
        mixed = false;
@@ -66,6 +77,7 @@ final class ExiElementDeclaration {
     this.mixed = false,
     this.nillable = false,
     this.typeAlternatives = const {},
+    this.anyAttribute = false,
   }) : children = const [],
        datatype = null;
 
@@ -77,6 +89,7 @@ final class ExiElementDeclaration {
   final bool mixed;
   final bool nillable;
   final Map<ExiQName, ExiElementDeclaration> typeAlternatives;
+  final bool anyAttribute;
 }
 
 final class ExiAttributeDeclaration {

@@ -307,6 +307,7 @@ final class _DecoderState {
     var nilSeen = false;
     var nilled = false;
     var specialAttributesAllowed = allowSpecialAttributes;
+    final seenAttributes = <ExiQName>{};
 
     while (true) {
       final candidates = <_DeclaredEvent>[];
@@ -320,6 +321,9 @@ final class _DecoderState {
         }
       }
       if (contentIsReachable) {
+        if (declaration.anyAttribute) {
+          candidates.add(const _DeclaredEvent.wildcardAttribute());
+        }
         if (datatype != null) {
           candidates.add(nilled ? const _DeclaredEvent.end() : const _DeclaredEvent.typedCharacters());
         } else {
@@ -381,7 +385,18 @@ final class _DecoderState {
           final attribute = event.attribute!;
           attributeIndex = event.attributeIndex! + 1;
           final value = ExiValueDecoder(input, strings).read(attribute.datatype, attribute.name);
+          if (!seenAttributes.add(attribute.name)) {
+            throw const FormatException('Duplicate schema attribute');
+          }
           events.add(ExiAttribute(attribute.name, value));
+        case _DeclaredEventKind.wildcardAttribute:
+          specialAttributesAllowed = false;
+          attributeIndex = attributes.length;
+          final name = strings.readQName(input);
+          if (!seenAttributes.add(name)) {
+            throw const FormatException('Duplicate wildcard attribute');
+          }
+          events.add(ExiAttribute(name, strings.readValue(input, name)));
         case _DeclaredEventKind.element:
           specialAttributesAllowed = false;
           attributeIndex = attributes.length;
@@ -487,7 +502,7 @@ final class _DecoderState {
   }
 }
 
-enum _DeclaredEventKind { attribute, element, end, characters, typedCharacters }
+enum _DeclaredEventKind { attribute, wildcardAttribute, element, end, characters, typedCharacters }
 
 final class _DeclaredEvent {
   const _DeclaredEvent.attribute(this.attributeIndex, this.attribute)
@@ -498,6 +513,12 @@ final class _DeclaredEvent {
     : kind = _DeclaredEventKind.element,
       attributeIndex = null,
       attribute = null;
+
+  const _DeclaredEvent.wildcardAttribute()
+    : kind = _DeclaredEventKind.wildcardAttribute,
+      attributeIndex = null,
+      attribute = null,
+      element = null;
 
   const _DeclaredEvent.end() : kind = _DeclaredEventKind.end, attributeIndex = null, attribute = null, element = null;
 

@@ -560,6 +560,23 @@ void main() {
       );
     });
 
+    test('compiles an unconstrained attribute wildcard', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'any-attribute.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:anyAttribute/>
+              </xs:complexType>
+            </xs:element>
+          </xs:schema>
+        ''',
+      );
+
+      expect(schema.globalElements.single.anyAttribute, isTrue);
+    });
+
     test('rejects unresolved attribute references', () {
       expect(
         () => ExiSchemaCompiler.compile(

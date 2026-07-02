@@ -392,6 +392,27 @@ void main() {
     expect(document.toXmlString(), '<root id="7" kind="example"/>');
   });
 
+  test('decodes an unconstrained schema attribute wildcard', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:anyAttribute/>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Root=0; AT(*)=0.
+      ..write('00')
+      ..write(_qName('', 'extra'))
+      ..write(_value('7'))
+      // EE=1 after the wildcard attribute.
+      ..write('1');
+
+    final document = _decode(schema, bits.toString());
+
+    expect(document.toXmlString(), '<root extra="7"/>');
+  });
+
   test('decodes qualified local names from schema form overrides', () {
     final schema = ExiSchemaCompiler.compile(
       id: 'forms',
@@ -470,6 +491,16 @@ String _value(String value) {
 String _rawString(String value) {
   final codePoints = value.runes.toList();
   return '${_unsigned(codePoints.length)}${codePoints.map(_unsigned).join()}';
+}
+
+String _qName(String uri, String localName) {
+  final encodedUri = uri.isEmpty ? '01' : '00${_rawString(uri)}';
+  return '$encodedUri${_literal(localName, 1)}';
+}
+
+String _literal(String value, int lengthOffset) {
+  final codePoints = value.runes.toList();
+  return '${_unsigned(codePoints.length + lengthOffset)}${codePoints.map(_unsigned).join()}';
 }
 
 String _unsigned(int value) {

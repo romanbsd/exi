@@ -259,9 +259,13 @@ final class _Compiler {
         attributes: declaration.attributes,
         nillable: declaration.nillable,
         typeAlternatives: alternatives,
+        anyAttribute: declaration.anyAttribute,
       );
     }
-    if (declaration.content != null || declaration.attributes.isNotEmpty || declaration.mixed) {
+    if (declaration.content != null ||
+        declaration.attributes.isNotEmpty ||
+        declaration.mixed ||
+        declaration.anyAttribute) {
       return ExiElementDeclaration.complex(
         declaration.name,
         attributes: declaration.attributes,
@@ -269,6 +273,7 @@ final class _Compiler {
         mixed: declaration.mixed,
         nillable: declaration.nillable,
         typeAlternatives: alternatives,
+        anyAttribute: declaration.anyAttribute,
       );
     }
     if (declaration.children.isNotEmpty) {
@@ -307,6 +312,7 @@ final class _Compiler {
       return _compileComplexContent(name, complexContent, mixed: mixed, nillable: nillable);
     }
     final attributes = _compileAttributes(complexType);
+    final anyAttribute = _hasAnyAttribute(complexType);
     final compositors = [
       ..._children(complexType, 'sequence'),
       ..._children(complexType, 'choice'),
@@ -317,8 +323,14 @@ final class _Compiler {
       throw UnsupportedError('A complex type with multiple compositors is not supported');
     }
     if (compositors.isEmpty) {
-      if (attributes.isNotEmpty || mixed) {
-        return ExiElementDeclaration.complex(name, attributes: attributes, mixed: mixed, nillable: nillable);
+      if (attributes.isNotEmpty || mixed || anyAttribute) {
+        return ExiElementDeclaration.complex(
+          name,
+          attributes: attributes,
+          mixed: mixed,
+          nillable: nillable,
+          anyAttribute: anyAttribute,
+        );
       }
       return ExiElementDeclaration.empty(name, nillable: nillable);
     }
@@ -344,6 +356,7 @@ final class _Compiler {
       content: content,
       mixed: mixed,
       nillable: nillable,
+      anyAttribute: anyAttribute,
     );
   }
 
@@ -409,6 +422,7 @@ final class _Compiler {
       content: content,
       mixed: mixed || contentMixed || base.mixed,
       nillable: nillable,
+      anyAttribute: base.anyAttribute || _hasAnyAttribute(extension),
     );
   }
 
@@ -459,7 +473,28 @@ final class _Compiler {
       }
     }
     final attributes = _compileAttributes(derivation);
-    return ExiElementDeclaration.simpleContent(name, datatype, attributes: attributes, nillable: nillable);
+    return ExiElementDeclaration.simpleContent(
+      name,
+      datatype,
+      attributes: attributes,
+      nillable: nillable,
+      anyAttribute: _hasAnyAttribute(derivation),
+    );
+  }
+
+  bool _hasAnyAttribute(XmlElement container) {
+    final wildcards = _children(container, 'anyAttribute');
+    if (wildcards.length > 1) {
+      throw const FormatException('An XSD declaration cannot contain multiple attribute wildcards');
+    }
+    if (wildcards.isEmpty) {
+      return false;
+    }
+    final namespace = wildcards.single.getAttribute('namespace');
+    if (namespace != null && namespace != '##any') {
+      throw UnsupportedError('Only unconstrained XSD attribute wildcards are supported yet');
+    }
+    return true;
   }
 
   ExiParticle _compileParticle(XmlElement particle) {

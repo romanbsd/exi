@@ -24,7 +24,8 @@ The current decoder stage supports:
   nested sequences and choices, `all` compositors, empty content, occurrence
   ranges, local namespace form overrides, and primitive, named, and chained
   base-only simple types, plus attributed `simpleContent` and
-  `complexContent` extension with namespace-aware type resolution;
+  `complexContent` extension, unconstrained attribute wildcards, and
+  namespace-aware type resolution;
 - schema-typed string, boolean, integer, decimal, float, binary, date, time,
   and date-time values;
 - URI, local-name, and value string-table partitions;
@@ -34,9 +35,10 @@ The current decoder stage supports:
 
 Datatype representation maps and user metadata remain unsupported. XSD
 imports/includes, simple-type facets, lists/unions, complex-content
-restriction, attribute wildcards, repetition of nullable compositors,
-non-strict and more general schema-informed grammars, self-contained elements,
-pre-compression, and compression are also not yet available.
+restriction, constrained attribute wildcards, repetition of nullable
+compositors, non-strict and more general schema-informed grammars,
+self-contained elements, pre-compression, and compression are also not yet
+available.
 
 ```dart
 import 'dart:typed_data';
