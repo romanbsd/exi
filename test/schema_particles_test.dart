@@ -30,6 +30,26 @@ void main() {
     expect(document.toXmlString(), '<root id="7"><child/></root>');
   });
 
+  test('decodes an early end-element non-strict deviation', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="required"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    ''');
+
+    // Document root=0; first-level escape=1; second-level EE=000.
+    final document = ExiDecoder(
+      options: const ExiOptions(schemaId: ExiSchemaId.named('particles')),
+      schemaResolver: (_) => schema,
+    ).decode(_pack('1000000001000'));
+
+    expect(document.toXmlString(), '<root/>');
+  });
+
   group('strict schema particles', () {
     test('decodes an optional child that is absent', () {
       final schema = _compile('''

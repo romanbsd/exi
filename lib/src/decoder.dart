@@ -334,6 +334,7 @@ final class _DecoderState {
     var nilSeen = false;
     var nilled = false;
     var specialAttributesAllowed = allowSpecialAttributes;
+    var contentStarted = false;
     final seenAttributes = <ExiQName>{};
 
     while (true) {
@@ -383,7 +384,16 @@ final class _DecoderState {
 
       final selected = input.readNBitUnsigned(_bitWidth(candidateCount));
       if (selected == candidates.length && !options.strict) {
-        throw UnsupportedError('Non-strict schema-deviation productions are not supported yet');
+        final ended = _readNonStrictDeviation(
+          hasFirstLevelEnd: candidates.any((event) => event.kind == _DeclaredEventKind.end),
+          atEntry: !contentStarted && attributeIndex == 0 && seenAttributes.isEmpty,
+          inAttributePhase: !contentStarted,
+        );
+        if (ended) {
+          events.add(ExiEndElement(elementName));
+          return;
+        }
+        continue;
       }
       if (specialCount > 0 && selected == candidates.length) {
         final special = input.readNBitUnsigned(_bitWidth(specialCount));
@@ -470,6 +480,7 @@ final class _DecoderState {
           events.add(ExiAttribute(name, value));
         case _DeclaredEventKind.element:
           specialAttributesAllowed = false;
+          contentStarted = true;
           attributeIndex = attributes.length;
           final child = event.element!;
           final derivative = _derive(content, child);
@@ -480,6 +491,7 @@ final class _DecoderState {
           _decodeElement(child.name, declaration: child);
         case _DeclaredEventKind.wildcardElement:
           specialAttributesAllowed = false;
+          contentStarted = true;
           attributeIndex = attributes.length;
           final wildcard = event.wildcardParticle!;
           final wildcardUri = event.wildcardUri;
@@ -498,6 +510,7 @@ final class _DecoderState {
           _decodeElement(name, declaration: globalElement);
         case _DeclaredEventKind.characters:
           specialAttributesAllowed = false;
+          contentStarted = true;
           attributeIndex = attributes.length;
           events.add(ExiCharacters(strings.readValue(input, elementName)));
         case _DeclaredEventKind.typedCharacters:
@@ -524,6 +537,32 @@ final class _DecoderState {
           return;
       }
     }
+  }
+
+  bool _readNonStrictDeviation({
+    required bool hasFirstLevelEnd,
+    required bool atEntry,
+    required bool inAttributePhase,
+  }) {
+    final productions = <_NonStrictDeviation>[
+      if (!hasFirstLevelEnd) _NonStrictDeviation.endElement,
+      if (atEntry) ...[_NonStrictDeviation.xsiType, _NonStrictDeviation.xsiNil],
+      if (inAttributePhase) ...[_NonStrictDeviation.attribute, _NonStrictDeviation.untypedAttribute],
+      if (atEntry && options.fidelity.prefixes) _NonStrictDeviation.namespaceDeclaration,
+      if (atEntry && options.selfContained) _NonStrictDeviation.selfContained,
+      _NonStrictDeviation.startElement,
+      _NonStrictDeviation.characters,
+      if (options.fidelity.dtd) _NonStrictDeviation.entityReference,
+      if (options.fidelity.comments || options.fidelity.processingInstructions) _NonStrictDeviation.commentOrPi,
+    ];
+    final selected = input.readNBitUnsigned(_bitWidth(productions.length));
+    if (selected >= productions.length) {
+      throw const FormatException('Invalid non-strict schema event-code second part');
+    }
+    if (productions[selected] == _NonStrictDeviation.endElement) {
+      return true;
+    }
+    throw UnsupportedError('Non-strict ${productions[selected].name} productions are not supported yet');
   }
 
   ({ExiQName targetName, String lexicalValue}) _readXsiType(ExiElementDeclaration declaration) {
@@ -631,6 +670,20 @@ final class _DecoderState {
 }
 
 enum _DeclaredEventKind { attribute, wildcardAttribute, element, wildcardElement, end, characters, typedCharacters }
+
+enum _NonStrictDeviation {
+  endElement,
+  xsiType,
+  xsiNil,
+  attribute,
+  untypedAttribute,
+  namespaceDeclaration,
+  selfContained,
+  startElement,
+  characters,
+  entityReference,
+  commentOrPi,
+}
 
 final class _DeclaredEvent {
   const _DeclaredEvent.attribute(this.attributeIndex, this.attribute)

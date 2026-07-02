@@ -18,11 +18,12 @@ The current decoder stage supports:
 - bit-packed and byte-aligned event/content decoding, including header padding;
 - absent, schema-less, built-in-types, and named schema IDs with resolver-based
   schema selection;
-- strict compiled schemas and schema-valid first-level paths through non-strict
-  schemas, containing global elements, attributes, sequences, choices,
-  unordered `all` groups, and optional, bounded, or unbounded element and
-  compositor particles, including mixed and nillable content and named
-  derived-type selection through QName-encoded `xsi:type`;
+- strict compiled schemas and schema-valid first-level paths plus early
+  end-element deviations through non-strict schemas, containing global
+  elements, attributes, sequences, choices, unordered `all` groups, and
+  optional, bounded, or unbounded element and compositor particles, including
+  mixed and nillable content and named derived-type selection through
+  QName-encoded `xsi:type`;
 - XSD compilation for global elements, named/inline complex types, attributes,
   global element and attribute references, named model and attribute groups,
   nested sequences and choices, `all` compositors, empty content, occurrence
@@ -49,9 +50,10 @@ imports/includes, simple-type facets other than enumeration, integer bounds,
 and Boolean patterns, complex-content restriction, defaults and fixed values,
 substitution groups, abstract declarations and derivation controls, inherited
 wildcard unions involving `##other`, repetition of nullable compositors,
-non-strict schema-deviation productions and more general schema-informed
-grammars, relaxed element-fragment grammars for ambiguous declarations,
-pre-compression, and compression are also not yet available.
+non-strict schema-deviation productions other than early end elements and more
+general schema-informed grammars, relaxed element-fragment grammars for
+ambiguous declarations, pre-compression, and compression are also not yet
+available.
 
 ```dart
 import 'dart:typed_data';
