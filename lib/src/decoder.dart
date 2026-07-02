@@ -387,12 +387,12 @@ final class _DecoderState {
       if (specialCount > 0 && selected == candidates.length) {
         final special = input.readNBitUnsigned(_bitWidth(specialCount));
         if (canReadType && special == 0) {
-          final targetName = strings.readQName(input);
+          final (:targetName, :lexicalValue) = _readXsiType(declaration);
           final target = declaration.typeAlternatives[targetName];
           if (target == null) {
             throw FormatException('Unknown xsi:type "${targetName.localName}"');
           }
-          events.add(ExiAttribute(_xsiTypeName, targetName.toString()));
+          events.add(ExiAttribute(_xsiTypeName, lexicalValue));
           _decodeDeclaredContent(elementName, target, allowSpecialAttributes: false);
           return;
         }
@@ -400,10 +400,18 @@ final class _DecoderState {
         if (!canReadNil || special != nilIndex) {
           throw const FormatException('Invalid strict schema special-attribute event code');
         }
-        final value = ExiValueDecoder(input, strings).read(ExiDatatype.boolean, _xsiNilName);
+        final value = ExiValueDecoder(
+          input,
+          strings,
+          preserveLexicalValues: options.fidelity.lexicalValues,
+        ).read(ExiDatatype.boolean, _xsiNilName);
         events.add(ExiAttribute(_xsiNilName, value));
         nilSeen = true;
-        if (value == 'true') {
+        final normalized = value.trim();
+        if (normalized != 'true' && normalized != '1' && normalized != 'false' && normalized != '0') {
+          throw FormatException('Invalid xsi:nil value "$value"');
+        }
+        if (normalized == 'true' || normalized == '1') {
           content = const ExiEmptyParticle();
           nilled = true;
         }
@@ -418,7 +426,7 @@ final class _DecoderState {
           specialAttributesAllowed = false;
           final attribute = event.attribute!;
           attributeIndex = event.attributeIndex! + 1;
-          final value = ExiValueDecoder(input, strings).read(
+          final value = ExiValueDecoder(input, strings, preserveLexicalValues: options.fidelity.lexicalValues).read(
             attribute.datatype,
             attribute.name,
             listItemDatatype: attribute.listItemDatatype,
@@ -446,7 +454,7 @@ final class _DecoderState {
           final globalAttribute = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
           final value = globalAttribute == null
               ? strings.readValue(input, name)
-              : ExiValueDecoder(input, strings).read(
+              : ExiValueDecoder(input, strings, preserveLexicalValues: options.fidelity.lexicalValues).read(
                   globalAttribute.datatype,
                   name,
                   listItemDatatype: globalAttribute.listItemDatatype,
@@ -491,7 +499,7 @@ final class _DecoderState {
           specialAttributesAllowed = false;
           events.add(
             ExiCharacters(
-              ExiValueDecoder(input, strings).read(
+              ExiValueDecoder(input, strings, preserveLexicalValues: options.fidelity.lexicalValues).read(
                 datatype!,
                 elementName,
                 listItemDatatype: declaration.listItemDatatype,
@@ -509,6 +517,29 @@ final class _DecoderState {
           return;
       }
     }
+  }
+
+  ({ExiQName targetName, String lexicalValue}) _readXsiType(ExiElementDeclaration declaration) {
+    if (!options.fidelity.lexicalValues) {
+      final name = strings.readQName(input);
+      return (targetName: name, lexicalValue: name.toString());
+    }
+
+    final lexical = strings.readValue(input, _xsiTypeName);
+    final normalized = lexical.trim();
+    final separator = normalized.indexOf(':');
+    if (normalized.isEmpty ||
+        separator != normalized.lastIndexOf(':') ||
+        separator == 0 ||
+        separator == normalized.length - 1) {
+      throw FormatException('Invalid lexical xsi:type QName "$lexical"');
+    }
+    final localName = separator == -1 ? normalized : normalized.substring(separator + 1);
+    final matches = declaration.typeAlternatives.keys.where((name) => name.localName == localName).toList();
+    if (matches.length != 1) {
+      throw FormatException('Cannot resolve lexical xsi:type QName "$lexical"');
+    }
+    return (targetName: matches.single, lexicalValue: lexical);
   }
 
   void _decodeProcessingInstruction() {

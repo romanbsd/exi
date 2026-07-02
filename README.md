@@ -34,7 +34,8 @@ The current decoder stage supports:
   `processContents`, and namespace-aware type resolution;
 - schema-typed string, boolean, integer, decimal, float, binary, date, time,
   date-time, partial Gregorian calendar, and list values, with the required
-  String fallback for duration, QName, and NOTATION schema types;
+  String fallback for duration, QName, and NOTATION schema types and restricted
+  String representations for preserved lexical values;
 - URI, local-name, and value string-table partitions, including schema-informed
   URI and declared-name prepopulation;
 - start/end document, start/end element, attribute, character, namespace,

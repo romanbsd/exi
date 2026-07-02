@@ -195,7 +195,7 @@ final class ExiStringTable {
     }
   }
 
-  String readValue(BitInput input, ExiQName context) {
+  String readValue(BitInput input, ExiQName context, {List<int>? restrictedCharacters}) {
     final marker = _readLength(input);
     final local = _localValues.putIfAbsent(context, () => []);
 
@@ -213,7 +213,7 @@ final class ExiStringTable {
       return _globalValues[compactId]!.value;
     }
 
-    final value = _readCharacters(input, marker - 2);
+    final value = _readCharacters(input, marker - 2, restrictedCharacters: restrictedCharacters);
     if (value.isNotEmpty &&
         (valueMaxLength == null || value.runes.length <= valueMaxLength!) &&
         valuePartitionCapacity != 0) {
@@ -270,10 +270,21 @@ final class ExiStringTable {
 
   String _readString(BitInput input) => _readCharacters(input, _readLength(input));
 
-  String _readCharacters(BitInput input, int length) {
+  String _readCharacters(BitInput input, int length, {List<int>? restrictedCharacters}) {
     final codePoints = <int>[];
     for (var index = 0; index < length; index++) {
-      final codePoint = input.readUnsignedInteger();
+      BigInt codePoint;
+      if (restrictedCharacters == null) {
+        codePoint = input.readUnsignedInteger();
+      } else {
+        final encoded = input.readNBitUnsigned(restrictedCharacters.length.bitLength);
+        if (encoded > restrictedCharacters.length) {
+          throw const FormatException('Invalid restricted-character-set code');
+        }
+        codePoint = encoded == restrictedCharacters.length
+            ? input.readUnsignedInteger()
+            : BigInt.from(restrictedCharacters[encoded]);
+      }
       if (codePoint > BigInt.from(0x10ffff)) {
         throw const FormatException('Invalid Unicode code point in EXI string');
       }

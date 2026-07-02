@@ -37,6 +37,91 @@ void main() {
     expect(document.toXmlString(), '<root><flag>true</flag><count>-3</count><amount>-12.034</amount></root>');
   });
 
+  test('preserves lexical forms of schema-typed element and attribute values', () {
+    const schemaId = 'lexical-values';
+    const schema = ExiSchema(
+      id: schemaId,
+      globalElements: [
+        ExiElementDeclaration.complex(
+          ExiQName(localName: 'root'),
+          attributes: [
+            ExiAttributeDeclaration(
+              name: ExiQName(localName: 'count'),
+              datatype: ExiDatatype.integer,
+              required: true,
+            ),
+          ],
+          content: ExiElementParticle(ExiElementDeclaration.value(ExiQName(localName: 'flag'), ExiDatatype.boolean)),
+        ),
+      ],
+    );
+    final bits = StringBuffer('10000000')
+      // Root selection and required attribute/child productions are implicit.
+      ..write('0')
+      ..write(_restrictedValue('+007', _integerCharacters))
+      ..write(_restrictedValue('1', _booleanCharacters));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: true,
+        schemaId: ExiSchemaId.named(schemaId),
+        fidelity: ExiFidelityOptions(lexicalValues: true),
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root count="+007"><flag>1</flag></root>');
+  });
+
+  test('uses lexical String values for xsi:nil and xsi:type', () {
+    const nilSchemaId = 'lexical-nil';
+    const nilSchema = ExiSchema(
+      id: nilSchemaId,
+      globalElements: [ExiElementDeclaration.value(ExiQName(localName: 'value'), ExiDatatype.integer, nillable: true)],
+    );
+    final nilBits = StringBuffer('10000000')
+      // Root selection and xsi:nil escape.
+      ..write('01')
+      ..write(_restrictedValue('1', _booleanCharacters));
+    final nilDocument = ExiDecoder(
+      options: const ExiOptions(
+        strict: true,
+        schemaId: ExiSchemaId.named(nilSchemaId),
+        fidelity: ExiFidelityOptions(lexicalValues: true),
+      ),
+      schemaResolver: (_) => nilSchema,
+    ).decode(_pack(nilBits.toString()));
+
+    expect(nilDocument.events.whereType<ExiAttribute>().single.value, '1');
+    expect(nilDocument.events.whereType<ExiCharacters>(), isEmpty);
+
+    const typeSchemaId = 'lexical-type';
+    const rootName = ExiQName(localName: 'root');
+    final typeSchema = ExiSchema(
+      id: typeSchemaId,
+      globalElements: [
+        ExiElementDeclaration.empty(
+          rootName,
+          typeAlternatives: {ExiQName(uri: 'urn:types', localName: 'Derived'): ExiElementDeclaration.empty(rootName)},
+        ),
+      ],
+    );
+    final typeBits = StringBuffer('10000000')
+      // Root selection and xsi:type escape.
+      ..write('01')
+      ..write(_value('t:Derived'));
+    final typeDocument = ExiDecoder(
+      options: const ExiOptions(
+        strict: true,
+        schemaId: ExiSchemaId.named(typeSchemaId),
+        fidelity: ExiFidelityOptions(lexicalValues: true),
+      ),
+      schemaResolver: (_) => typeSchema,
+    ).decode(_pack(typeBits.toString()));
+
+    expect(typeDocument.events.whereType<ExiAttribute>().single.value, 't:Derived');
+  });
+
   test('decodes a dateTime schema value', () {
     const schemaId = 'date-time';
     const schema = ExiSchema(
@@ -799,4 +884,12 @@ Uint8List _pack(String bits) {
   return Uint8List.fromList([
     for (var offset = 0; offset < padded.length; offset += 8) int.parse(padded.substring(offset, offset + 8), radix: 2),
   ]);
+}
+
+const _integerCharacters = [9, 10, 13, 32, 43, 45, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57];
+const _booleanCharacters = [9, 10, 13, 32, 48, 49, 97, 101, 102, 108, 114, 115, 116, 117];
+
+String _restrictedValue(String value, List<int> characters) {
+  final width = characters.length.bitLength;
+  return '${_unsigned(value.runes.length + 2)}${value.runes.map((character) => characters.indexOf(character).toRadixString(2).padLeft(width, '0')).join()}';
 }

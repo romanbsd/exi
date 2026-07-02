@@ -79,6 +79,20 @@ void main() {
       expect(document.toXmlString(), '<root><!--note--></root>');
     });
 
+    test('reads preserve-lexical-values from the options document', () {
+      final bits = StringBuffer('10100000')
+        // header/lesscommon/preserve/lexicalValues, then close each sequence.
+        ..write('0000101010110')
+        // Empty schema-less document body.
+        ..write(_qName('', 'root'))
+        ..write('00');
+
+      final document = ExiDecoder().decode(_pack(bits.toString()));
+
+      expect(document.options.fidelity.lexicalValues, isTrue);
+      expect(document.toXmlString(), '<root/>');
+    });
+
     test('applies self-contained mode to the following body', () {
       final bits = StringBuffer('10100000')
         // header/lesscommon/uncommon/selfContained, then close each sequence.

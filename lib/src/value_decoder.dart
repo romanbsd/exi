@@ -6,10 +6,11 @@ import 'schema.dart';
 import 'string_table.dart';
 
 final class ExiValueDecoder {
-  ExiValueDecoder(this.input, this.strings);
+  ExiValueDecoder(this.input, this.strings, {this.preserveLexicalValues = false});
 
   final BitInput input;
   final ExiStringTable strings;
+  final bool preserveLexicalValues;
 
   String read(
     ExiDatatype datatype,
@@ -19,6 +20,13 @@ final class ExiValueDecoder {
     BigInt? integerMinInclusive,
     BigInt? integerMaxInclusive,
   }) {
+    if (preserveLexicalValues) {
+      return strings.readValue(
+        input,
+        context,
+        restrictedCharacters: _restrictedCharacters(datatype, listItemDatatype: listItemDatatype),
+      );
+    }
     if (enumerationValues.isNotEmpty) {
       final ordinal = input.readNBitUnsigned(_bitWidth(enumerationValues.length));
       if (ordinal >= enumerationValues.length) {
@@ -265,6 +273,53 @@ final class ExiValueDecoder {
 String _two(int value) => value.toString().padLeft(2, '0');
 
 int _bitWidth(int valueCount) => valueCount <= 1 ? 0 : (valueCount - 1).bitLength;
+
+List<int>? _restrictedCharacters(ExiDatatype datatype, {ExiDatatype? listItemDatatype}) {
+  if (datatype == ExiDatatype.list) {
+    return _restrictedCharacters(
+      listItemDatatype ?? (throw StateError('EXI list datatype is missing its item datatype')),
+    );
+  }
+  return switch (datatype) {
+    ExiDatatype.base64Binary => _base64Characters,
+    ExiDatatype.hexBinary => _hexCharacters,
+    ExiDatatype.boolean => _booleanCharacters,
+    ExiDatatype.dateTime ||
+    ExiDatatype.date ||
+    ExiDatatype.time ||
+    ExiDatatype.gYear ||
+    ExiDatatype.gYearMonth ||
+    ExiDatatype.gMonth ||
+    ExiDatatype.gMonthDay ||
+    ExiDatatype.gDay => _dateTimeCharacters,
+    ExiDatatype.decimal => _decimalCharacters,
+    ExiDatatype.float => _floatCharacters,
+    ExiDatatype.integer ||
+    ExiDatatype.unsignedInteger ||
+    ExiDatatype.byte ||
+    ExiDatatype.unsignedByte => _integerCharacters,
+    ExiDatatype.string || ExiDatatype.list => null,
+  };
+}
+
+const _whitespaceCharacters = [9, 10, 13, 32];
+final _base64Characters = [
+  ..._whitespaceCharacters,
+  43,
+  47,
+  ..._range(48, 57),
+  61,
+  ..._range(65, 90),
+  ..._range(97, 122),
+];
+final _hexCharacters = [..._whitespaceCharacters, ..._range(48, 57), ..._range(65, 70), ..._range(97, 102)];
+const _booleanCharacters = [..._whitespaceCharacters, 48, 49, 97, 101, 102, 108, 114, 115, 116, 117];
+final _dateTimeCharacters = [..._whitespaceCharacters, 43, 45, 46, ..._range(48, 57), 58, 84, 90];
+final _decimalCharacters = [..._whitespaceCharacters, 43, 45, 46, ..._range(48, 57)];
+final _floatCharacters = [..._whitespaceCharacters, 43, 45, 46, ..._range(48, 57), 69, 70, 73, 78, 97, 101];
+final _integerCharacters = [..._whitespaceCharacters, 43, 45, ..._range(48, 57)];
+
+List<int> _range(int first, int last) => [for (var value = first; value <= last; value++) value];
 
 bool _isValidMonthDay(int month, int day, {int? year}) {
   if (month < 1 || month > 12 || day < 1) {
