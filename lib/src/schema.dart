@@ -16,6 +16,11 @@ enum ExiDatatype {
   dateTime,
   date,
   time,
+  gYear,
+  gYearMonth,
+  gMonth,
+  gMonthDay,
+  gDay,
   qName,
 }
 

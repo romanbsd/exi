@@ -26,6 +26,11 @@ final class ExiValueDecoder {
       ExiDatatype.dateTime => _readDateTime(includeDate: true, includeTime: true),
       ExiDatatype.date => _readDateTime(includeDate: true, includeTime: false),
       ExiDatatype.time => _readDateTime(includeDate: false, includeTime: true),
+      ExiDatatype.gYear => _readGregorian(ExiDatatype.gYear),
+      ExiDatatype.gYearMonth => _readGregorian(ExiDatatype.gYearMonth),
+      ExiDatatype.gMonth => _readGregorian(ExiDatatype.gMonth),
+      ExiDatatype.gMonthDay => _readGregorian(ExiDatatype.gMonthDay),
+      ExiDatatype.gDay => _readGregorian(ExiDatatype.gDay),
       ExiDatatype.qName => strings.readQName(input).toString(),
     };
   }
@@ -67,6 +72,63 @@ final class ExiValueDecoder {
     return [for (var index = 0; index < encodedLength.toInt(); index++) input.readBits(8)];
   }
 
+  String _readGregorian(ExiDatatype datatype) {
+    final output = StringBuffer();
+    int? year;
+    int? month;
+    int? day;
+
+    if (datatype == ExiDatatype.gYear || datatype == ExiDatatype.gYearMonth) {
+      year = _readInteger().toInt() + 2000;
+    }
+    if (datatype != ExiDatatype.gYear) {
+      final monthDay = input.readNBitUnsigned(9);
+      month = monthDay >> 5;
+      day = monthDay & 31;
+    }
+
+    switch (datatype) {
+      case ExiDatatype.gYear:
+        output.write(_year(year!));
+      case ExiDatatype.gYearMonth:
+        if (month! < 1 || month > 12 || day != 0) {
+          throw const FormatException('Invalid EXI gYearMonth value');
+        }
+        output
+          ..write(_year(year!))
+          ..write('-')
+          ..write(_two(month));
+      case ExiDatatype.gMonth:
+        if (month! < 1 || month > 12 || day != 0) {
+          throw const FormatException('Invalid EXI gMonth value');
+        }
+        output
+          ..write('--')
+          ..write(_two(month))
+          ..write('--');
+      case ExiDatatype.gMonthDay:
+        if (!_isValidMonthDay(month!, day!)) {
+          throw const FormatException('Invalid EXI gMonthDay value');
+        }
+        output
+          ..write('--')
+          ..write(_two(month))
+          ..write('-')
+          ..write(_two(day));
+      case ExiDatatype.gDay:
+        if (month != 0 || day! < 1 || day > 31) {
+          throw const FormatException('Invalid EXI gDay value');
+        }
+        output
+          ..write('---')
+          ..write(_two(day));
+      default:
+        throw ArgumentError.value(datatype, 'datatype', 'is not a partial Gregorian datatype');
+    }
+    _readTimezone(output);
+    return output.toString();
+  }
+
   String _readDateTime({required bool includeDate, required bool includeTime}) {
     final output = StringBuffer();
     if (includeDate) {
@@ -74,7 +136,7 @@ final class ExiValueDecoder {
       final monthDay = input.readNBitUnsigned(9);
       final month = monthDay >> 5;
       final day = monthDay & 31;
-      if (month < 1 || month > 12 || day < 1 || day > 31) {
+      if (!_isValidMonthDay(month, day, year: year)) {
         throw const FormatException('Invalid EXI month/day value');
       }
       output
@@ -108,25 +170,48 @@ final class ExiValueDecoder {
           ..write(fraction);
       }
     }
-    if (input.readNBitUnsigned(1) == 1) {
-      final timezone = input.readNBitUnsigned(11) - 896;
-      if (timezone == 0) {
-        output.write('Z');
-      } else {
-        final sign = timezone < 0 ? '-' : '+';
-        final absolute = timezone.abs();
-        output
-          ..write(sign)
-          ..write(_two(absolute ~/ 64))
-          ..write(':')
-          ..write(_two(absolute % 64));
-      }
-    }
+    _readTimezone(output);
     return output.toString();
+  }
+
+  void _readTimezone(StringBuffer output) {
+    if (input.readNBitUnsigned(1) == 0) {
+      return;
+    }
+    final timezone = input.readNBitUnsigned(11) - 896;
+    if (timezone == 0) {
+      output.write('Z');
+      return;
+    }
+    final sign = timezone < 0 ? '-' : '+';
+    final absolute = timezone.abs();
+    final hours = absolute ~/ 64;
+    final minutes = absolute % 64;
+    if (hours > 14 || minutes > 59 || (hours == 14 && minutes != 0)) {
+      throw const FormatException('Invalid EXI timezone value');
+    }
+    output
+      ..write(sign)
+      ..write(_two(hours))
+      ..write(':')
+      ..write(_two(minutes));
   }
 }
 
 String _two(int value) => value.toString().padLeft(2, '0');
+
+bool _isValidMonthDay(int month, int day, {int? year}) {
+  if (month < 1 || month > 12 || day < 1) {
+    return false;
+  }
+  final leapYear = year == null || (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
+  final maximum = switch (month) {
+    2 => leapYear ? 29 : 28,
+    4 || 6 || 9 || 11 => 30,
+    _ => 31,
+  };
+  return day <= maximum;
+}
 
 String _year(int value) {
   if (value < 0) {

@@ -1150,6 +1150,11 @@ final class _Compiler {
       'dateTime' => ExiDatatype.dateTime,
       'date' => ExiDatatype.date,
       'time' => ExiDatatype.time,
+      'gYear' => ExiDatatype.gYear,
+      'gYearMonth' => ExiDatatype.gYearMonth,
+      'gMonth' => ExiDatatype.gMonth,
+      'gMonthDay' => ExiDatatype.gMonthDay,
+      'gDay' => ExiDatatype.gDay,
       'QName' || 'NOTATION' => ExiDatatype.qName,
       _ => null,
     };

@@ -65,6 +65,83 @@ void main() {
     expect(document.toXmlString(), '<when>2024-07-01T12:34:56.25+02:30</when>');
   });
 
+  test('decodes partial Gregorian calendar schema values', () {
+    const schemaId = 'calendar-values';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="year" type="xs:gYear"/>
+                <xs:element name="yearMonth" type="xs:gYearMonth"/>
+                <xs:element name="month" type="xs:gMonth"/>
+                <xs:element name="monthDay" type="xs:gMonthDay"/>
+                <xs:element name="day" type="xs:gDay"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Root selection; gYear 2024 without timezone.
+      ..write('0')
+      ..write('0')
+      ..write(_unsigned(24))
+      ..write('0')
+      // gYearMonth 1999-12Z.
+      ..write('1')
+      ..write(_unsigned(0))
+      ..write((12 * 32).toRadixString(2).padLeft(9, '0'))
+      ..write('1')
+      ..write(896.toRadixString(2).padLeft(11, '0'))
+      // gMonth --07-- without timezone.
+      ..write((7 * 32).toRadixString(2).padLeft(9, '0'))
+      ..write('0')
+      // gMonthDay --07-01+02:30.
+      ..write((7 * 32 + 1).toRadixString(2).padLeft(9, '0'))
+      ..write('1')
+      ..write((896 + 2 * 64 + 30).toRadixString(2).padLeft(11, '0'))
+      // gDay ---31-05:00.
+      ..write(31.toRadixString(2).padLeft(9, '0'))
+      ..write('1')
+      ..write((896 - 5 * 64).toRadixString(2).padLeft(11, '0'));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(
+      document.toXmlString(),
+      '<root><year>2024</year><yearMonth>1999-12Z</yearMonth><month>--07--</month>'
+      '<monthDay>--07-01+02:30</monthDay><day>---31-05:00</day></root>',
+    );
+  });
+
+  test('rejects an invalid Gregorian month/day combination', () {
+    const schemaId = 'invalid-calendar';
+    const schema = ExiSchema(
+      id: schemaId,
+      globalElements: [ExiElementDeclaration.value(ExiQName(localName: 'value'), ExiDatatype.gMonthDay)],
+    );
+    final bits = StringBuffer('10000000')
+      ..write('0')
+      // April 31, followed by no timezone.
+      ..write((4 * 32 + 31).toRadixString(2).padLeft(9, '0'))
+      ..write('0');
+
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+        schemaResolver: (_) => schema,
+      ).decode(_pack(bits.toString())),
+      throwsFormatException,
+    );
+  });
+
   test('decodes a value declared through a named simple type', () {
     const schemaId = 'named-simple';
     final schema = ExiSchemaCompiler.compile(
