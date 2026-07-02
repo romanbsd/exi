@@ -102,6 +102,71 @@ void main() {
     expect(document.toXmlString(), '<root><unexpected/><required/></root>');
   });
 
+  test('decodes an undeclared non-strict attribute', () {
+    final schema = _compile('<xs:element name="root"/>');
+    final bits = StringBuffer('10000000')
+      // Document root=0; first-level escape=1; second-level AT(*)=010.
+      ..write('01010')
+      ..write(_schemaQName('', 'extra', localNames: ['root']))
+      ..write(_value('value'))
+      // Root EE remains a first-level production.
+      ..write('0');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(schemaId: ExiSchemaId.named('particles')),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root extra="value"/>');
+  });
+
+  test('uses a global datatype for a non-strict wildcard attribute', () {
+    final schema = _compile('''
+      <xs:attribute name="count" type="xs:integer"/>
+      <xs:element name="root"/>
+    ''');
+    final bits = StringBuffer('10000000')
+      // Document root=0; first-level escape=1; second-level AT(*)=010.
+      ..write('01010')
+      ..write(_schemaQName('', 'count', localNames: ['count', 'root']))
+      // Integer -3.
+      ..write('1')
+      ..write(_unsigned(2))
+      // Root EE remains a first-level production.
+      ..write('0');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(schemaId: ExiSchemaId.named('particles')),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root count="-3"/>');
+  });
+
+  test('decodes an untyped value for a declared non-strict attribute', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:attribute name="count" type="xs:integer"/>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer('10000000')
+      // Document root=0; first-level escape=10; untyped AT group=011;
+      // declared count attribute=0.
+      ..write('0100110')
+      ..write(_value('not-an-integer'))
+      // Root EE remains a first-level production.
+      ..write('0');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(schemaId: ExiSchemaId.named('particles')),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root count="not-an-integer"/>');
+  });
+
   group('strict schema particles', () {
     test('decodes an optional child that is absent', () {
       final schema = _compile('''

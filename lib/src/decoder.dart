@@ -407,6 +407,47 @@ final class _DecoderState {
             final globalDeclaration = schema?.globalElements.where((element) => element.name == name).firstOrNull;
             _decodeElement(name, declaration: globalDeclaration);
             continue;
+          case _NonStrictDeviation.attribute:
+            specialAttributesAllowed = false;
+            final name = strings.readQName(input);
+            if (!seenAttributes.add(name)) {
+              throw const FormatException('Duplicate non-strict schema attribute');
+            }
+            final globalAttribute = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
+            final value = globalAttribute == null
+                ? strings.readValue(input, name)
+                : ExiValueDecoder(input, strings, preserveLexicalValues: options.fidelity.lexicalValues).read(
+                    globalAttribute.datatype,
+                    name,
+                    listItemDatatype: globalAttribute.listItemDatatype,
+                    enumerationValues: globalAttribute.enumerationValues,
+                    booleanPattern: globalAttribute.booleanPattern,
+                    listItemBooleanPattern: globalAttribute.listItemBooleanPattern,
+                    integerMinInclusive: globalAttribute.integerMinInclusive,
+                    integerMaxInclusive: globalAttribute.integerMaxInclusive,
+                  );
+            events.add(ExiAttribute(name, value));
+            continue;
+          case _NonStrictDeviation.untypedAttribute:
+            specialAttributesAllowed = false;
+            final declaredAttributes = candidates.where((event) => event.kind == _DeclaredEventKind.attribute).toList();
+            final selectedAttribute = input.readNBitUnsigned(_bitWidth(declaredAttributes.length + 1));
+            if (selectedAttribute > declaredAttributes.length) {
+              throw const FormatException('Invalid non-strict untyped-attribute event code');
+            }
+            final ExiQName name;
+            if (selectedAttribute < declaredAttributes.length) {
+              final event = declaredAttributes[selectedAttribute];
+              attributeIndex = event.attributeIndex! + 1;
+              name = event.attribute!.name;
+            } else {
+              name = strings.readQName(input);
+            }
+            if (!seenAttributes.add(name)) {
+              throw const FormatException('Duplicate non-strict schema attribute');
+            }
+            events.add(ExiAttribute(name, strings.readValue(input, name)));
+            continue;
           default:
             throw UnsupportedError('Non-strict ${deviation.name} productions are not supported yet');
         }
