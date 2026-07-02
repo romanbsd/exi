@@ -25,6 +25,7 @@ final class ExiSchema {
     required this.id,
     required this.globalElements,
     this.globalAttributes = const [],
+    this.fragmentElements = const [],
     this.stringTableQNames = const [],
     this.stringTableUris = const {},
   });
@@ -32,6 +33,7 @@ final class ExiSchema {
   final String id;
   final List<ExiElementDeclaration> globalElements;
   final List<ExiAttributeDeclaration> globalAttributes;
+  final List<ExiElementDeclaration> fragmentElements;
   final List<ExiQName> stringTableQNames;
   final Set<String> stringTableUris;
 }

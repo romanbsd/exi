@@ -137,13 +137,29 @@ final class _Compiler {
       throw const FormatException('XML Schema contains no global elements');
     }
     final stringTableQNames = _collectStringTableQNames();
+    final globalElements = [for (final name in _globalElementNodes.keys) _compileGlobalElement(name)];
     return ExiSchema(
       id: id,
-      globalElements: [for (final name in _globalElementNodes.keys) _compileGlobalElement(name)],
+      globalElements: globalElements,
       globalAttributes: [for (final name in _globalAttributeNodes.keys) _compileGlobalAttribute(name)],
+      fragmentElements: _compileFragmentElements(globalElements),
       stringTableQNames: stringTableQNames.toList(),
       stringTableUris: _collectStringTableUris(stringTableQNames),
     );
+  }
+
+  List<ExiElementDeclaration> _compileFragmentElements(List<ExiElementDeclaration> globals) {
+    final result = [...globals];
+    for (final element in root.descendants.whereType<XmlElement>()) {
+      if (element.name.namespaceUri != _xsdUri ||
+          element.name.local != 'element' ||
+          identical(element.parent, root) ||
+          element.getAttribute('name') == null) {
+        continue;
+      }
+      result.add(_compileElement(element, global: false));
+    }
+    return result;
   }
 
   Set<ExiQName> _collectStringTableQNames() {

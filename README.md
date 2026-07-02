@@ -7,7 +7,8 @@ The current decoder stage supports:
 
 - optional `$EXI` cookies and final EXI version 1 headers;
 - schema-less documents using the built-in document and element grammars;
-- schema-less fragments with dynamic top-level QName learning;
+- schema-less fragments with dynamic top-level QName learning and strict
+  schema-informed fragments with unambiguous declared element QNames;
 - configurable out-of-band fidelity options for comments, processing
   instructions, DTD/entity events, and namespace prefixes;
 - in-band EXI options for strict mode, fragments, fidelity preservation, and
@@ -41,8 +42,9 @@ imports/includes, simple-type facets, lists/unions, complex-content
 restriction, defaults and fixed values, substitution groups, abstract
 declarations and derivation controls, inherited wildcard unions involving
 `##other`, repetition of nullable compositors, non-strict and more general
-schema-informed grammars, self-contained elements, pre-compression, and
-compression are also not yet available.
+schema-informed grammars, relaxed element-fragment grammars for ambiguous
+declarations, self-contained elements, pre-compression, and compression are
+also not yet available.
 
 ```dart
 import 'dart:typed_data';

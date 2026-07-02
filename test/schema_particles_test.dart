@@ -666,6 +666,77 @@ void main() {
     ]);
   });
 
+  test('decodes a local declaration as a schema-informed fragment root', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="child"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    ''');
+
+    // Fragment declarations are child=00 and root=01; ED=11.
+    final document = _decodeFragment(schema, '0011');
+
+    expect(document.events.whereType<ExiStartElement>().map((event) => event.name.localName), ['child']);
+  });
+
+  test('uses a built-in grammar for a schema-informed fragment wildcard', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="child"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Fragment declarations are child=00, root=01, SE(*)=10, ED=11.
+      ..write('10')
+      ..write(_schemaQName('', 'other', localNames: ['child', 'root']))
+      // Built-in element start-tag EE, followed by fragment ED.
+      ..write('00')
+      ..write('11');
+
+    final document = _decodeFragment(schema, bits.toString());
+
+    expect(document.events.whereType<ExiStartElement>().single.name.localName, 'other');
+  });
+
+  test('includes fragment declarations from unused named types', () {
+    final schema = _compile('''
+      <xs:complexType name="Unused">
+        <xs:sequence>
+          <xs:element name="orphan"/>
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="root"/>
+    ''');
+
+    // Fragment declarations are orphan=00 and root=01; ED=11.
+    final document = _decodeFragment(schema, '0011');
+
+    expect(document.events.whereType<ExiStartElement>().single.name.localName, 'orphan');
+  });
+
+  test('rejects ambiguous schema-informed fragment declarations', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:integer"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+
+    expect(() => _decodeFragment(schema, '0'), throwsUnsupportedError);
+  });
+
   test('decodes qualified local names from schema form overrides', () {
     final schema = ExiSchemaCompiler.compile(
       id: 'forms',
@@ -732,6 +803,14 @@ ExiDocument _decode(ExiSchema schema, String bodyBits) {
   final bits = '10000000$bodyBits';
   return ExiDecoder(
     options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named('particles')),
+    schemaResolver: (_) => schema,
+  ).decode(_pack(bits));
+}
+
+ExiDocument _decodeFragment(ExiSchema schema, String bodyBits) {
+  final bits = '10000000$bodyBits';
+  return ExiDecoder(
+    options: const ExiOptions(strict: true, fragment: true, schemaId: ExiSchemaId.named('particles')),
     schemaResolver: (_) => schema,
   ).decode(_pack(bits));
 }

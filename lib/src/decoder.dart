@@ -29,9 +29,6 @@ final class ExiDecoder {
     if (schema != null && !parsedHeader.options.strict) {
       throw UnsupportedError('Non-strict schema-informed grammars are not supported yet');
     }
-    if (schema != null && parsedHeader.options.fragment) {
-      throw UnsupportedError('Schema-informed fragments are not supported yet');
-    }
     final state = _DecoderState(input, parsedHeader.options, schema);
     final events = state.decode();
     return ExiDocument(header: parsedHeader.header, events: events, options: parsedHeader.options);
@@ -142,6 +139,7 @@ final class _DecoderState {
   final ExiStringTable strings;
   final Map<ExiQName, _ElementGrammar> grammars = {};
   final List<_Production> _fragmentElements = [];
+  late final List<ExiElementDeclaration> _fragmentDeclarations = _collectFragmentDeclarations(schema);
   final List<ExiEvent> events = [];
 
   List<ExiEvent> decode() {
@@ -219,8 +217,15 @@ final class _DecoderState {
           return;
         case _EventType.startElement:
           final name = production.name ?? strings.readQName(input);
-          _learn(_fragmentElements, _Production(_EventType.startElement, name));
-          _decodeElement(name);
+          final declaration = schema == null
+              ? null
+              : production.name == null
+              ? schema!.globalElements.where((element) => element.name == name).firstOrNull
+              : _fragmentDeclarations.where((element) => element.name == name).firstOrNull;
+          if (schema == null) {
+            _learn(_fragmentElements, _Production(_EventType.startElement, name));
+          }
+          _decodeElement(name, declaration: declaration);
         case _EventType.comment:
           events.add(ExiComment(strings.readString(input)));
         case _EventType.processingInstruction:
@@ -513,18 +518,21 @@ final class _DecoderState {
 
   _Production _readFragmentContent() {
     final hasCommentOrPi = options.fidelity.comments || options.fidelity.processingInstructions;
-    final firstCount = _fragmentElements.length + 2 + (hasCommentOrPi ? 1 : 0);
+    final declaredCount = schema == null ? _fragmentElements.length : _fragmentDeclarations.length;
+    final firstCount = declaredCount + 2 + (hasCommentOrPi ? 1 : 0);
     final first = input.readNBitUnsigned(_bitWidth(firstCount));
     if (first >= firstCount) {
       throw const FormatException('Invalid fragment event code');
     }
-    if (first < _fragmentElements.length) {
-      return _fragmentElements[first];
+    if (first < declaredCount) {
+      return schema == null
+          ? _fragmentElements[first]
+          : _Production(_EventType.startElement, _fragmentDeclarations[first].name);
     }
-    if (first == _fragmentElements.length) {
+    if (first == declaredCount) {
       return const _Production(_EventType.startElement);
     }
-    if (first == _fragmentElements.length + 1) {
+    if (first == declaredCount + 1) {
       return const _Production(_EventType.endDocument);
     }
     return _readCommentOrPi();
@@ -612,6 +620,72 @@ ExiParticle _legacyContent(List<ExiElementDeclaration> children) {
     return const ExiEmptyParticle();
   }
   return ExiSequenceParticle([for (final child in children) ExiElementParticle(child)]);
+}
+
+List<ExiElementDeclaration> _collectFragmentDeclarations(ExiSchema? schema) {
+  if (schema == null) {
+    return const [];
+  }
+  final declarations = <ExiElementDeclaration>[];
+  final seen = Set<ExiElementDeclaration>.identity();
+  late void Function(ExiElementDeclaration) collectElement;
+  late void Function(ExiParticle?) collectParticle;
+
+  collectElement = (element) {
+    if (!seen.add(element)) {
+      return;
+    }
+    declarations.add(element);
+    for (final child in element.children) {
+      collectElement(child);
+    }
+    collectParticle(element.content);
+  };
+  collectParticle = (particle) {
+    switch (particle) {
+      case null:
+      case ExiEmptyParticle():
+      case ExiWildcardParticle():
+        return;
+      case ExiElementParticle(:final element):
+        collectElement(element);
+      case ExiSequenceParticle(:final particles):
+      case ExiChoiceParticle(:final particles):
+      case ExiAllParticle(:final particles):
+        for (final child in particles) {
+          collectParticle(child);
+        }
+      case ExiRepeatedParticle(:final particle):
+        collectParticle(particle);
+    }
+  };
+
+  final compiled = schema.fragmentElements;
+  if (compiled.isEmpty) {
+    for (final element in schema.globalElements) {
+      collectElement(element);
+    }
+  } else {
+    for (final element in compiled) {
+      if (seen.add(element)) {
+        declarations.add(element);
+      }
+    }
+  }
+
+  declarations.sort((left, right) {
+    final localNameOrder = left.name.localName.compareTo(right.name.localName);
+    return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
+  });
+  for (var index = 1; index < declarations.length; index++) {
+    if (declarations[index - 1].name == declarations[index].name) {
+      throw UnsupportedError(
+        'Schema-informed fragments with ambiguous element QName "${declarations[index].name.localName}" '
+        'are not supported yet',
+      );
+    }
+  }
+  return declarations;
 }
 
 bool _isNullable(ExiParticle particle) {
