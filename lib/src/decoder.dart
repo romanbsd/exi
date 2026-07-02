@@ -396,10 +396,12 @@ final class _DecoderState {
           specialAttributesAllowed = false;
           final attribute = event.attribute!;
           attributeIndex = event.attributeIndex! + 1;
-          final value = ExiValueDecoder(
-            input,
-            strings,
-          ).read(attribute.datatype, attribute.name, listItemDatatype: attribute.listItemDatatype);
+          final value = ExiValueDecoder(input, strings).read(
+            attribute.datatype,
+            attribute.name,
+            listItemDatatype: attribute.listItemDatatype,
+            enumerationValues: attribute.enumerationValues,
+          );
           if (!seenAttributes.add(attribute.name)) {
             throw const FormatException('Duplicate schema attribute');
           }
@@ -420,10 +422,12 @@ final class _DecoderState {
           final globalAttribute = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
           final value = globalAttribute == null
               ? strings.readValue(input, name)
-              : ExiValueDecoder(
-                  input,
-                  strings,
-                ).read(globalAttribute.datatype, name, listItemDatatype: globalAttribute.listItemDatatype);
+              : ExiValueDecoder(input, strings).read(
+                  globalAttribute.datatype,
+                  name,
+                  listItemDatatype: globalAttribute.listItemDatatype,
+                  enumerationValues: globalAttribute.enumerationValues,
+                );
           events.add(ExiAttribute(name, value));
         case _DeclaredEventKind.element:
           specialAttributesAllowed = false;
@@ -461,10 +465,12 @@ final class _DecoderState {
           specialAttributesAllowed = false;
           events.add(
             ExiCharacters(
-              ExiValueDecoder(
-                input,
-                strings,
-              ).read(datatype!, elementName, listItemDatatype: declaration.listItemDatatype),
+              ExiValueDecoder(input, strings).read(
+                datatype!,
+                elementName,
+                listItemDatatype: declaration.listItemDatatype,
+                enumerationValues: declaration.enumerationValues,
+              ),
             ),
           );
           events.add(ExiEndElement(elementName));

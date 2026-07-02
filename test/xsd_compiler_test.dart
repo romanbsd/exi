@@ -180,7 +180,7 @@ void main() {
             <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
               <xs:simpleType name="Code">
                 <xs:restriction base="xs:string">
-                  <xs:enumeration value="A"/>
+                  <xs:pattern value="[A-Z]+"/>
                 </xs:restriction>
               </xs:simpleType>
               <xs:element name="code" type="Code"/>

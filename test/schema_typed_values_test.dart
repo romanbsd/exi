@@ -408,6 +408,141 @@ void main() {
     );
   });
 
+  test('decodes schema enumeration values by schema-order ordinal', () {
+    const schemaId = 'enumerations';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Color">
+            <xs:restriction base="xs:string">
+              <xs:enumeration value="red"/>
+              <xs:enumeration value="green"/>
+              <xs:enumeration value="blue"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="Number">
+            <xs:restriction base="xs:integer">
+              <xs:enumeration value="1"/>
+              <xs:enumeration value="2"/>
+              <xs:enumeration value="3"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="color" type="Color"/>
+                <xs:element name="number" type="Number"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Root selection; color ordinal 2 and number ordinal 1.
+      ..write('0')
+      ..write('10')
+      ..write('01');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root><color>blue</color><number>2</number></root>');
+  });
+
+  test('rejects an unused enumeration ordinal', () {
+    const schemaId = 'invalid-enumeration';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="value">
+            <xs:simpleType>
+              <xs:restriction base="xs:string">
+                <xs:enumeration value="red"/>
+                <xs:enumeration value="green"/>
+                <xs:enumeration value="blue"/>
+              </xs:restriction>
+            </xs:simpleType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+        schemaResolver: (_) => schema,
+      ).decode(_pack('10000000011')),
+      throwsFormatException,
+    );
+  });
+
+  test('decodes an enumerated schema attribute', () {
+    const schemaId = 'attribute-enumeration';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:attribute name="state" use="required">
+                <xs:simpleType>
+                  <xs:restriction base="xs:string">
+                    <xs:enumeration value="off"/>
+                    <xs:enumeration value="on"/>
+                  </xs:restriction>
+                </xs:simpleType>
+              </xs:attribute>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+
+    // Root and required attribute events are implicit; "on" is ordinal 1.
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack('1000000001'));
+
+    expect(document.toXmlString(), '<root state="on"/>');
+  });
+
+  test('keeps union enumerations on the String representation', () {
+    const schemaId = 'union-enumeration';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Scalar">
+            <xs:union memberTypes="xs:boolean xs:integer"/>
+          </xs:simpleType>
+          <xs:simpleType name="RestrictedScalar">
+            <xs:restriction base="Scalar">
+              <xs:enumeration value="true"/>
+              <xs:enumeration value="7"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="value" type="RestrictedScalar"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      ..write('0')
+      ..write(_value('true'));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<value>true</value>');
+  });
+
   test('decodes typed simple content after a required attribute', () {
     const schemaId = 'simple-content';
     final schema = ExiSchemaCompiler.compile(

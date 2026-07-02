@@ -4,7 +4,12 @@ import 'model.dart';
 import 'schema.dart';
 
 const _xsdUri = 'http://www.w3.org/2001/XMLSchema';
-typedef _SimpleType = ({ExiDatatype datatype, ExiDatatype? listItemDatatype});
+typedef _SimpleType = ({
+  ExiDatatype datatype,
+  ExiDatatype? listItemDatatype,
+  List<String> enumerationValues,
+  bool enumerationEligible,
+});
 
 final class ExiSchemaCompiler {
   static ExiSchema compile({required String id, required String source}) {
@@ -261,6 +266,7 @@ final class _Compiler {
           name,
           simpleDatatype.datatype,
           listItemDatatype: simpleDatatype.listItemDatatype,
+          enumerationValues: simpleDatatype.enumerationValues,
           nillable: nillable,
         );
       }
@@ -294,6 +300,7 @@ final class _Compiler {
         name,
         simpleType.datatype,
         listItemDatatype: simpleType.listItemDatatype,
+        enumerationValues: simpleType.enumerationValues,
         nillable: nillable,
       );
     }
@@ -339,6 +346,7 @@ final class _Compiler {
         declaration.name,
         declaration.datatype,
         listItemDatatype: declaration.listItemDatatype,
+        enumerationValues: declaration.enumerationValues,
         attributes: declaration.attributes,
         nillable: declaration.nillable,
         typeAlternatives: alternatives,
@@ -598,6 +606,7 @@ final class _Compiler {
       name,
       simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
+      enumerationValues: simpleType.enumerationValues,
       attributes: attributes,
       nillable: nillable,
       anyAttribute: _hasAnyAttribute(derivation),
@@ -938,6 +947,7 @@ final class _Compiler {
         name: declaration.name,
         datatype: declaration.datatype,
         listItemDatatype: declaration.listItemDatatype,
+        enumerationValues: declaration.enumerationValues,
         required: _isRequiredAttribute(attribute),
       );
     }
@@ -951,7 +961,7 @@ final class _Compiler {
         ? _resolveSimpleDatatype(attribute, typeName)
         : inlineSimple != null
         ? _compileSimpleType(inlineSimple)
-        : (datatype: ExiDatatype.string, listItemDatatype: null);
+        : _scalarType(ExiDatatype.string);
     if (simpleType == null) {
       throw UnsupportedError('Unsupported XSD attribute type "$typeName"');
     }
@@ -964,6 +974,7 @@ final class _Compiler {
       ),
       datatype: simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
+      enumerationValues: simpleType.enumerationValues,
       required: _isRequiredAttribute(attribute),
     );
   }
@@ -998,7 +1009,7 @@ final class _Compiler {
         ? _resolveSimpleDatatype(attribute, typeName)
         : inlineSimple != null
         ? _compileSimpleType(inlineSimple)
-        : (datatype: ExiDatatype.string, listItemDatatype: null);
+        : _scalarType(ExiDatatype.string);
     if (simpleType == null) {
       throw UnsupportedError('Unsupported XSD attribute type "$typeName"');
     }
@@ -1006,6 +1017,7 @@ final class _Compiler {
       name: ExiQName(uri: targetNamespace, localName: localName),
       datatype: simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
+      enumerationValues: simpleType.enumerationValues,
     );
   }
 
@@ -1074,7 +1086,7 @@ final class _Compiler {
       for (final inlineType in inlineTypes) {
         _compileSimpleType(inlineType);
       }
-      return _scalarType(ExiDatatype.string);
+      return _scalarType(ExiDatatype.string, enumerationEligible: false);
     }
 
     if (list != null) {
@@ -1101,20 +1113,41 @@ final class _Compiler {
       if (itemType.datatype == ExiDatatype.list) {
         throw UnsupportedError('Nested XSD list datatypes are not supported');
       }
-      return (datatype: ExiDatatype.list, listItemDatatype: itemType.datatype);
+      return (
+        datatype: ExiDatatype.list,
+        listItemDatatype: itemType.datatype,
+        enumerationValues: const [],
+        enumerationEligible: false,
+      );
     }
 
     final base = restriction?.getAttribute('base');
     if (base == null) {
       throw UnsupportedError('Only XSD simple-type restrictions are supported');
     }
-    final facets = restriction!.children.whereType<XmlElement>().where(
-      (child) => child.name.namespaceUri == _xsdUri && child.name.local != 'annotation',
-    );
-    if (facets.isNotEmpty) {
-      throw UnsupportedError('XSD simple-type facets are not supported yet');
+    final baseType =
+        _resolveSimpleDatatype(restriction!, base) ?? (throw UnsupportedError('Unsupported XSD simple type "$base"'));
+    final facets = restriction.children
+        .whereType<XmlElement>()
+        .where((child) => child.name.namespaceUri == _xsdUri && child.name.local != 'annotation')
+        .toList();
+    final unsupported = facets.where((facet) => facet.name.local != 'enumeration').firstOrNull;
+    if (unsupported != null) {
+      throw UnsupportedError('Unsupported XSD simple-type facet "${unsupported.name.local}"');
     }
-    return _resolveSimpleDatatype(restriction, base) ?? (throw UnsupportedError('Unsupported XSD simple type "$base"'));
+    final values = <String>[
+      for (final facet in facets)
+        facet.getAttribute('value') ?? (throw const FormatException('An XSD enumeration facet must specify a value')),
+    ];
+    if (values.isEmpty || !baseType.enumerationEligible) {
+      return baseType;
+    }
+    return (
+      datatype: baseType.datatype,
+      listItemDatatype: baseType.listItemDatatype,
+      enumerationValues: List.unmodifiable(values),
+      enumerationEligible: true,
+    );
   }
 
   _SimpleType? _resolveSimpleDatatype(XmlElement context, String qualifiedName) {
@@ -1214,7 +1247,12 @@ final class _Compiler {
       'IDREF' ||
       'ENTITY' ||
       'anyURI' => _scalarType(ExiDatatype.string),
-      'NMTOKENS' || 'IDREFS' || 'ENTITIES' => (datatype: ExiDatatype.list, listItemDatatype: ExiDatatype.string),
+      'NMTOKENS' || 'IDREFS' || 'ENTITIES' => (
+        datatype: ExiDatatype.list,
+        listItemDatatype: ExiDatatype.string,
+        enumerationValues: const [],
+        enumerationEligible: false,
+      ),
       'boolean' => _scalarType(ExiDatatype.boolean),
       'decimal' => _scalarType(ExiDatatype.decimal),
       'float' || 'double' => _scalarType(ExiDatatype.float),
@@ -1241,13 +1279,15 @@ final class _Compiler {
       'gMonth' => _scalarType(ExiDatatype.gMonth),
       'gMonthDay' => _scalarType(ExiDatatype.gMonthDay),
       'gDay' => _scalarType(ExiDatatype.gDay),
-      'duration' || 'QName' || 'NOTATION' => _scalarType(ExiDatatype.string),
+      'duration' => _scalarType(ExiDatatype.string),
+      'QName' || 'NOTATION' => _scalarType(ExiDatatype.string, enumerationEligible: false),
       _ => null,
     };
   }
 }
 
-_SimpleType _scalarType(ExiDatatype datatype) => (datatype: datatype, listItemDatatype: null);
+_SimpleType _scalarType(ExiDatatype datatype, {bool enumerationEligible = true}) =>
+    (datatype: datatype, listItemDatatype: null, enumerationValues: const [], enumerationEligible: enumerationEligible);
 
 Iterable<XmlElement> _children(XmlElement parent, String localName) => parent.children.whereType<XmlElement>().where(
   (element) => element.name.local == localName && element.name.namespaceUri == _xsdUri,

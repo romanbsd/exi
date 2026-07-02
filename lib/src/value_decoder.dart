@@ -11,7 +11,19 @@ final class ExiValueDecoder {
   final BitInput input;
   final ExiStringTable strings;
 
-  String read(ExiDatatype datatype, ExiQName context, {ExiDatatype? listItemDatatype}) {
+  String read(
+    ExiDatatype datatype,
+    ExiQName context, {
+    ExiDatatype? listItemDatatype,
+    List<String> enumerationValues = const [],
+  }) {
+    if (enumerationValues.isNotEmpty) {
+      final ordinal = input.readNBitUnsigned(_bitWidth(enumerationValues.length));
+      if (ordinal >= enumerationValues.length) {
+        throw const FormatException('Invalid EXI enumeration ordinal');
+      }
+      return enumerationValues[ordinal];
+    }
     return switch (datatype) {
       ExiDatatype.string => strings.readValue(input, context),
       ExiDatatype.boolean => input.readNBitUnsigned(2) < 2 ? 'false' : 'true',
@@ -213,6 +225,8 @@ final class ExiValueDecoder {
 }
 
 String _two(int value) => value.toString().padLeft(2, '0');
+
+int _bitWidth(int valueCount) => valueCount <= 1 ? 0 : (valueCount - 1).bitLength;
 
 bool _isValidMonthDay(int month, int day, {int? year}) {
   if (month < 1 || month > 12 || day < 1) {

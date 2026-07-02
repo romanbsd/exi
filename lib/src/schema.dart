@@ -56,6 +56,7 @@ final class ExiElementDeclaration {
   }) : children = const [],
        datatype = null,
        listItemDatatype = null,
+       enumerationValues = const [],
        attributes = const [],
        content = null,
        mixed = false;
@@ -71,6 +72,7 @@ final class ExiElementDeclaration {
     this.attributeProcessContents = ExiProcessContents.strict,
   }) : datatype = null,
        listItemDatatype = null,
+       enumerationValues = const [],
        attributes = const [],
        content = null,
        mixed = false;
@@ -79,6 +81,7 @@ final class ExiElementDeclaration {
     this.name,
     this.datatype, {
     this.listItemDatatype,
+    this.enumerationValues = const [],
     this.nillable = false,
     this.typeAlternatives = const {},
     this.anyAttribute = false,
@@ -95,6 +98,7 @@ final class ExiElementDeclaration {
     this.name,
     this.datatype, {
     this.listItemDatatype,
+    this.enumerationValues = const [],
     this.attributes = const [],
     this.nillable = false,
     this.typeAlternatives = const {},
@@ -120,12 +124,14 @@ final class ExiElementDeclaration {
     this.attributeProcessContents = ExiProcessContents.strict,
   }) : children = const [],
        datatype = null,
-       listItemDatatype = null;
+       listItemDatatype = null,
+       enumerationValues = const [];
 
   final ExiQName name;
   final List<ExiElementDeclaration> children;
   final ExiDatatype? datatype;
   final ExiDatatype? listItemDatatype;
+  final List<String> enumerationValues;
   final List<ExiAttributeDeclaration> attributes;
   final ExiParticle? content;
   final bool mixed;
@@ -142,12 +148,14 @@ final class ExiAttributeDeclaration {
     required this.name,
     required this.datatype,
     this.listItemDatatype,
+    this.enumerationValues = const [],
     this.required = false,
   }) : assert((datatype == ExiDatatype.list) == (listItemDatatype != null));
 
   final ExiQName name;
   final ExiDatatype datatype;
   final ExiDatatype? listItemDatatype;
+  final List<String> enumerationValues;
   final bool required;
 }
 
