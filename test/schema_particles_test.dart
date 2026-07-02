@@ -437,6 +437,36 @@ void main() {
     expect(document.toXmlString(), '<root code="7"/>');
   });
 
+  test('decodes an attribute with an implicit wildcard namespace', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'qualified-wildcard',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:example">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:anyAttribute namespace="##targetNamespace"/>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer()
+      // Root=0; AT(urn:example:*)=0; only the local-name String is encoded.
+      ..write('00')
+      ..write(_rawString('code'))
+      ..write(_value('7'))
+      // EE=1.
+      ..write('1');
+
+    final document = _decode(schema, bits.toString());
+    final attribute = document.events.whereType<ExiAttribute>().single;
+
+    expect(attribute.name, const ExiQName(uri: 'urn:example', localName: 'code'));
+    expect(attribute.value, '7');
+  });
+
   test('decodes qualified local names from schema form overrides', () {
     final schema = ExiSchemaCompiler.compile(
       id: 'forms',

@@ -25,7 +25,8 @@ The current decoder stage supports:
   ranges, local namespace form overrides, and primitive, named, and chained
   base-only simple types, plus attributed `simpleContent` and
   `complexContent` extension, unconstrained attribute wildcards with global
-  datatype lookup, and namespace-aware type resolution;
+  datatype lookup, finite namespace-constrained attribute wildcards, and
+  namespace-aware type resolution;
 - schema-typed string, boolean, integer, decimal, float, binary, date, time,
   and date-time values;
 - URI, local-name, and value string-table partitions;
@@ -35,7 +36,7 @@ The current decoder stage supports:
 
 Datatype representation maps and user metadata remain unsupported. XSD
 imports/includes, simple-type facets, lists/unions, complex-content
-restriction, constrained attribute wildcards, repetition of nullable
+restriction, `##other` attribute wildcards, repetition of nullable
 compositors, non-strict and more general schema-informed grammars,
 self-contained elements, pre-compression, and compression are also not yet
 available.

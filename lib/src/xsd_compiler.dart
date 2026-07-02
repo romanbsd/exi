@@ -261,6 +261,7 @@ final class _Compiler {
         nillable: declaration.nillable,
         typeAlternatives: alternatives,
         anyAttribute: declaration.anyAttribute,
+        attributeWildcardNamespaces: declaration.attributeWildcardNamespaces,
       );
     }
     if (declaration.content != null ||
@@ -275,6 +276,7 @@ final class _Compiler {
         nillable: declaration.nillable,
         typeAlternatives: alternatives,
         anyAttribute: declaration.anyAttribute,
+        attributeWildcardNamespaces: declaration.attributeWildcardNamespaces,
       );
     }
     if (declaration.children.isNotEmpty) {
@@ -314,6 +316,7 @@ final class _Compiler {
     }
     final attributes = _compileAttributes(complexType);
     final anyAttribute = _hasAnyAttribute(complexType);
+    final attributeWildcardNamespaces = _attributeWildcardNamespaces(complexType);
     final compositors = [
       ..._children(complexType, 'sequence'),
       ..._children(complexType, 'choice'),
@@ -331,6 +334,7 @@ final class _Compiler {
           mixed: mixed,
           nillable: nillable,
           anyAttribute: anyAttribute,
+          attributeWildcardNamespaces: attributeWildcardNamespaces,
         );
       }
       return ExiElementDeclaration.empty(name, nillable: nillable);
@@ -358,6 +362,7 @@ final class _Compiler {
       mixed: mixed,
       nillable: nillable,
       anyAttribute: anyAttribute,
+      attributeWildcardNamespaces: attributeWildcardNamespaces,
     );
   }
 
@@ -417,13 +422,22 @@ final class _Compiler {
       'true' || '1' => true,
       final value => throw FormatException('Invalid XSD mixed value "$value"'),
     };
+    final extensionAnyAttribute = _hasAnyAttribute(extension);
+    final anyAttribute = base.anyAttribute || extensionAnyAttribute;
+    final attributeWildcardNamespaces = _mergeWildcardNamespaces(
+      base.anyAttribute,
+      base.attributeWildcardNamespaces,
+      extensionAnyAttribute,
+      _attributeWildcardNamespaces(extension),
+    );
     return ExiElementDeclaration.complex(
       name,
       attributes: attributes,
       content: content,
       mixed: mixed || contentMixed || base.mixed,
       nillable: nillable,
-      anyAttribute: base.anyAttribute || _hasAnyAttribute(extension),
+      anyAttribute: anyAttribute,
+      attributeWildcardNamespaces: attributeWildcardNamespaces,
     );
   }
 
@@ -480,6 +494,7 @@ final class _Compiler {
       attributes: attributes,
       nillable: nillable,
       anyAttribute: _hasAnyAttribute(derivation),
+      attributeWildcardNamespaces: _attributeWildcardNamespaces(derivation),
     );
   }
 
@@ -491,11 +506,39 @@ final class _Compiler {
     if (wildcards.isEmpty) {
       return false;
     }
-    final namespace = wildcards.single.getAttribute('namespace');
-    if (namespace != null && namespace != '##any') {
-      throw UnsupportedError('Only unconstrained XSD attribute wildcards are supported yet');
-    }
     return true;
+  }
+
+  Set<String>? _attributeWildcardNamespaces(XmlElement container) {
+    final wildcards = _children(container, 'anyAttribute');
+    if (wildcards.isEmpty) {
+      return null;
+    }
+    final namespace = wildcards.single.getAttribute('namespace');
+    if (namespace == null || namespace == '##any') {
+      return null;
+    }
+    final result = <String>{};
+    for (final token in namespace.split(RegExp(r'\s+')).where((token) => token.isNotEmpty)) {
+      switch (token) {
+        case '##local':
+          result.add('');
+        case '##targetNamespace':
+          result.add(targetNamespace);
+        case '##other':
+          throw UnsupportedError('The XSD ##other attribute wildcard is not supported yet');
+        default:
+          result.add(token);
+      }
+    }
+    return result;
+  }
+
+  Set<String>? _mergeWildcardNamespaces(bool leftEnabled, Set<String>? left, bool rightEnabled, Set<String>? right) {
+    if (!leftEnabled) return right;
+    if (!rightEnabled) return left;
+    if (left == null || right == null) return null;
+    return {...left, ...right};
   }
 
   ExiParticle _compileParticle(XmlElement particle) {

@@ -322,7 +322,14 @@ final class _DecoderState {
       }
       if (contentIsReachable) {
         if (declaration.anyAttribute) {
-          candidates.add(const _DeclaredEvent.wildcardAttribute());
+          final namespaces = declaration.attributeWildcardNamespaces;
+          if (namespaces == null) {
+            candidates.add(const _DeclaredEvent.wildcardAttribute(null));
+          } else {
+            for (final uri in namespaces.toList()..sort()) {
+              candidates.add(_DeclaredEvent.wildcardAttribute(uri));
+            }
+          }
         }
         if (datatype != null) {
           candidates.add(nilled ? const _DeclaredEvent.end() : const _DeclaredEvent.typedCharacters());
@@ -392,7 +399,10 @@ final class _DecoderState {
         case _DeclaredEventKind.wildcardAttribute:
           specialAttributesAllowed = false;
           attributeIndex = attributes.length;
-          final name = strings.readQName(input);
+          final wildcardUri = event.wildcardUri;
+          final name = wildcardUri == null
+              ? strings.readQName(input)
+              : ExiQName(uri: wildcardUri, localName: strings.readString(input));
           if (!seenAttributes.add(name)) {
             throw const FormatException('Duplicate wildcard attribute');
           }
@@ -511,37 +521,47 @@ enum _DeclaredEventKind { attribute, wildcardAttribute, element, end, characters
 final class _DeclaredEvent {
   const _DeclaredEvent.attribute(this.attributeIndex, this.attribute)
     : kind = _DeclaredEventKind.attribute,
-      element = null;
+      element = null,
+      wildcardUri = null;
 
   const _DeclaredEvent.element(this.element)
     : kind = _DeclaredEventKind.element,
       attributeIndex = null,
-      attribute = null;
+      attribute = null,
+      wildcardUri = null;
 
-  const _DeclaredEvent.wildcardAttribute()
+  const _DeclaredEvent.wildcardAttribute(this.wildcardUri)
     : kind = _DeclaredEventKind.wildcardAttribute,
       attributeIndex = null,
       attribute = null,
       element = null;
 
-  const _DeclaredEvent.end() : kind = _DeclaredEventKind.end, attributeIndex = null, attribute = null, element = null;
+  const _DeclaredEvent.end()
+    : kind = _DeclaredEventKind.end,
+      attributeIndex = null,
+      attribute = null,
+      element = null,
+      wildcardUri = null;
 
   const _DeclaredEvent.characters()
     : kind = _DeclaredEventKind.characters,
       attributeIndex = null,
       attribute = null,
-      element = null;
+      element = null,
+      wildcardUri = null;
 
   const _DeclaredEvent.typedCharacters()
     : kind = _DeclaredEventKind.typedCharacters,
       attributeIndex = null,
       attribute = null,
-      element = null;
+      element = null,
+      wildcardUri = null;
 
   final _DeclaredEventKind kind;
   final int? attributeIndex;
   final ExiAttributeDeclaration? attribute;
   final ExiElementDeclaration? element;
+  final String? wildcardUri;
 }
 
 ExiParticle _legacyContent(List<ExiElementDeclaration> children) {
