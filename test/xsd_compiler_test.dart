@@ -323,6 +323,38 @@ void main() {
       expect(all.particles, hasLength(2));
     });
 
+    test('compiles an element wildcard with namespace and processing constraints', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'any.xsd',
+        source: '''
+          <xs:schema
+              xmlns:xs="http://www.w3.org/2001/XMLSchema"
+              targetNamespace="urn:example">
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:sequence>
+                  <xs:any
+                      namespace="##local ##targetNamespace"
+                      processContents="lax"
+                      minOccurs="0"
+                      maxOccurs="unbounded"/>
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
+          </xs:schema>
+        ''',
+      );
+
+      final sequence = schema.globalElements.single.content as ExiSequenceParticle;
+      final repeated = sequence.particles.single as ExiRepeatedParticle;
+      final wildcard = repeated.particle as ExiWildcardParticle;
+      expect(wildcard.namespaces, {'', 'urn:example'});
+      expect(wildcard.excludedNamespaces, isNull);
+      expect(wildcard.processContents, ExiProcessContents.lax);
+      expect(repeated.minOccurs, 0);
+      expect(repeated.maxOccurs, isNull);
+    });
+
     test('rejects repeated children in an all compositor', () {
       expect(
         () => ExiSchemaCompiler.compile(

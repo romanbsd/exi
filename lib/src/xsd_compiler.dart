@@ -541,11 +541,15 @@ final class _Compiler {
     if (wildcards.isEmpty) {
       return null;
     }
-    final namespace = wildcards.single.getAttribute('namespace');
+    return _wildcardNamespaces(wildcards.single);
+  }
+
+  Set<String>? _wildcardNamespaces(XmlElement wildcard) {
+    final namespace = wildcard.getAttribute('namespace')?.trim();
     if (namespace == null || namespace == '##any') {
       return null;
     }
-    if (namespace.trim() == '##other') {
+    if (namespace == '##other') {
       return null;
     }
     final result = <String>{};
@@ -566,15 +570,23 @@ final class _Compiler {
 
   Set<String>? _attributeWildcardExcludedNamespaces(XmlElement container) {
     final wildcards = _children(container, 'anyAttribute');
-    if (wildcards.isEmpty || wildcards.single.getAttribute('namespace')?.trim() != '##other') {
+    if (wildcards.isEmpty) {
       return null;
     }
-    return {'', targetNamespace};
+    return _wildcardExcludedNamespaces(wildcards.single);
+  }
+
+  Set<String>? _wildcardExcludedNamespaces(XmlElement wildcard) {
+    return wildcard.getAttribute('namespace')?.trim() == '##other' ? {'', targetNamespace} : null;
   }
 
   ExiProcessContents _attributeProcessContents(XmlElement container) {
     final wildcard = _children(container, 'anyAttribute').firstOrNull;
-    return switch (wildcard?.getAttribute('processContents')) {
+    return wildcard == null ? ExiProcessContents.strict : _wildcardProcessContents(wildcard);
+  }
+
+  ExiProcessContents _wildcardProcessContents(XmlElement wildcard) {
+    return switch (wildcard.getAttribute('processContents')) {
       null || 'strict' => ExiProcessContents.strict,
       'lax' => ExiProcessContents.lax,
       'skip' => ExiProcessContents.skip,
@@ -593,6 +605,8 @@ final class _Compiler {
     switch (particle.name.local) {
       case 'element':
         return _compileElementParticle(particle);
+      case 'any':
+        return _compileWildcardParticle(particle);
       case 'sequence':
       case 'choice':
         final children = <ExiParticle>[];
@@ -600,7 +614,7 @@ final class _Compiler {
           if (child.name.namespaceUri != _xsdUri || child.name.local == 'annotation') {
             continue;
           }
-          if (!const {'element', 'sequence', 'choice', 'all', 'group'}.contains(child.name.local)) {
+          if (!const {'element', 'any', 'sequence', 'choice', 'all', 'group'}.contains(child.name.local)) {
             throw UnsupportedError('Unsupported XSD particle "${child.name.local}"');
           }
           children.add(_compileParticle(child));
@@ -693,11 +707,31 @@ final class _Compiler {
     return switch (particle) {
       ExiEmptyParticle() => true,
       ExiElementParticle(:final minOccurs) => minOccurs == 0,
+      ExiWildcardParticle() => false,
       ExiSequenceParticle(:final particles) => particles.every(_particleIsNullable),
       ExiChoiceParticle(:final particles) => particles.any(_particleIsNullable),
       ExiAllParticle(:final particles) => particles.every(_particleIsNullable),
       ExiRepeatedParticle(:final particle, :final minOccurs) => minOccurs == 0 || _particleIsNullable(particle),
     };
+  }
+
+  ExiParticle _compileWildcardParticle(XmlElement wildcard) {
+    if (wildcard.getAttribute('notNamespace') != null || wildcard.getAttribute('notQName') != null) {
+      throw UnsupportedError('XSD 1.1 wildcard exclusions are not supported yet');
+    }
+    for (final child in wildcard.children.whereType<XmlElement>()) {
+      if (child.name.namespaceUri == _xsdUri && child.name.local != 'annotation') {
+        throw UnsupportedError('Unsupported XSD element-wildcard component "${child.name.local}"');
+      }
+    }
+    return _applyParticleOccurrences(
+      wildcard,
+      ExiWildcardParticle(
+        namespaces: _wildcardNamespaces(wildcard),
+        excludedNamespaces: _wildcardExcludedNamespaces(wildcard),
+        processContents: _wildcardProcessContents(wildcard),
+      ),
+    );
   }
 
   ExiParticle _compileElementParticle(XmlElement element) {

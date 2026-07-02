@@ -334,8 +334,8 @@ final class _DecoderState {
         if (datatype != null) {
           candidates.add(nilled ? const _DeclaredEvent.end() : const _DeclaredEvent.typedCharacters());
         } else {
-          for (final child in _leadingElements(content)) {
-            candidates.add(_DeclaredEvent.element(child));
+          for (final child in _leadingElementEvents(content)) {
+            candidates.add(child);
           }
           if (_isNullable(content)) {
             candidates.add(const _DeclaredEvent.end());
@@ -432,6 +432,24 @@ final class _DecoderState {
           }
           content = derivative;
           _decodeElement(child.name, declaration: child);
+        case _DeclaredEventKind.wildcardElement:
+          specialAttributesAllowed = false;
+          attributeIndex = attributes.length;
+          final wildcard = event.wildcardParticle!;
+          final wildcardUri = event.wildcardUri;
+          final name = wildcardUri == null
+              ? strings.readQName(input)
+              : ExiQName(uri: wildcardUri, localName: strings.readString(input));
+          if (wildcard.excludedNamespaces?.contains(name.uri) ?? false) {
+            throw const FormatException('Element QName does not match the schema wildcard namespace constraint');
+          }
+          final derivative = _derive(content, wildcard);
+          if (derivative == null) {
+            throw const FormatException('Element does not match the schema wildcard particle');
+          }
+          content = derivative;
+          final globalElement = schema?.globalElements.where((element) => element.name == name).firstOrNull;
+          _decodeElement(name, declaration: globalElement);
         case _DeclaredEventKind.characters:
           specialAttributesAllowed = false;
           attributeIndex = attributes.length;
@@ -527,22 +545,31 @@ final class _DecoderState {
   }
 }
 
-enum _DeclaredEventKind { attribute, wildcardAttribute, element, end, characters, typedCharacters }
+enum _DeclaredEventKind { attribute, wildcardAttribute, element, wildcardElement, end, characters, typedCharacters }
 
 final class _DeclaredEvent {
   const _DeclaredEvent.attribute(this.attributeIndex, this.attribute)
     : kind = _DeclaredEventKind.attribute,
       element = null,
+      wildcardParticle = null,
       wildcardUri = null;
 
   const _DeclaredEvent.element(this.element)
     : kind = _DeclaredEventKind.element,
       attributeIndex = null,
       attribute = null,
+      wildcardParticle = null,
       wildcardUri = null;
 
   const _DeclaredEvent.wildcardAttribute(this.wildcardUri)
     : kind = _DeclaredEventKind.wildcardAttribute,
+      attributeIndex = null,
+      attribute = null,
+      element = null,
+      wildcardParticle = null;
+
+  const _DeclaredEvent.wildcardElement(this.wildcardParticle, this.wildcardUri)
+    : kind = _DeclaredEventKind.wildcardElement,
       attributeIndex = null,
       attribute = null,
       element = null;
@@ -552,6 +579,7 @@ final class _DeclaredEvent {
       attributeIndex = null,
       attribute = null,
       element = null,
+      wildcardParticle = null,
       wildcardUri = null;
 
   const _DeclaredEvent.characters()
@@ -559,6 +587,7 @@ final class _DeclaredEvent {
       attributeIndex = null,
       attribute = null,
       element = null,
+      wildcardParticle = null,
       wildcardUri = null;
 
   const _DeclaredEvent.typedCharacters()
@@ -566,12 +595,14 @@ final class _DeclaredEvent {
       attributeIndex = null,
       attribute = null,
       element = null,
+      wildcardParticle = null,
       wildcardUri = null;
 
   final _DeclaredEventKind kind;
   final int? attributeIndex;
   final ExiAttributeDeclaration? attribute;
   final ExiElementDeclaration? element;
+  final ExiWildcardParticle? wildcardParticle;
   final String? wildcardUri;
 }
 
@@ -586,6 +617,7 @@ bool _isNullable(ExiParticle particle) {
   return switch (particle) {
     ExiEmptyParticle() => true,
     ExiElementParticle(:final minOccurs) => minOccurs == 0,
+    ExiWildcardParticle() => false,
     ExiSequenceParticle(:final particles) => particles.every(_isNullable),
     ExiChoiceParticle(:final particles) => particles.any(_isNullable),
     ExiAllParticle(:final particles) => particles.every(_isNullable),
@@ -593,18 +625,38 @@ bool _isNullable(ExiParticle particle) {
   };
 }
 
-List<ExiElementDeclaration> _leadingElements(ExiParticle particle) {
-  final result = <ExiElementDeclaration>[];
+List<_DeclaredEvent> _leadingElementEvents(ExiParticle particle) {
+  final result = <_DeclaredEvent>[];
   void collect(ExiParticle current) {
     switch (current) {
       case ExiEmptyParticle():
         return;
       case ExiElementParticle(:final element, :final maxOccurs):
         if (maxOccurs != 0) {
-          if (result.any((candidate) => candidate.name == element.name)) {
+          if (result.any((candidate) => candidate.element?.name == element.name)) {
             throw UnsupportedError('Ambiguous schema particles with the same leading QName are not supported yet');
           }
-          result.add(element);
+          result.add(_DeclaredEvent.element(element));
+        }
+      case ExiWildcardParticle(:final namespaces):
+        final uris = namespaces?.toList();
+        uris?.sort();
+        if (uris == null) {
+          if (result.any(
+            (candidate) => candidate.kind == _DeclaredEventKind.wildcardElement && candidate.wildcardUri == null,
+          )) {
+            throw UnsupportedError('Ambiguous unconstrained schema element wildcards are not supported yet');
+          }
+          result.add(_DeclaredEvent.wildcardElement(current, null));
+        } else {
+          for (final uri in uris) {
+            if (result.any(
+              (candidate) => candidate.kind == _DeclaredEventKind.wildcardElement && candidate.wildcardUri == uri,
+            )) {
+              throw UnsupportedError('Ambiguous schema element wildcards for namespace "$uri" are not supported yet');
+            }
+            result.add(_DeclaredEvent.wildcardElement(current, uri));
+          }
         }
       case ExiSequenceParticle(:final particles):
         for (final child in particles) {
@@ -632,7 +684,7 @@ List<ExiElementDeclaration> _leadingElements(ExiParticle particle) {
   return result;
 }
 
-ExiParticle? _derive(ExiParticle particle, ExiElementDeclaration selected) {
+ExiParticle? _derive(ExiParticle particle, Object selected) {
   switch (particle) {
     case ExiEmptyParticle():
       return null;
@@ -646,6 +698,8 @@ ExiParticle? _derive(ExiParticle particle, ExiElementDeclaration selected) {
         return const ExiEmptyParticle();
       }
       return ExiElementParticle(element, minOccurs: remainingMin, maxOccurs: remainingMax);
+    case ExiWildcardParticle():
+      return identical(particle, selected) ? const ExiEmptyParticle() : null;
     case ExiSequenceParticle(:final particles):
       final alternatives = <ExiParticle>[];
       for (var index = 0; index < particles.length; index++) {

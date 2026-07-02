@@ -137,6 +137,18 @@ final class ExiElementParticle extends ExiParticle {
   final int? maxOccurs;
 }
 
+final class ExiWildcardParticle extends ExiParticle {
+  const ExiWildcardParticle({
+    this.namespaces,
+    this.excludedNamespaces,
+    this.processContents = ExiProcessContents.strict,
+  });
+
+  final Set<String>? namespaces;
+  final Set<String>? excludedNamespaces;
+  final ExiProcessContents processContents;
+}
+
 final class ExiSequenceParticle extends ExiParticle {
   const ExiSequenceParticle(this.particles);
 

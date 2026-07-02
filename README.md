@@ -24,10 +24,10 @@ The current decoder stage supports:
   nested sequences and choices, `all` compositors, empty content, occurrence
   ranges, local namespace form overrides, and primitive, named, and chained
   base-only simple types, plus attributed `simpleContent` and
-  `complexContent` extension, unconstrained attribute wildcards with global
-  datatype lookup, finite namespace-constrained attribute wildcards, and
-  `##other` attribute wildcards with strict/lax/skip processing, and
-  namespace-aware type resolution;
+  `complexContent` extension, unconstrained element and attribute wildcards
+  with global declaration lookup, finite namespace-constrained wildcards,
+  `##other` wildcards, attribute strict/lax/skip processing, and namespace-aware
+  type resolution;
 - schema-typed string, boolean, integer, decimal, float, binary, date, time,
   and date-time values;
 - URI, local-name, and value string-table partitions;

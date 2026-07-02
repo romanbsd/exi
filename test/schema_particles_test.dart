@@ -495,6 +495,107 @@ void main() {
     expect(attribute.name, const ExiQName(uri: 'urn:other', localName: 'code'));
   });
 
+  test('decodes an unknown child through a lax element wildcard', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'particles',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:example">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:any namespace="urn:other" processContents="lax"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer()
+      // Root=0; SE(urn:other:*) is implicit and encodes only the local name.
+      ..write('0')
+      ..write(_rawString('child'))
+      // The unknown child uses its schema-less start-tag EE production.
+      ..write('00');
+
+    final document = _decode(schema, bits.toString());
+    final elements = document.events.whereType<ExiStartElement>().toList();
+
+    expect(elements[1].name, const ExiQName(uri: 'urn:other', localName: 'child'));
+    expect(document.events.whereType<ExiEndElement>(), hasLength(2));
+  });
+
+  test('uses a global element declaration for a strict wildcard match', () {
+    final schema = _compile('''
+      <xs:element name="child" type="xs:integer"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:any/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Global roots are child=00, root=01, SE(*)=10.
+      ..write('01')
+      // The wildcard QName is child.
+      ..write(_qName('', 'child'))
+      // Positive integer 7.
+      ..write('0')
+      ..write(_unsigned(7));
+
+    final document = _decode(schema, bits.toString());
+
+    expect(document.toXmlString(), '<root><child>7</child></root>');
+  });
+
+  test('uses a built-in grammar for a wildcard without a global declaration', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:any/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      ..write('0')
+      ..write(_qName('', 'missing'))
+      // The synthesized global element grammar starts with schema-less EE.
+      ..write('00');
+
+    final document = _decode(schema, bits.toString());
+
+    expect(document.toXmlString(), '<root><missing/></root>');
+  });
+
+  test('uses a global declaration regardless of XSD wildcard processing mode', () {
+    final schema = _compile('''
+      <xs:element name="child" type="xs:integer"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:any processContents="skip"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Root=01; SE(*) is implicit and names the global child.
+      ..write('01')
+      ..write(_qName('', 'child'))
+      // EXI wildcard semantics use the global integer grammar.
+      ..write('0')
+      ..write(_unsigned(7));
+
+    final document = _decode(schema, bits.toString());
+
+    expect(document.toXmlString(), '<root><child>7</child></root>');
+  });
+
   test('decodes qualified local names from schema form overrides', () {
     final schema = ExiSchemaCompiler.compile(
       id: 'forms',
