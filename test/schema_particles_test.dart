@@ -4,6 +4,32 @@ import 'package:exi/exi.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('decodes schema-valid productions in a non-strict schema grammar', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="child"/>
+          </xs:sequence>
+          <xs:attribute name="id" type="xs:string" use="required"/>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Document root and declared attribute first-level productions.
+      ..write('00')
+      ..write(_value('7'))
+      // Declared child, child EE, and root EE first-level productions.
+      ..write('000');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(schemaId: ExiSchemaId.named('particles')),
+      schemaResolver: (_) => schema,
+    ).decode(_pack('10000000$bits'));
+
+    expect(document.toXmlString(), '<root id="7"><child/></root>');
+  });
+
   group('strict schema particles', () {
     test('decodes an optional child that is absent', () {
       final schema = _compile('''

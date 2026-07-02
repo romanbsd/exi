@@ -26,9 +26,6 @@ final class ExiDecoder {
     final parsedHeader = _readHeader(input, hasCookie: hasCookie);
     _validateOptions(parsedHeader.options);
     final schema = _resolveSchema(parsedHeader.options.schemaId);
-    if (schema != null && !parsedHeader.options.strict) {
-      throw UnsupportedError('Non-strict schema-informed grammars are not supported yet');
-    }
     final state = _DecoderState(input, parsedHeader.options, schema);
     final events = state.decode();
     return ExiDocument(header: parsedHeader.header, events: events, options: parsedHeader.options);
@@ -378,12 +375,16 @@ final class _DecoderState {
       final canReadType = declaration.typeAlternatives.isNotEmpty && specialAttributesAllowed;
       final canReadNil = declaration.nillable && !nilSeen && specialAttributesAllowed;
       final specialCount = (canReadType ? 1 : 0) + (canReadNil ? 1 : 0);
-      final candidateCount = candidates.length + (specialCount > 0 ? 1 : 0);
+      final hasSecondLevel = !options.strict || specialCount > 0;
+      final candidateCount = candidates.length + (hasSecondLevel ? 1 : 0);
       if (candidateCount == 0) {
         throw const FormatException('Schema grammar has no valid next event');
       }
 
       final selected = input.readNBitUnsigned(_bitWidth(candidateCount));
+      if (selected == candidates.length && !options.strict) {
+        throw UnsupportedError('Non-strict schema-deviation productions are not supported yet');
+      }
       if (specialCount > 0 && selected == candidates.length) {
         final special = input.readNBitUnsigned(_bitWidth(specialCount));
         if (canReadType && special == 0) {
