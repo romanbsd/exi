@@ -166,6 +166,7 @@ final class _Compiler {
     if (element.getAttribute('ref') != null) {
       throw const FormatException('Global XSD elements cannot use ref');
     }
+    _rejectUnsupportedElementSemantics(element);
     final localName = element.getAttribute('name');
     if (localName == null || localName.isEmpty) {
       throw const FormatException('XSD element declaration is missing a name');
@@ -299,6 +300,12 @@ final class _Compiler {
   }
 
   ExiElementDeclaration _compileComplexType(ExiQName name, XmlElement complexType, {required bool nillable}) {
+    if (complexType.getAttribute('abstract') == 'true' ||
+        complexType.getAttribute('abstract') == '1' ||
+        complexType.getAttribute('block') != null ||
+        complexType.getAttribute('final') != null) {
+      throw UnsupportedError('Abstract, blocked, or final XSD complex types are not supported yet');
+    }
     final mixed = switch (complexType.getAttribute('mixed')) {
       null || 'false' || '0' => false,
       'true' || '1' => true,
@@ -710,6 +717,7 @@ final class _Compiler {
   }
 
   ExiElementDeclaration _resolveElementReference(XmlElement element, String reference) {
+    _rejectUnsupportedElementSemantics(element);
     if (element.getAttribute('name') != null ||
         element.getAttribute('type') != null ||
         element.getAttribute('nillable') != null ||
@@ -800,6 +808,7 @@ final class _Compiler {
   }
 
   ExiAttributeDeclaration _compileAttribute(XmlElement attribute) {
+    _rejectUnsupportedAttributeSemantics(attribute);
     final reference = attribute.getAttribute('ref');
     if (reference != null) {
       if (attribute.getAttribute('name') != null ||
@@ -859,6 +868,7 @@ final class _Compiler {
     if (attribute == null) {
       throw FormatException('Unknown global XSD attribute "$localName"');
     }
+    _rejectUnsupportedAttributeSemantics(attribute);
     if (attribute.getAttribute('ref') != null ||
         attribute.getAttribute('use') != null ||
         attribute.getAttribute('form') != null) {
@@ -887,6 +897,27 @@ final class _Compiler {
       'prohibited' => throw UnsupportedError('Prohibited XSD attributes are not supported yet'),
       final value => throw FormatException('Invalid XSD attribute use "$value"'),
     };
+  }
+
+  void _rejectUnsupportedElementSemantics(XmlElement element) {
+    if (element.getAttribute('default') != null ||
+        element.getAttribute('fixed') != null ||
+        element.getAttribute('substitutionGroup') != null ||
+        element.getAttribute('block') != null ||
+        element.getAttribute('final') != null ||
+        element.getAttribute('abstract') == 'true' ||
+        element.getAttribute('abstract') == '1') {
+      throw UnsupportedError(
+        'XSD element defaults, fixed values, substitution groups, abstractness, and derivation controls '
+        'are not supported yet',
+      );
+    }
+  }
+
+  void _rejectUnsupportedAttributeSemantics(XmlElement attribute) {
+    if (attribute.getAttribute('default') != null || attribute.getAttribute('fixed') != null) {
+      throw UnsupportedError('XSD attribute default and fixed values are not supported yet');
+    }
   }
 
   ExiDatatype _compileSimpleType(XmlElement simpleType) {

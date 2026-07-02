@@ -37,10 +37,11 @@ The current decoder stage supports:
 
 Datatype representation maps and user metadata remain unsupported. XSD
 imports/includes, simple-type facets, lists/unions, complex-content
-restriction, inherited wildcard unions involving `##other`, repetition of
-nullable compositors, non-strict and more general schema-informed grammars,
-self-contained elements, pre-compression, and compression are also not yet
-available.
+restriction, defaults and fixed values, substitution groups, abstract
+declarations and derivation controls, inherited wildcard unions involving
+`##other`, repetition of nullable compositors, non-strict and more general
+schema-informed grammars, self-contained elements, pre-compression, and
+compression are also not yet available.
 
 ```dart
 import 'dart:typed_data';

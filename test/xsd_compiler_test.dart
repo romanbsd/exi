@@ -775,6 +775,35 @@ void main() {
       );
     });
 
+    test('rejects schema semantics that would change the EXI grammar', () {
+      for (final declaration in [
+        '<xs:element name="root" default="value"/>',
+        '<xs:element name="root" fixed="value"/>',
+        '<xs:element name="root" substitutionGroup="member"/>',
+        '<xs:element name="root" abstract="true"/>',
+        '''
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:attribute name="code" default="value"/>
+            </xs:complexType>
+          </xs:element>
+        ''',
+      ]) {
+        expect(
+          () => ExiSchemaCompiler.compile(
+            id: 'unsupported-semantics.xsd',
+            source:
+                '''
+              <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+                $declaration
+              </xs:schema>
+            ''',
+          ),
+          throwsUnsupportedError,
+        );
+      }
+    });
+
     test('compiles mixed complex content', () {
       final schema = ExiSchemaCompiler.compile(
         id: 'mixed.xsd',
