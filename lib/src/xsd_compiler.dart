@@ -9,6 +9,8 @@ typedef _SimpleType = ({
   ExiDatatype? listItemDatatype,
   List<String> enumerationValues,
   bool enumerationEligible,
+  BigInt? integerMinInclusive,
+  BigInt? integerMaxInclusive,
 });
 
 final class ExiSchemaCompiler {
@@ -267,6 +269,8 @@ final class _Compiler {
           simpleDatatype.datatype,
           listItemDatatype: simpleDatatype.listItemDatatype,
           enumerationValues: simpleDatatype.enumerationValues,
+          integerMinInclusive: simpleDatatype.integerMinInclusive,
+          integerMaxInclusive: simpleDatatype.integerMaxInclusive,
           nillable: nillable,
         );
       }
@@ -301,6 +305,8 @@ final class _Compiler {
         simpleType.datatype,
         listItemDatatype: simpleType.listItemDatatype,
         enumerationValues: simpleType.enumerationValues,
+        integerMinInclusive: simpleType.integerMinInclusive,
+        integerMaxInclusive: simpleType.integerMaxInclusive,
         nillable: nillable,
       );
     }
@@ -347,6 +353,8 @@ final class _Compiler {
         declaration.datatype,
         listItemDatatype: declaration.listItemDatatype,
         enumerationValues: declaration.enumerationValues,
+        integerMinInclusive: declaration.integerMinInclusive,
+        integerMaxInclusive: declaration.integerMaxInclusive,
         attributes: declaration.attributes,
         nillable: declaration.nillable,
         typeAlternatives: alternatives,
@@ -607,6 +615,8 @@ final class _Compiler {
       simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
       enumerationValues: simpleType.enumerationValues,
+      integerMinInclusive: simpleType.integerMinInclusive,
+      integerMaxInclusive: simpleType.integerMaxInclusive,
       attributes: attributes,
       nillable: nillable,
       anyAttribute: _hasAnyAttribute(derivation),
@@ -948,6 +958,8 @@ final class _Compiler {
         datatype: declaration.datatype,
         listItemDatatype: declaration.listItemDatatype,
         enumerationValues: declaration.enumerationValues,
+        integerMinInclusive: declaration.integerMinInclusive,
+        integerMaxInclusive: declaration.integerMaxInclusive,
         required: _isRequiredAttribute(attribute),
       );
     }
@@ -975,6 +987,8 @@ final class _Compiler {
       datatype: simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
       enumerationValues: simpleType.enumerationValues,
+      integerMinInclusive: simpleType.integerMinInclusive,
+      integerMaxInclusive: simpleType.integerMaxInclusive,
       required: _isRequiredAttribute(attribute),
     );
   }
@@ -1018,6 +1032,8 @@ final class _Compiler {
       datatype: simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
       enumerationValues: simpleType.enumerationValues,
+      integerMinInclusive: simpleType.integerMinInclusive,
+      integerMaxInclusive: simpleType.integerMaxInclusive,
     );
   }
 
@@ -1118,6 +1134,8 @@ final class _Compiler {
         listItemDatatype: itemType.datatype,
         enumerationValues: const [],
         enumerationEligible: false,
+        integerMinInclusive: null,
+        integerMaxInclusive: null,
       );
     }
 
@@ -1131,22 +1149,62 @@ final class _Compiler {
         .whereType<XmlElement>()
         .where((child) => child.name.namespaceUri == _xsdUri && child.name.local != 'annotation')
         .toList();
-    final unsupported = facets.where((facet) => facet.name.local != 'enumeration').firstOrNull;
+    const supportedFacets = {'enumeration', 'minInclusive', 'minExclusive', 'maxInclusive', 'maxExclusive'};
+    final unsupported = facets.where((facet) => !supportedFacets.contains(facet.name.local)).firstOrNull;
     if (unsupported != null) {
       throw UnsupportedError('Unsupported XSD simple-type facet "${unsupported.name.local}"');
     }
     final values = <String>[
-      for (final facet in facets)
+      for (final facet in facets.where((facet) => facet.name.local == 'enumeration'))
         facet.getAttribute('value') ?? (throw const FormatException('An XSD enumeration facet must specify a value')),
     ];
-    if (values.isEmpty || !baseType.enumerationEligible) {
-      return baseType;
+    var minimum = baseType.integerMinInclusive;
+    var maximum = baseType.integerMaxInclusive;
+    final boundFacets = facets.where((facet) => facet.name.local != 'enumeration').toList();
+    if (boundFacets.isNotEmpty &&
+        baseType.datatype != ExiDatatype.integer &&
+        baseType.datatype != ExiDatatype.unsignedInteger &&
+        baseType.datatype != ExiDatatype.byte &&
+        baseType.datatype != ExiDatatype.unsignedByte) {
+      throw UnsupportedError('Integer range facets require an integer XSD base type');
+    }
+    final seenBounds = <String>{};
+    for (final facet in boundFacets) {
+      if (!seenBounds.add(facet.name.local)) {
+        throw FormatException('Duplicate XSD ${facet.name.local} facet');
+      }
+      final lexical =
+          facet.getAttribute('value') ??
+          (throw FormatException('An XSD ${facet.name.local} facet must specify a value'));
+      final parsed = BigInt.tryParse(lexical.trim());
+      if (parsed == null) {
+        throw FormatException('Invalid XSD integer bound "$lexical"');
+      }
+      switch (facet.name.local) {
+        case 'minInclusive':
+          minimum = minimum == null || parsed > minimum ? parsed : minimum;
+        case 'minExclusive':
+          final inclusive = parsed + BigInt.one;
+          minimum = minimum == null || inclusive > minimum ? inclusive : minimum;
+        case 'maxInclusive':
+          maximum = maximum == null || parsed < maximum ? parsed : maximum;
+        case 'maxExclusive':
+          final inclusive = parsed - BigInt.one;
+          maximum = maximum == null || inclusive < maximum ? inclusive : maximum;
+      }
+    }
+    if (minimum != null && maximum != null && maximum < minimum) {
+      throw const FormatException('XSD integer restriction has an empty value range');
     }
     return (
       datatype: baseType.datatype,
       listItemDatatype: baseType.listItemDatatype,
-      enumerationValues: List.unmodifiable(values),
-      enumerationEligible: true,
+      enumerationValues: values.isNotEmpty && baseType.enumerationEligible
+          ? List.unmodifiable(values)
+          : baseType.enumerationValues,
+      enumerationEligible: baseType.enumerationEligible,
+      integerMinInclusive: minimum,
+      integerMaxInclusive: maximum,
     );
   }
 
@@ -1252,23 +1310,57 @@ final class _Compiler {
         listItemDatatype: ExiDatatype.string,
         enumerationValues: const [],
         enumerationEligible: false,
+        integerMinInclusive: null,
+        integerMaxInclusive: null,
       ),
       'boolean' => _scalarType(ExiDatatype.boolean),
       'decimal' => _scalarType(ExiDatatype.decimal),
       'float' || 'double' => _scalarType(ExiDatatype.float),
-      'integer' ||
-      'long' ||
-      'int' ||
-      'short' ||
-      'negativeInteger' ||
-      'nonPositiveInteger' => _scalarType(ExiDatatype.integer),
-      'byte' => _scalarType(ExiDatatype.byte),
-      'nonNegativeInteger' ||
-      'positiveInteger' ||
-      'unsignedLong' ||
-      'unsignedInt' ||
-      'unsignedShort' => _scalarType(ExiDatatype.unsignedInteger),
-      'unsignedByte' => _scalarType(ExiDatatype.unsignedByte),
+      'integer' => _scalarType(ExiDatatype.integer),
+      'long' => _scalarType(
+        ExiDatatype.integer,
+        integerMinInclusive: -(BigInt.one << 63),
+        integerMaxInclusive: (BigInt.one << 63) - BigInt.one,
+      ),
+      'int' => _scalarType(
+        ExiDatatype.integer,
+        integerMinInclusive: -(BigInt.one << 31),
+        integerMaxInclusive: (BigInt.one << 31) - BigInt.one,
+      ),
+      'short' => _scalarType(
+        ExiDatatype.integer,
+        integerMinInclusive: -(BigInt.one << 15),
+        integerMaxInclusive: (BigInt.one << 15) - BigInt.one,
+      ),
+      'negativeInteger' => _scalarType(ExiDatatype.integer, integerMaxInclusive: -BigInt.one),
+      'nonPositiveInteger' => _scalarType(ExiDatatype.integer, integerMaxInclusive: BigInt.zero),
+      'byte' => _scalarType(
+        ExiDatatype.byte,
+        integerMinInclusive: BigInt.from(-128),
+        integerMaxInclusive: BigInt.from(127),
+      ),
+      'nonNegativeInteger' => _scalarType(ExiDatatype.unsignedInteger, integerMinInclusive: BigInt.zero),
+      'positiveInteger' => _scalarType(ExiDatatype.unsignedInteger, integerMinInclusive: BigInt.one),
+      'unsignedLong' => _scalarType(
+        ExiDatatype.unsignedInteger,
+        integerMinInclusive: BigInt.zero,
+        integerMaxInclusive: (BigInt.one << 64) - BigInt.one,
+      ),
+      'unsignedInt' => _scalarType(
+        ExiDatatype.unsignedInteger,
+        integerMinInclusive: BigInt.zero,
+        integerMaxInclusive: (BigInt.one << 32) - BigInt.one,
+      ),
+      'unsignedShort' => _scalarType(
+        ExiDatatype.unsignedInteger,
+        integerMinInclusive: BigInt.zero,
+        integerMaxInclusive: BigInt.from(65535),
+      ),
+      'unsignedByte' => _scalarType(
+        ExiDatatype.unsignedByte,
+        integerMinInclusive: BigInt.zero,
+        integerMaxInclusive: BigInt.from(255),
+      ),
       'base64Binary' => _scalarType(ExiDatatype.base64Binary),
       'hexBinary' => _scalarType(ExiDatatype.hexBinary),
       'dateTime' => _scalarType(ExiDatatype.dateTime),
@@ -1286,8 +1378,19 @@ final class _Compiler {
   }
 }
 
-_SimpleType _scalarType(ExiDatatype datatype, {bool enumerationEligible = true}) =>
-    (datatype: datatype, listItemDatatype: null, enumerationValues: const [], enumerationEligible: enumerationEligible);
+_SimpleType _scalarType(
+  ExiDatatype datatype, {
+  bool enumerationEligible = true,
+  BigInt? integerMinInclusive,
+  BigInt? integerMaxInclusive,
+}) => (
+  datatype: datatype,
+  listItemDatatype: null,
+  enumerationValues: const [],
+  enumerationEligible: enumerationEligible,
+  integerMinInclusive: integerMinInclusive,
+  integerMaxInclusive: integerMaxInclusive,
+);
 
 Iterable<XmlElement> _children(XmlElement parent, String localName) => parent.children.whereType<XmlElement>().where(
   (element) => element.name.local == localName && element.name.namespaceUri == _xsdUri,

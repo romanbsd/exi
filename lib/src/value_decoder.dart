@@ -16,6 +16,8 @@ final class ExiValueDecoder {
     ExiQName context, {
     ExiDatatype? listItemDatatype,
     List<String> enumerationValues = const [],
+    BigInt? integerMinInclusive,
+    BigInt? integerMaxInclusive,
   }) {
     if (enumerationValues.isNotEmpty) {
       final ordinal = input.readNBitUnsigned(_bitWidth(enumerationValues.length));
@@ -29,10 +31,8 @@ final class ExiValueDecoder {
       ExiDatatype.boolean => input.readNBitUnsigned(2) < 2 ? 'false' : 'true',
       ExiDatatype.decimal => _readDecimal(),
       ExiDatatype.float => _readFloat(),
-      ExiDatatype.integer => _readInteger().toString(),
-      ExiDatatype.unsignedInteger => input.readUnsignedInteger().toString(),
-      ExiDatatype.byte => (input.readNBitUnsigned(8) - 128).toString(),
-      ExiDatatype.unsignedByte => input.readNBitUnsigned(8).toString(),
+      ExiDatatype.integer || ExiDatatype.unsignedInteger || ExiDatatype.byte || ExiDatatype.unsignedByte =>
+        _readIntegerValue(datatype, minimum: integerMinInclusive, maximum: integerMaxInclusive),
       ExiDatatype.base64Binary => base64Encode(_readBinary()),
       ExiDatatype.hexBinary => _readBinary().map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(),
       ExiDatatype.dateTime => _readDateTime(includeDate: true, includeTime: true),
@@ -65,6 +65,44 @@ final class ExiValueDecoder {
     final negative = input.readNBitUnsigned(1) == 1;
     final magnitude = input.readUnsignedInteger();
     return negative ? -(magnitude + BigInt.one) : magnitude;
+  }
+
+  String _readIntegerValue(ExiDatatype datatype, {BigInt? minimum, BigInt? maximum}) {
+    if (minimum == null && maximum == null) {
+      return switch (datatype) {
+        ExiDatatype.integer => _readInteger().toString(),
+        ExiDatatype.unsignedInteger => input.readUnsignedInteger().toString(),
+        ExiDatatype.byte => (input.readNBitUnsigned(8) - 128).toString(),
+        ExiDatatype.unsignedByte => input.readNBitUnsigned(8).toString(),
+        _ => throw StateError('$datatype is not an integer datatype'),
+      };
+    }
+
+    BigInt value;
+    if (minimum != null && maximum != null) {
+      final valueCount = maximum - minimum + BigInt.one;
+      if (valueCount <= BigInt.zero) {
+        throw StateError('EXI integer datatype has an empty range');
+      }
+      if (valueCount <= BigInt.from(4096)) {
+        final offset = input.readNBitUnsigned((valueCount.toInt() - 1).bitLength);
+        if (offset >= valueCount.toInt()) {
+          throw const FormatException('Invalid EXI bounded-integer offset');
+        }
+        value = minimum + BigInt.from(offset);
+        return value.toString();
+      }
+    }
+
+    final unsigned =
+        datatype == ExiDatatype.unsignedInteger ||
+        datatype == ExiDatatype.unsignedByte ||
+        (minimum != null && minimum >= BigInt.zero);
+    value = unsigned ? input.readUnsignedInteger() : _readInteger();
+    if ((minimum != null && value < minimum) || (maximum != null && value > maximum)) {
+      throw const FormatException('EXI integer value is outside its schema range');
+    }
+    return value.toString();
   }
 
   String _readDecimal() {

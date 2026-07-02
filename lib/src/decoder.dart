@@ -401,6 +401,8 @@ final class _DecoderState {
             attribute.name,
             listItemDatatype: attribute.listItemDatatype,
             enumerationValues: attribute.enumerationValues,
+            integerMinInclusive: attribute.integerMinInclusive,
+            integerMaxInclusive: attribute.integerMaxInclusive,
           );
           if (!seenAttributes.add(attribute.name)) {
             throw const FormatException('Duplicate schema attribute');
@@ -427,6 +429,8 @@ final class _DecoderState {
                   name,
                   listItemDatatype: globalAttribute.listItemDatatype,
                   enumerationValues: globalAttribute.enumerationValues,
+                  integerMinInclusive: globalAttribute.integerMinInclusive,
+                  integerMaxInclusive: globalAttribute.integerMaxInclusive,
                 );
           events.add(ExiAttribute(name, value));
         case _DeclaredEventKind.element:
@@ -470,6 +474,8 @@ final class _DecoderState {
                 elementName,
                 listItemDatatype: declaration.listItemDatatype,
                 enumerationValues: declaration.enumerationValues,
+                integerMinInclusive: declaration.integerMinInclusive,
+                integerMaxInclusive: declaration.integerMaxInclusive,
               ),
             ),
           );
