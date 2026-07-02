@@ -168,7 +168,7 @@ void main() {
     expect(document.toXmlString(), '<count>7</count>');
   });
 
-  test('decodes a schema-typed QName element value', () {
+  test('uses the String representation for schema QName and NOTATION values', () {
     const schemaId = 'qname-element';
     final schema = ExiSchemaCompiler.compile(
       id: schemaId,
@@ -181,18 +181,17 @@ void main() {
       ''',
     );
     final bits = StringBuffer('10000000')
-      // Root selection; URI compact ID 4 is encoded as 5.
-      ..write('0101')
-      // Local-name "value" is the only name in the urn:values partition.
-      ..write(_unsigned(0));
+      // Root selection followed by the QName lexical form as a String value.
+      ..write('0')
+      ..write(_value('tns:value'));
 
     final document = ExiDecoder(
       options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
       schemaResolver: (_) => schema,
     ).decode(_pack(bits.toString()));
 
-    expect(schema.globalElements.single.datatype, ExiDatatype.qName);
-    expect(document.events.whereType<ExiCharacters>().single.value, '{urn:values}value');
+    expect(schema.globalElements.single.datatype, ExiDatatype.string);
+    expect(document.events.whereType<ExiCharacters>().single.value, 'tns:value');
 
     final notationSchema = ExiSchemaCompiler.compile(
       id: 'notation',
@@ -202,10 +201,10 @@ void main() {
         </xs:schema>
       ''',
     );
-    expect(notationSchema.globalElements.single.datatype, ExiDatatype.qName);
+    expect(notationSchema.globalElements.single.datatype, ExiDatatype.string);
   });
 
-  test('decodes a schema-typed QName attribute value', () {
+  test('uses the String representation for a schema QName attribute', () {
     const schemaId = 'qname-attribute';
     final schema = ExiSchemaCompiler.compile(
       id: schemaId,
@@ -222,18 +221,53 @@ void main() {
       ''',
     );
     final bits = StringBuffer('10000000')
-      // Root and required attribute events are implicit.
+      // Root and required attribute events are implicit; the value is a String.
       ..write('0')
-      // QName URI compact ID 4 and local-name compact ID 0 ("root").
-      ..write('101')
-      ..write(_unsigned(0));
+      ..write(_value('tns:root'));
 
     final document = ExiDecoder(
       options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
       schemaResolver: (_) => schema,
     ).decode(_pack(bits.toString()));
 
-    expect(document.events.whereType<ExiAttribute>().single.value, '{urn:values}root');
+    expect(document.events.whereType<ExiAttribute>().single.value, 'tns:root');
+  });
+
+  test('uses the String representation for schema duration values', () {
+    const schemaId = 'durations';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="positive" type="xs:duration"/>
+                <xs:element name="negative" type="xs:duration"/>
+                <xs:element name="zero" type="xs:duration"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Root/children are schema-declared; duration has no default EXI
+      // datatype representation and is therefore encoded as String.
+      ..write('0')
+      ..write(_value('P1Y2M3DT4H5M6.7S'))
+      ..write(_value('-P3DT1S'))
+      ..write(_value('PT0S'));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(
+      document.toXmlString(),
+      '<root><positive>P1Y2M3DT4H5M6.7S</positive><negative>-P3DT1S</negative><zero>PT0S</zero></root>',
+    );
   });
 
   test('decodes typed simple content after a required attribute', () {

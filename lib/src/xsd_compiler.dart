@@ -1155,7 +1155,7 @@ final class _Compiler {
       'gMonth' => ExiDatatype.gMonth,
       'gMonthDay' => ExiDatatype.gMonthDay,
       'gDay' => ExiDatatype.gDay,
-      'QName' || 'NOTATION' => ExiDatatype.qName,
+      'duration' || 'QName' || 'NOTATION' => ExiDatatype.string,
       _ => null,
     };
   }

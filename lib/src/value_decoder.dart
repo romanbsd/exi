@@ -31,7 +31,6 @@ final class ExiValueDecoder {
       ExiDatatype.gMonth => _readGregorian(ExiDatatype.gMonth),
       ExiDatatype.gMonthDay => _readGregorian(ExiDatatype.gMonthDay),
       ExiDatatype.gDay => _readGregorian(ExiDatatype.gDay),
-      ExiDatatype.qName => strings.readQName(input).toString(),
     };
   }
 

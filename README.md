@@ -30,7 +30,8 @@ The current decoder stage supports:
   `##other` wildcards, wildcard datatype lookup independent of XSD
   `processContents`, and namespace-aware type resolution;
 - schema-typed string, boolean, integer, decimal, float, binary, date, time,
-  date-time, partial Gregorian calendar, QName, and NOTATION values;
+  date-time, and partial Gregorian calendar values, with the required String
+  fallback for duration, QName, and NOTATION schema types;
 - URI, local-name, and value string-table partitions, including schema-informed
   URI and declared-name prepopulation;
 - start/end document, start/end element, attribute, character, namespace,

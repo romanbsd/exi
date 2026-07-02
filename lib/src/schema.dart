@@ -21,7 +21,6 @@ enum ExiDatatype {
   gMonth,
   gMonthDay,
   gDay,
-  qName,
 }
 
 enum ExiProcessContents { strict, lax, skip }
