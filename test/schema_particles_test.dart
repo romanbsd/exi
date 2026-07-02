@@ -243,6 +243,35 @@ void main() {
     expect(document.toXmlString(), '<root id="7" kind="example"><first/><second/></root>');
   });
 
+  test('switches to a named derived grammar through xsi:type', () {
+    final schema = _compile('''
+      <xs:complexType name="Base"/>
+      <xs:complexType name="Derived">
+        <xs:complexContent>
+          <xs:extension base="Base">
+            <xs:sequence>
+              <xs:element name="child"/>
+            </xs:sequence>
+          </xs:extension>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:element name="root" type="Base"/>
+    ''');
+    final bits = StringBuffer()
+      // Root=0; xsi:type uses the second-level escape=1.
+      ..write('01')
+      // QName value: empty URI, local name Derived.
+      ..write(_rawString(''))
+      ..write(_rawString('Derived'));
+
+    final document = _decode(schema, bits.toString());
+    final type = document.events.whereType<ExiAttribute>().single;
+
+    expect(type.name.localName, 'type');
+    expect(type.value, 'Derived');
+    expect(document.events.whereType<ExiStartElement>().map((event) => event.name.localName), ['root', 'child']);
+  });
+
   test('decodes characters in empty mixed content', () {
     final schema = _compile('''
       <xs:element name="root">
@@ -436,6 +465,11 @@ ExiDocument _decode(ExiSchema schema, String bodyBits) {
 String _value(String value) {
   final codePoints = value.runes.toList();
   return '${_unsigned(codePoints.length + 2)}${codePoints.map(_unsigned).join()}';
+}
+
+String _rawString(String value) {
+  final codePoints = value.runes.toList();
+  return '${_unsigned(codePoints.length)}${codePoints.map(_unsigned).join()}';
 }
 
 String _unsigned(int value) {

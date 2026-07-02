@@ -85,6 +85,29 @@ void main() {
       );
     });
 
+    test('records named derived types for xsi:type', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'type-alternatives.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:complexType name="Base"/>
+            <xs:complexType name="Derived">
+              <xs:complexContent>
+                <xs:extension base="Base">
+                  <xs:sequence>
+                    <xs:element name="child"/>
+                  </xs:sequence>
+                </xs:extension>
+              </xs:complexContent>
+            </xs:complexType>
+            <xs:element name="root" type="Base"/>
+          </xs:schema>
+        ''',
+      );
+
+      expect(schema.globalElements.single.typeAlternatives.keys, [const ExiQName(localName: 'Derived')]);
+    });
+
     test('compiles inline empty and simple type declarations', () {
       final schema = ExiSchemaCompiler.compile(
         id: 'inline.xsd',

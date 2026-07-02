@@ -10,6 +10,7 @@ import 'value_decoder.dart';
 
 const _cookie = [0x24, 0x45, 0x58, 0x49];
 const _xsiNilName = ExiQName(uri: 'http://www.w3.org/2001/XMLSchema-instance', localName: 'nil', prefix: 'xsi');
+const _xsiTypeName = ExiQName(uri: 'http://www.w3.org/2001/XMLSchema-instance', localName: 'type', prefix: 'xsi');
 
 final class ExiDecoder {
   ExiDecoder({this.options = const ExiOptions(), this.schemaResolver}) {
@@ -290,7 +291,11 @@ final class _DecoderState {
     }
   }
 
-  void _decodeDeclaredContent(ExiQName elementName, ExiElementDeclaration declaration) {
+  void _decodeDeclaredContent(
+    ExiQName elementName,
+    ExiElementDeclaration declaration, {
+    bool allowSpecialAttributes = true,
+  }) {
     final datatype = declaration.datatype;
     final attributes = [...declaration.attributes]
       ..sort((left, right) {
@@ -301,7 +306,7 @@ final class _DecoderState {
     var content = declaration.content ?? _legacyContent(declaration.children);
     var nilSeen = false;
     var nilled = false;
-    var specialAttributesAllowed = true;
+    var specialAttributesAllowed = allowSpecialAttributes;
 
     while (true) {
       final candidates = <_DeclaredEvent>[];
@@ -329,14 +334,34 @@ final class _DecoderState {
           }
         }
       }
+      final canReadType = declaration.typeAlternatives.isNotEmpty && specialAttributesAllowed;
       final canReadNil = declaration.nillable && !nilSeen && specialAttributesAllowed;
-      final candidateCount = candidates.length + (canReadNil ? 1 : 0);
+      final specialCount = (canReadType ? 1 : 0) + (canReadNil ? 1 : 0);
+      final candidateCount = candidates.length + (specialCount > 0 ? 1 : 0);
       if (candidateCount == 0) {
         throw const FormatException('Schema grammar has no valid next event');
       }
 
       final selected = input.readNBitUnsigned(_bitWidth(candidateCount));
-      if (canReadNil && selected == candidates.length) {
+      if (specialCount > 0 && selected == candidates.length) {
+        final special = input.readNBitUnsigned(_bitWidth(specialCount));
+        if (canReadType && special == 0) {
+          final targetName = ExiQName(uri: strings.readString(input), localName: strings.readString(input));
+          final target = declaration.typeAlternatives[targetName];
+          if (target == null) {
+            throw FormatException('Unknown xsi:type "${targetName.localName}"');
+          }
+          final lexicalValue = targetName.uri.isEmpty
+              ? targetName.localName
+              : '{${targetName.uri}}${targetName.localName}';
+          events.add(ExiAttribute(_xsiTypeName, lexicalValue));
+          _decodeDeclaredContent(elementName, target, allowSpecialAttributes: false);
+          return;
+        }
+        final nilIndex = canReadType ? 1 : 0;
+        if (!canReadNil || special != nilIndex) {
+          throw const FormatException('Invalid strict schema special-attribute event code');
+        }
         final value = ExiValueDecoder(input, strings).read(ExiDatatype.boolean, _xsiNilName);
         events.add(ExiAttribute(_xsiNilName, value));
         nilSeen = true;

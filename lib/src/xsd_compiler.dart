@@ -193,7 +193,18 @@ final class _Compiler {
       if (complexType == null) {
         throw UnsupportedError('Unknown or unsupported XSD type "$typeName"');
       }
-      return _compileNamedComplexType(name, complexTypeName, nillable: nillable);
+      final declaration = _compileNamedComplexType(name, complexTypeName, nillable: nillable);
+      final alternatives = <ExiQName, ExiElementDeclaration>{};
+      for (final candidate in _complexTypes.keys) {
+        if (candidate != complexTypeName && _isComplexTypeDerivedFrom(candidate, complexTypeName, <String>{})) {
+          alternatives[ExiQName(uri: targetNamespace, localName: candidate)] = _compileNamedComplexType(
+            name,
+            candidate,
+            nillable: false,
+          );
+        }
+      }
+      return alternatives.isEmpty ? declaration : _withTypeAlternatives(declaration, alternatives);
     }
 
     final inlineComplex = _children(element, 'complexType').firstOrNull;
@@ -220,6 +231,59 @@ final class _Compiler {
     } finally {
       _compilingComplexTypes.remove(typeName);
     }
+  }
+
+  bool _isComplexTypeDerivedFrom(String candidate, String base, Set<String> visited) {
+    if (!visited.add(candidate)) {
+      return false;
+    }
+    final complexType = _complexTypes[candidate]!;
+    final complexContent = _children(complexType, 'complexContent').firstOrNull;
+    final extension = complexContent == null ? null : _children(complexContent, 'extension').firstOrNull;
+    final baseName = extension?.getAttribute('base');
+    if (baseName == null) {
+      return false;
+    }
+    final parent = _resolveNamedTypeLocalName(extension!, baseName);
+    return parent == base || (_complexTypes.containsKey(parent) && _isComplexTypeDerivedFrom(parent, base, visited));
+  }
+
+  ExiElementDeclaration _withTypeAlternatives(
+    ExiElementDeclaration declaration,
+    Map<ExiQName, ExiElementDeclaration> alternatives,
+  ) {
+    if (declaration.datatype != null) {
+      return ExiElementDeclaration.simpleContent(
+        declaration.name,
+        declaration.datatype,
+        attributes: declaration.attributes,
+        nillable: declaration.nillable,
+        typeAlternatives: alternatives,
+      );
+    }
+    if (declaration.content != null || declaration.attributes.isNotEmpty || declaration.mixed) {
+      return ExiElementDeclaration.complex(
+        declaration.name,
+        attributes: declaration.attributes,
+        content: declaration.content,
+        mixed: declaration.mixed,
+        nillable: declaration.nillable,
+        typeAlternatives: alternatives,
+      );
+    }
+    if (declaration.children.isNotEmpty) {
+      return ExiElementDeclaration.sequence(
+        declaration.name,
+        declaration.children,
+        nillable: declaration.nillable,
+        typeAlternatives: alternatives,
+      );
+    }
+    return ExiElementDeclaration.empty(
+      declaration.name,
+      nillable: declaration.nillable,
+      typeAlternatives: alternatives,
+    );
   }
 
   ExiElementDeclaration _compileComplexType(ExiQName name, XmlElement complexType, {required bool nillable}) {
