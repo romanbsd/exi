@@ -150,6 +150,109 @@ void main() {
     expect(document.toXmlString(), '<when>2024-07-01T12:34:56.25+02:30</when>');
   });
 
+  test('decodes Float boundary and special values', () {
+    const schemaId = 'float-values';
+    const schema = ExiSchema(
+      id: schemaId,
+      globalElements: [
+        ExiElementDeclaration.sequence(ExiQName(localName: 'root'), [
+          ExiElementDeclaration.value(ExiQName(localName: 'maximum'), ExiDatatype.float),
+          ExiElementDeclaration.value(ExiQName(localName: 'minimum'), ExiDatatype.float),
+          ExiElementDeclaration.value(ExiQName(localName: 'infinity'), ExiDatatype.float),
+          ExiElementDeclaration.value(ExiQName(localName: 'notANumber'), ExiDatatype.float),
+        ]),
+      ],
+    );
+    final bits = StringBuffer('10000000')
+      ..write('0')
+      ..write(_signed((BigInt.one << 63) - BigInt.one))
+      ..write(_signed((BigInt.one << 14) - BigInt.one))
+      ..write(_signed(-(BigInt.one << 63)))
+      ..write(_signed(-(BigInt.one << 14) + BigInt.one))
+      ..write(_signed(BigInt.one))
+      ..write(_signed(-(BigInt.one << 14)))
+      ..write(_signed(BigInt.zero))
+      ..write(_signed(-(BigInt.one << 14)));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(
+      document.toXmlString(),
+      '<root><maximum>9223372036854775807E16383</maximum>'
+      '<minimum>-9223372036854775808E-16383</minimum>'
+      '<infinity>INF</infinity><notANumber>NaN</notANumber></root>',
+    );
+  });
+
+  test('rejects Float components outside the EXI representation ranges', () {
+    const schemaId = 'invalid-float';
+    const schema = ExiSchema(
+      id: schemaId,
+      globalElements: [ExiElementDeclaration.value(ExiQName(localName: 'value'), ExiDatatype.float)],
+    );
+
+    for (final (mantissa, exponent) in [
+      (BigInt.one << 63, BigInt.zero),
+      (BigInt.zero, BigInt.one << 14),
+      (BigInt.zero, -(BigInt.one << 14) - BigInt.one),
+    ]) {
+      final bits = StringBuffer('10000000')
+        ..write('0')
+        ..write(_signed(mantissa))
+        ..write(_signed(exponent));
+
+      expect(
+        () => ExiDecoder(
+          options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+          schemaResolver: (_) => schema,
+        ).decode(_pack(bits.toString())),
+        throwsFormatException,
+        reason: 'mantissa=$mantissa exponent=$exponent',
+      );
+    }
+  });
+
+  test('rejects invalid XML Schema calendar boundaries', () {
+    const timeSchemaId = 'invalid-time-boundary';
+    const timeSchema = ExiSchema(
+      id: timeSchemaId,
+      globalElements: [ExiElementDeclaration.value(ExiQName(localName: 'value'), ExiDatatype.time)],
+    );
+    final invalidTime = StringBuffer('10000000')
+      ..write('0')
+      ..write((((24 * 64) + 1) * 64).toRadixString(2).padLeft(17, '0'))
+      ..write('0')
+      ..write('0');
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(timeSchemaId)),
+        schemaResolver: (_) => timeSchema,
+      ).decode(_pack(invalidTime.toString())),
+      throwsFormatException,
+    );
+
+    const dateSchemaId = 'invalid-year-zero';
+    const dateSchema = ExiSchema(
+      id: dateSchemaId,
+      globalElements: [ExiElementDeclaration.value(ExiQName(localName: 'value'), ExiDatatype.date)],
+    );
+    final invalidDate = StringBuffer('10000000')
+      ..write('0')
+      ..write(_signed(BigInt.from(-2000)))
+      ..write((1 * 32 + 1).toRadixString(2).padLeft(9, '0'))
+      ..write('0');
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(dateSchemaId)),
+        schemaResolver: (_) => dateSchema,
+      ).decode(_pack(invalidDate.toString())),
+      throwsFormatException,
+    );
+  });
+
   test('decodes partial Gregorian calendar schema values', () {
     const schemaId = 'calendar-values';
     final schema = ExiSchemaCompiler.compile(
@@ -901,6 +1004,17 @@ String _unsigned(int value) {
     remainder >>= 7;
     bits.write((group | (remainder == 0 ? 0 : 0x80)).toRadixString(2).padLeft(8, '0'));
   } while (remainder != 0);
+  return bits.toString();
+}
+
+String _signed(BigInt value) {
+  var magnitude = value < BigInt.zero ? -value - BigInt.one : value;
+  final bits = StringBuffer(value < BigInt.zero ? '1' : '0');
+  do {
+    final group = (magnitude & BigInt.from(0x7f)).toInt();
+    magnitude >>= 7;
+    bits.write((group | (magnitude == BigInt.zero ? 0 : 0x80)).toRadixString(2).padLeft(8, '0'));
+  } while (magnitude != BigInt.zero);
   return bits.toString();
 }
 

@@ -139,7 +139,13 @@ final class ExiValueDecoder {
   String _readFloat() {
     final mantissa = _readInteger();
     final exponent = _readInteger();
-    if (exponent == BigInt.from(-16384)) {
+    if (mantissa < _minimumFloatMantissa || mantissa > _maximumFloatMantissa) {
+      throw const FormatException('EXI Float mantissa is outside its permitted range');
+    }
+    if (exponent < _specialFloatExponent || exponent > _maximumFloatExponent) {
+      throw const FormatException('EXI Float exponent is outside its permitted range');
+    }
+    if (exponent == _specialFloatExponent) {
       if (mantissa == BigInt.one) {
         return 'INF';
       }
@@ -167,6 +173,9 @@ final class ExiValueDecoder {
 
     if (datatype == ExiDatatype.gYear || datatype == ExiDatatype.gYearMonth) {
       year = _readInteger().toInt() + 2000;
+      if (year == 0) {
+        throw const FormatException('Year zero is not valid in XML Schema calendar values');
+      }
     }
     if (datatype != ExiDatatype.gYear) {
       final monthDay = input.readNBitUnsigned(9);
@@ -220,6 +229,9 @@ final class ExiValueDecoder {
     final output = StringBuffer();
     if (includeDate) {
       final year = _readInteger().toInt() + 2000;
+      if (year == 0) {
+        throw const FormatException('Year zero is not valid in XML Schema calendar values');
+      }
       final monthDay = input.readNBitUnsigned(9);
       final month = monthDay >> 5;
       final day = monthDay & 31;
@@ -241,8 +253,16 @@ final class ExiValueDecoder {
       final second = encodedTime & 63;
       final minute = (encodedTime >> 6) & 63;
       final hour = encodedTime >> 12;
-      if (hour > 24 || minute > 59 || second > 60) {
+      if (hour > 24 || minute > 59 || second > 60 || (hour == 24 && (minute != 0 || second != 0))) {
         throw const FormatException('Invalid EXI time value');
+      }
+      String? fraction;
+      if (input.readNBitUnsigned(1) == 1) {
+        final encodedFraction = input.readUnsignedInteger();
+        if (hour == 24 && encodedFraction != BigInt.zero) {
+          throw const FormatException('Invalid EXI time value after hour 24');
+        }
+        fraction = encodedFraction.toString().split('').reversed.join();
       }
       output
         ..write(_two(hour))
@@ -250,8 +270,7 @@ final class ExiValueDecoder {
         ..write(_two(minute))
         ..write(':')
         ..write(_two(second));
-      if (input.readNBitUnsigned(1) == 1) {
-        final fraction = input.readUnsignedInteger().toString().split('').reversed.join();
+      if (fraction != null) {
         output
           ..write('.')
           ..write(fraction);
@@ -288,6 +307,11 @@ final class ExiValueDecoder {
 String _two(int value) => value.toString().padLeft(2, '0');
 
 int _bitWidth(int valueCount) => valueCount <= 1 ? 0 : (valueCount - 1).bitLength;
+
+final _minimumFloatMantissa = -(BigInt.one << 63);
+final _maximumFloatMantissa = (BigInt.one << 63) - BigInt.one;
+final _specialFloatExponent = -(BigInt.one << 14);
+final _maximumFloatExponent = (BigInt.one << 14) - BigInt.one;
 
 List<int>? _restrictedCharacters(ExiDatatype datatype, {ExiDatatype? listItemDatatype}) {
   if (datatype == ExiDatatype.list) {
