@@ -384,16 +384,24 @@ final class _DecoderState {
 
       final selected = input.readNBitUnsigned(_bitWidth(candidateCount));
       if (selected == candidates.length && !options.strict) {
-        final ended = _readNonStrictDeviation(
+        final deviation = _readNonStrictDeviation(
           hasFirstLevelEnd: candidates.any((event) => event.kind == _DeclaredEventKind.end),
           atEntry: !contentStarted && attributeIndex == 0 && seenAttributes.isEmpty,
           inAttributePhase: !contentStarted,
         );
-        if (ended) {
-          events.add(ExiEndElement(elementName));
-          return;
+        switch (deviation) {
+          case _NonStrictDeviation.endElement:
+            events.add(ExiEndElement(elementName));
+            return;
+          case _NonStrictDeviation.characters:
+            specialAttributesAllowed = false;
+            contentStarted = true;
+            attributeIndex = attributes.length;
+            events.add(ExiCharacters(strings.readValue(input, elementName)));
+            continue;
+          default:
+            throw UnsupportedError('Non-strict ${deviation.name} productions are not supported yet');
         }
-        continue;
       }
       if (specialCount > 0 && selected == candidates.length) {
         final special = input.readNBitUnsigned(_bitWidth(specialCount));
@@ -539,7 +547,7 @@ final class _DecoderState {
     }
   }
 
-  bool _readNonStrictDeviation({
+  _NonStrictDeviation _readNonStrictDeviation({
     required bool hasFirstLevelEnd,
     required bool atEntry,
     required bool inAttributePhase,
@@ -559,10 +567,7 @@ final class _DecoderState {
     if (selected >= productions.length) {
       throw const FormatException('Invalid non-strict schema event-code second part');
     }
-    if (productions[selected] == _NonStrictDeviation.endElement) {
-      return true;
-    }
-    throw UnsupportedError('Non-strict ${productions[selected].name} productions are not supported yet');
+    return productions[selected];
   }
 
   ({ExiQName targetName, String lexicalValue}) _readXsiType(ExiElementDeclaration declaration) {
