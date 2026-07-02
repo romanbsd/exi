@@ -399,6 +399,14 @@ final class _DecoderState {
             attributeIndex = attributes.length;
             events.add(ExiCharacters(strings.readValue(input, elementName)));
             continue;
+          case _NonStrictDeviation.startElement:
+            specialAttributesAllowed = false;
+            contentStarted = true;
+            attributeIndex = attributes.length;
+            final name = strings.readQName(input);
+            final globalDeclaration = schema?.globalElements.where((element) => element.name == name).firstOrNull;
+            _decodeElement(name, declaration: globalDeclaration);
+            continue;
           default:
             throw UnsupportedError('Non-strict ${deviation.name} productions are not supported yet');
         }
