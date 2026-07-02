@@ -1040,11 +1040,43 @@ final class _Compiler {
   }
 
   _SimpleType _compileSimpleType(XmlElement simpleType) {
-    final restriction = _children(simpleType, 'restriction').firstOrNull;
-    final list = _children(simpleType, 'list').firstOrNull;
-    if ((restriction == null) == (list == null)) {
-      throw UnsupportedError('An XSD simple type must contain exactly one supported restriction or list');
+    final restrictions = _children(simpleType, 'restriction');
+    final lists = _children(simpleType, 'list');
+    final unions = _children(simpleType, 'union');
+    if (restrictions.length + lists.length + unions.length != 1) {
+      throw const FormatException('An XSD simple type must contain exactly one restriction, list, or union');
     }
+    final restriction = restrictions.firstOrNull;
+    final list = lists.firstOrNull;
+    final union = unions.firstOrNull;
+
+    if (union != null) {
+      final memberTypes = (union.getAttribute('memberTypes') ?? '')
+          .split(RegExp(r'\s+'))
+          .where((value) => value.isNotEmpty)
+          .toList();
+      final inlineTypes = _children(union, 'simpleType');
+      if (memberTypes.isEmpty && inlineTypes.isEmpty) {
+        throw const FormatException('An XSD union must contain at least one member type');
+      }
+      for (final child in union.children.whereType<XmlElement>()) {
+        if (child.name.namespaceUri == _xsdUri &&
+            child.name.local != 'annotation' &&
+            child.name.local != 'simpleType') {
+          throw UnsupportedError('Unsupported XSD union component "${child.name.local}"');
+        }
+      }
+      for (final memberType in memberTypes) {
+        if (_resolveSimpleDatatype(union, memberType) == null) {
+          throw UnsupportedError('Unsupported XSD union member type "$memberType"');
+        }
+      }
+      for (final inlineType in inlineTypes) {
+        _compileSimpleType(inlineType);
+      }
+      return _scalarType(ExiDatatype.string);
+    }
+
     if (list != null) {
       final itemTypeName = list.getAttribute('itemType');
       final inlineTypes = _children(list, 'simpleType');

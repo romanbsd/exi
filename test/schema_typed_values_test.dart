@@ -345,6 +345,69 @@ void main() {
     expect(document.toXmlString(), '<root flags="true false"><tokens>one two</tokens></root>');
   });
 
+  test('uses the String representation for named and inline union types', () {
+    const schemaId = 'unions';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Scalar">
+            <xs:union memberTypes="xs:boolean xs:integer"/>
+          </xs:simpleType>
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="value" type="Scalar"/>
+              </xs:sequence>
+              <xs:attribute name="choice" use="required">
+                <xs:simpleType>
+                  <xs:union>
+                    <xs:simpleType>
+                      <xs:restriction base="xs:date"/>
+                    </xs:simpleType>
+                    <xs:simpleType>
+                      <xs:restriction base="xs:time"/>
+                    </xs:simpleType>
+                  </xs:union>
+                </xs:simpleType>
+              </xs:attribute>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Root and required attribute are implicit; union values are Strings.
+      ..write('0')
+      ..write(_value('2026-07-03'))
+      ..write(_value('true'));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root choice="2026-07-03"><value>true</value></root>');
+  });
+
+  test('rejects an XSD union without member types', () {
+    expect(
+      () => ExiSchemaCompiler.compile(
+        id: 'empty-union',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="value">
+              <xs:simpleType>
+                <xs:union/>
+              </xs:simpleType>
+            </xs:element>
+          </xs:schema>
+        ''',
+      ),
+      throwsFormatException,
+    );
+  });
+
   test('decodes typed simple content after a required attribute', () {
     const schemaId = 'simple-content';
     final schema = ExiSchemaCompiler.compile(
