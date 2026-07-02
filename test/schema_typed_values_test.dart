@@ -91,6 +91,74 @@ void main() {
     expect(document.toXmlString(), '<count>7</count>');
   });
 
+  test('decodes a schema-typed QName element value', () {
+    const schemaId = 'qname-element';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:values">
+          <xs:element name="value" type="xs:QName"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Root selection; URI compact ID 4 is encoded as 5.
+      ..write('0101')
+      // Local-name "value" is the only name in the urn:values partition.
+      ..write(_unsigned(0));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(schema.globalElements.single.datatype, ExiDatatype.qName);
+    expect(document.events.whereType<ExiCharacters>().single.value, '{urn:values}value');
+
+    final notationSchema = ExiSchemaCompiler.compile(
+      id: 'notation',
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="notation" type="xs:NOTATION"/>
+        </xs:schema>
+      ''',
+    );
+    expect(notationSchema.globalElements.single.datatype, ExiDatatype.qName);
+  });
+
+  test('decodes a schema-typed QName attribute value', () {
+    const schemaId = 'qname-attribute';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:values">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:attribute name="code" type="xs:QName" use="required"/>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Root and required attribute events are implicit.
+      ..write('0')
+      // QName URI compact ID 4 and local-name compact ID 0 ("root").
+      ..write('101')
+      ..write(_unsigned(0));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.events.whereType<ExiAttribute>().single.value, '{urn:values}root');
+  });
+
   test('decodes typed simple content after a required attribute', () {
     const schemaId = 'simple-content';
     final schema = ExiSchemaCompiler.compile(

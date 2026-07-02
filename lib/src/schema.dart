@@ -16,6 +16,7 @@ enum ExiDatatype {
   dateTime,
   date,
   time,
+  qName,
 }
 
 enum ExiProcessContents { strict, lax, skip }

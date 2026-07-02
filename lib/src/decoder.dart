@@ -370,10 +370,7 @@ final class _DecoderState {
           if (target == null) {
             throw FormatException('Unknown xsi:type "${targetName.localName}"');
           }
-          final lexicalValue = targetName.uri.isEmpty
-              ? targetName.localName
-              : '{${targetName.uri}}${targetName.localName}';
-          events.add(ExiAttribute(_xsiTypeName, lexicalValue));
+          events.add(ExiAttribute(_xsiTypeName, targetName.toString()));
           _decodeDeclaredContent(elementName, target, allowSpecialAttributes: false);
           return;
         }

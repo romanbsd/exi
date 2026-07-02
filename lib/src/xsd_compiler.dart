@@ -1150,6 +1150,7 @@ final class _Compiler {
       'dateTime' => ExiDatatype.dateTime,
       'date' => ExiDatatype.date,
       'time' => ExiDatatype.time,
+      'QName' || 'NOTATION' => ExiDatatype.qName,
       _ => null,
     };
   }

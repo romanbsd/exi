@@ -26,6 +26,7 @@ final class ExiValueDecoder {
       ExiDatatype.dateTime => _readDateTime(includeDate: true, includeTime: true),
       ExiDatatype.date => _readDateTime(includeDate: true, includeTime: false),
       ExiDatatype.time => _readDateTime(includeDate: false, includeTime: true),
+      ExiDatatype.qName => strings.readQName(input).toString(),
     };
   }
 
