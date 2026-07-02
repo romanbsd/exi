@@ -168,7 +168,9 @@ final class _DecoderState {
       if (selected < globals.length) {
         _decodeElement(globals[selected].name, declaration: globals[selected]);
       } else {
-        _decodeElement(strings.readQName(input));
+        final name = strings.readQName(input);
+        final declaration = globals.where((element) => element.name == name).firstOrNull;
+        _decodeElement(name, declaration: declaration);
       }
       _decodeDocumentEnd();
       return;

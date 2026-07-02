@@ -666,6 +666,38 @@ void main() {
     ]);
   });
 
+  test('uses a global declaration for a schema document wildcard', () {
+    final schema = _compile('''
+      <xs:element name="child" type="xs:integer"/>
+      <xs:element name="root"/>
+    ''');
+    final bits = StringBuffer()
+      // Global roots are child=00, root=01, SE(*)=10.
+      ..write('10')
+      ..write(_schemaQName('', 'child', localNames: ['child', 'root']))
+      // The matching global declaration supplies the integer grammar.
+      ..write('0')
+      ..write(_unsigned(7));
+
+    final document = _decode(schema, bits.toString());
+
+    expect(document.toXmlString(), '<child>7</child>');
+  });
+
+  test('uses a built-in grammar for an undeclared schema document wildcard', () {
+    final schema = _compile('<xs:element name="root"/>');
+    final bits = StringBuffer()
+      // Root=0, SE(*)=1.
+      ..write('1')
+      ..write(_schemaQName('', 'other', localNames: ['root']))
+      // Built-in element start-tag EE.
+      ..write('00');
+
+    final document = _decode(schema, bits.toString());
+
+    expect(document.toXmlString(), '<other/>');
+  });
+
   test('decodes a local declaration as a schema-informed fragment root', () {
     final schema = _compile('''
       <xs:element name="root">
@@ -704,6 +736,24 @@ void main() {
     final document = _decodeFragment(schema, bits.toString());
 
     expect(document.events.whereType<ExiStartElement>().single.name.localName, 'other');
+  });
+
+  test('uses a global grammar for a schema-informed fragment wildcard', () {
+    final schema = _compile('''
+      <xs:element name="child" type="xs:integer"/>
+      <xs:element name="root"/>
+    ''');
+    final bits = StringBuffer()
+      // Fragment declarations are child=00, root=01, SE(*)=10, ED=11.
+      ..write('10')
+      ..write(_schemaQName('', 'child', localNames: ['child', 'root']))
+      ..write('0')
+      ..write(_unsigned(7))
+      ..write('11');
+
+    final document = _decodeFragment(schema, bits.toString());
+
+    expect(document.toXmlString(), '<child>7</child>');
   });
 
   test('includes fragment declarations from unused named types', () {
