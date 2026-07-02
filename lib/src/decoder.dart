@@ -431,6 +431,8 @@ final class _DecoderState {
             attribute.name,
             listItemDatatype: attribute.listItemDatatype,
             enumerationValues: attribute.enumerationValues,
+            booleanPattern: attribute.booleanPattern,
+            listItemBooleanPattern: attribute.listItemBooleanPattern,
             integerMinInclusive: attribute.integerMinInclusive,
             integerMaxInclusive: attribute.integerMaxInclusive,
           );
@@ -459,6 +461,8 @@ final class _DecoderState {
                   name,
                   listItemDatatype: globalAttribute.listItemDatatype,
                   enumerationValues: globalAttribute.enumerationValues,
+                  booleanPattern: globalAttribute.booleanPattern,
+                  listItemBooleanPattern: globalAttribute.listItemBooleanPattern,
                   integerMinInclusive: globalAttribute.integerMinInclusive,
                   integerMaxInclusive: globalAttribute.integerMaxInclusive,
                 );
@@ -504,6 +508,8 @@ final class _DecoderState {
                 elementName,
                 listItemDatatype: declaration.listItemDatatype,
                 enumerationValues: declaration.enumerationValues,
+                booleanPattern: declaration.booleanPattern,
+                listItemBooleanPattern: declaration.listItemBooleanPattern,
                 integerMinInclusive: declaration.integerMinInclusive,
                 integerMaxInclusive: declaration.integerMaxInclusive,
               ),

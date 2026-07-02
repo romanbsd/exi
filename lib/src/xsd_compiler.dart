@@ -9,6 +9,8 @@ typedef _SimpleType = ({
   ExiDatatype? listItemDatatype,
   List<String> enumerationValues,
   bool enumerationEligible,
+  bool booleanPattern,
+  bool listItemBooleanPattern,
   BigInt? integerMinInclusive,
   BigInt? integerMaxInclusive,
 });
@@ -269,6 +271,8 @@ final class _Compiler {
           simpleDatatype.datatype,
           listItemDatatype: simpleDatatype.listItemDatatype,
           enumerationValues: simpleDatatype.enumerationValues,
+          booleanPattern: simpleDatatype.booleanPattern,
+          listItemBooleanPattern: simpleDatatype.listItemBooleanPattern,
           integerMinInclusive: simpleDatatype.integerMinInclusive,
           integerMaxInclusive: simpleDatatype.integerMaxInclusive,
           nillable: nillable,
@@ -305,6 +309,8 @@ final class _Compiler {
         simpleType.datatype,
         listItemDatatype: simpleType.listItemDatatype,
         enumerationValues: simpleType.enumerationValues,
+        booleanPattern: simpleType.booleanPattern,
+        listItemBooleanPattern: simpleType.listItemBooleanPattern,
         integerMinInclusive: simpleType.integerMinInclusive,
         integerMaxInclusive: simpleType.integerMaxInclusive,
         nillable: nillable,
@@ -353,6 +359,8 @@ final class _Compiler {
         declaration.datatype,
         listItemDatatype: declaration.listItemDatatype,
         enumerationValues: declaration.enumerationValues,
+        booleanPattern: declaration.booleanPattern,
+        listItemBooleanPattern: declaration.listItemBooleanPattern,
         integerMinInclusive: declaration.integerMinInclusive,
         integerMaxInclusive: declaration.integerMaxInclusive,
         attributes: declaration.attributes,
@@ -615,6 +623,8 @@ final class _Compiler {
       simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
       enumerationValues: simpleType.enumerationValues,
+      booleanPattern: simpleType.booleanPattern,
+      listItemBooleanPattern: simpleType.listItemBooleanPattern,
       integerMinInclusive: simpleType.integerMinInclusive,
       integerMaxInclusive: simpleType.integerMaxInclusive,
       attributes: attributes,
@@ -958,6 +968,8 @@ final class _Compiler {
         datatype: declaration.datatype,
         listItemDatatype: declaration.listItemDatatype,
         enumerationValues: declaration.enumerationValues,
+        booleanPattern: declaration.booleanPattern,
+        listItemBooleanPattern: declaration.listItemBooleanPattern,
         integerMinInclusive: declaration.integerMinInclusive,
         integerMaxInclusive: declaration.integerMaxInclusive,
         required: _isRequiredAttribute(attribute),
@@ -987,6 +999,8 @@ final class _Compiler {
       datatype: simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
       enumerationValues: simpleType.enumerationValues,
+      booleanPattern: simpleType.booleanPattern,
+      listItemBooleanPattern: simpleType.listItemBooleanPattern,
       integerMinInclusive: simpleType.integerMinInclusive,
       integerMaxInclusive: simpleType.integerMaxInclusive,
       required: _isRequiredAttribute(attribute),
@@ -1032,6 +1046,8 @@ final class _Compiler {
       datatype: simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
       enumerationValues: simpleType.enumerationValues,
+      booleanPattern: simpleType.booleanPattern,
+      listItemBooleanPattern: simpleType.listItemBooleanPattern,
       integerMinInclusive: simpleType.integerMinInclusive,
       integerMaxInclusive: simpleType.integerMaxInclusive,
     );
@@ -1134,6 +1150,8 @@ final class _Compiler {
         listItemDatatype: itemType.datatype,
         enumerationValues: const [],
         enumerationEligible: false,
+        booleanPattern: false,
+        listItemBooleanPattern: itemType.booleanPattern,
         integerMinInclusive: null,
         integerMaxInclusive: null,
       );
@@ -1149,7 +1167,7 @@ final class _Compiler {
         .whereType<XmlElement>()
         .where((child) => child.name.namespaceUri == _xsdUri && child.name.local != 'annotation')
         .toList();
-    const supportedFacets = {'enumeration', 'minInclusive', 'minExclusive', 'maxInclusive', 'maxExclusive'};
+    const supportedFacets = {'enumeration', 'minInclusive', 'minExclusive', 'maxInclusive', 'maxExclusive', 'pattern'};
     final unsupported = facets.where((facet) => !supportedFacets.contains(facet.name.local)).firstOrNull;
     if (unsupported != null) {
       throw UnsupportedError('Unsupported XSD simple-type facet "${unsupported.name.local}"');
@@ -1158,9 +1176,26 @@ final class _Compiler {
       for (final facet in facets.where((facet) => facet.name.local == 'enumeration'))
         facet.getAttribute('value') ?? (throw const FormatException('An XSD enumeration facet must specify a value')),
     ];
+    final patterns = facets.where((facet) => facet.name.local == 'pattern').toList();
+    if (patterns.isNotEmpty && baseType.datatype != ExiDatatype.boolean) {
+      throw UnsupportedError('Pattern facets are currently supported only for Boolean XSD types');
+    }
+    for (final pattern in patterns) {
+      if (pattern.getAttribute('value') == null) {
+        throw const FormatException('An XSD pattern facet must specify a value');
+      }
+    }
     var minimum = baseType.integerMinInclusive;
     var maximum = baseType.integerMaxInclusive;
-    final boundFacets = facets.where((facet) => facet.name.local != 'enumeration').toList();
+    final boundFacets = facets
+        .where(
+          (facet) =>
+              facet.name.local == 'minInclusive' ||
+              facet.name.local == 'minExclusive' ||
+              facet.name.local == 'maxInclusive' ||
+              facet.name.local == 'maxExclusive',
+        )
+        .toList();
     if (boundFacets.isNotEmpty &&
         baseType.datatype != ExiDatatype.integer &&
         baseType.datatype != ExiDatatype.unsignedInteger &&
@@ -1203,6 +1238,8 @@ final class _Compiler {
           ? List.unmodifiable(values)
           : baseType.enumerationValues,
       enumerationEligible: baseType.enumerationEligible,
+      booleanPattern: baseType.booleanPattern || patterns.isNotEmpty,
+      listItemBooleanPattern: baseType.listItemBooleanPattern,
       integerMinInclusive: minimum,
       integerMaxInclusive: maximum,
     );
@@ -1310,6 +1347,8 @@ final class _Compiler {
         listItemDatatype: ExiDatatype.string,
         enumerationValues: const [],
         enumerationEligible: false,
+        booleanPattern: false,
+        listItemBooleanPattern: false,
         integerMinInclusive: null,
         integerMaxInclusive: null,
       ),
@@ -1388,6 +1427,8 @@ _SimpleType _scalarType(
   listItemDatatype: null,
   enumerationValues: const [],
   enumerationEligible: enumerationEligible,
+  booleanPattern: false,
+  listItemBooleanPattern: false,
   integerMinInclusive: integerMinInclusive,
   integerMaxInclusive: integerMaxInclusive,
 );

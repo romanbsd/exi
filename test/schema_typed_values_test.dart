@@ -19,8 +19,8 @@ void main() {
     final bits = StringBuffer('10000000')
       // Schema document root selection.
       ..write('0')
-      // boolean true (two-bit lexical-value representation)
-      ..write('10')
+      // Unpatterned Boolean true.
+      ..write('1')
       // integer -3: negative sign and magnitude minus one.
       ..write('1')
       ..write(_unsigned(2))
@@ -415,8 +415,8 @@ void main() {
       // Root and required attribute are implicit; two Boolean list items.
       ..write('0')
       ..write(_unsigned(2))
-      ..write('10')
-      ..write('00')
+      ..write('1')
+      ..write('0')
       // The tokens child is implicit; two String list items.
       ..write(_unsigned(2))
       ..write(_rawString('one'))
@@ -818,8 +818,8 @@ void main() {
       ''',
     );
     final bits = StringBuffer('10000000')
-      // Root=0; xsi:nil escape=1; true=10; required id remains implicit.
-      ..write('0110')
+      // Root=0; xsi:nil escape=1; true=1; required id remains implicit.
+      ..write('011')
       ..write(_value('7'));
 
     final document = ExiDecoder(
@@ -840,7 +840,13 @@ void main() {
           <xs:element name="root">
             <xs:complexType>
               <xs:sequence>
-                <xs:element name="flag" type="xs:boolean"/>
+                <xs:element name="flag">
+                  <xs:simpleType>
+                    <xs:restriction base="xs:boolean">
+                      <xs:pattern value="true|1"/>
+                    </xs:restriction>
+                  </xs:simpleType>
+                </xs:element>
                 <xs:element name="count" type="xs:integer"/>
               </xs:sequence>
             </xs:complexType>
@@ -855,6 +861,35 @@ void main() {
     ).decode(Uint8List.fromList([0x80, 0x50, 0x20]));
 
     expect(document.toXmlString(), '<root><flag>true</flag><count>-3</count></root>');
+  });
+
+  test('uses the four Boolean lexical codes when a pattern facet is available', () {
+    const schemaId = 'patterned-boolean';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="PatternedBoolean">
+            <xs:restriction base="xs:boolean">
+              <xs:pattern value="true|1"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="DerivedBoolean">
+            <xs:restriction base="PatternedBoolean"/>
+          </xs:simpleType>
+          <xs:element name="flag" type="DerivedBoolean"/>
+        </xs:schema>
+      ''',
+    );
+
+    for (final (code, lexical) in [('00', 'false'), ('01', '0'), ('10', 'true'), ('11', '1')]) {
+      final document = ExiDecoder(
+        options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+        schemaResolver: (_) => schema,
+      ).decode(_pack('100000000$code'));
+
+      expect(document.toXmlString(), '<flag>$lexical</flag>');
+    }
   });
 }
 

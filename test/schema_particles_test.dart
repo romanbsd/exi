@@ -335,8 +335,8 @@ void main() {
       </xs:element>
     ''');
 
-    // Root=0; xsi:nil escape=1; Boolean true=10; EE is implicit.
-    final document = _decode(schema, '0110');
+    // Root=0; xsi:nil escape=1; Boolean true=1; EE is implicit.
+    final document = _decode(schema, '011');
     final nil = document.events.whereType<ExiAttribute>().single;
 
     expect(nil.name.uri, 'http://www.w3.org/2001/XMLSchema-instance');
@@ -356,8 +356,8 @@ void main() {
       </xs:element>
     ''');
 
-    // Root=0; xsi:nil escape=1; Boolean false=00; required child is implicit.
-    final document = _decode(schema, '0100');
+    // Root=0; xsi:nil escape=1; Boolean false=0; required child is implicit.
+    final document = _decode(schema, '010');
 
     expect(document.events.whereType<ExiStartElement>().map((event) => event.name.localName), ['root', 'required']);
   });

@@ -57,6 +57,8 @@ final class ExiElementDeclaration {
        datatype = null,
        listItemDatatype = null,
        enumerationValues = const [],
+       booleanPattern = false,
+       listItemBooleanPattern = false,
        integerMinInclusive = null,
        integerMaxInclusive = null,
        attributes = const [],
@@ -75,6 +77,8 @@ final class ExiElementDeclaration {
   }) : datatype = null,
        listItemDatatype = null,
        enumerationValues = const [],
+       booleanPattern = false,
+       listItemBooleanPattern = false,
        integerMinInclusive = null,
        integerMaxInclusive = null,
        attributes = const [],
@@ -86,6 +90,8 @@ final class ExiElementDeclaration {
     this.datatype, {
     this.listItemDatatype,
     this.enumerationValues = const [],
+    this.booleanPattern = false,
+    this.listItemBooleanPattern = false,
     this.integerMinInclusive,
     this.integerMaxInclusive,
     this.nillable = false,
@@ -105,6 +111,8 @@ final class ExiElementDeclaration {
     this.datatype, {
     this.listItemDatatype,
     this.enumerationValues = const [],
+    this.booleanPattern = false,
+    this.listItemBooleanPattern = false,
     this.integerMinInclusive,
     this.integerMaxInclusive,
     this.attributes = const [],
@@ -134,6 +142,8 @@ final class ExiElementDeclaration {
        datatype = null,
        listItemDatatype = null,
        enumerationValues = const [],
+       booleanPattern = false,
+       listItemBooleanPattern = false,
        integerMinInclusive = null,
        integerMaxInclusive = null;
 
@@ -142,6 +152,8 @@ final class ExiElementDeclaration {
   final ExiDatatype? datatype;
   final ExiDatatype? listItemDatatype;
   final List<String> enumerationValues;
+  final bool booleanPattern;
+  final bool listItemBooleanPattern;
   final BigInt? integerMinInclusive;
   final BigInt? integerMaxInclusive;
   final List<ExiAttributeDeclaration> attributes;
@@ -161,6 +173,8 @@ final class ExiAttributeDeclaration {
     required this.datatype,
     this.listItemDatatype,
     this.enumerationValues = const [],
+    this.booleanPattern = false,
+    this.listItemBooleanPattern = false,
     this.integerMinInclusive,
     this.integerMaxInclusive,
     this.required = false,
@@ -170,6 +184,8 @@ final class ExiAttributeDeclaration {
   final ExiDatatype datatype;
   final ExiDatatype? listItemDatatype;
   final List<String> enumerationValues;
+  final bool booleanPattern;
+  final bool listItemBooleanPattern;
   final BigInt? integerMinInclusive;
   final BigInt? integerMaxInclusive;
   final bool required;

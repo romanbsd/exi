@@ -17,6 +17,8 @@ final class ExiValueDecoder {
     ExiQName context, {
     ExiDatatype? listItemDatatype,
     List<String> enumerationValues = const [],
+    bool booleanPattern = false,
+    bool listItemBooleanPattern = false,
     BigInt? integerMinInclusive,
     BigInt? integerMaxInclusive,
   }) {
@@ -36,7 +38,17 @@ final class ExiValueDecoder {
     }
     return switch (datatype) {
       ExiDatatype.string => strings.readValue(input, context),
-      ExiDatatype.boolean => input.readNBitUnsigned(2) < 2 ? 'false' : 'true',
+      ExiDatatype.boolean =>
+        booleanPattern
+            ? switch (input.readNBitUnsigned(2)) {
+                0 => 'false',
+                1 => '0',
+                2 => 'true',
+                _ => '1',
+              }
+            : input.readNBitUnsigned(1) == 0
+            ? 'false'
+            : 'true',
       ExiDatatype.decimal => _readDecimal(),
       ExiDatatype.float => _readFloat(),
       ExiDatatype.integer || ExiDatatype.unsignedInteger || ExiDatatype.byte || ExiDatatype.unsignedByte =>
@@ -54,18 +66,21 @@ final class ExiValueDecoder {
       ExiDatatype.list => _readList(
         listItemDatatype ?? (throw StateError('EXI list datatype is missing its item datatype')),
         context,
+        itemBooleanPattern: listItemBooleanPattern,
       ),
     };
   }
 
-  String _readList(ExiDatatype itemDatatype, ExiQName context) {
+  String _readList(ExiDatatype itemDatatype, ExiQName context, {required bool itemBooleanPattern}) {
     final encodedLength = input.readUnsignedInteger();
     if (encodedLength > BigInt.from(0x7fffffff)) {
       throw const FormatException('EXI list value is too large to materialize');
     }
     return [
       for (var index = 0; index < encodedLength.toInt(); index++)
-        itemDatatype == ExiDatatype.string ? strings.readString(input) : read(itemDatatype, context),
+        itemDatatype == ExiDatatype.string
+            ? strings.readString(input)
+            : read(itemDatatype, context, booleanPattern: itemBooleanPattern),
     ].join(' ');
   }
 

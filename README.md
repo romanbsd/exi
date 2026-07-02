@@ -26,12 +26,13 @@ The current decoder stage supports:
   global element and attribute references, named model and attribute groups,
   nested sequences and choices, `all` compositors, empty content, occurrence
   ranges, local namespace form overrides, and primitive, named, and chained
-  simple types, schema-order enumerations, integer range facets, typed lists,
-  and String-represented unions, plus attributed `simpleContent` and
-  `complexContent` extension, unconstrained element and attribute wildcards
-  with global declaration lookup, finite namespace-constrained wildcards,
-  `##other` wildcards, wildcard datatype lookup independent of XSD
-  `processContents`, and namespace-aware type resolution;
+  simple types, schema-order enumerations, integer range and Boolean pattern
+  facets, typed lists, and String-represented unions, plus attributed
+  `simpleContent` and `complexContent` extension, unconstrained element and
+  attribute wildcards with global declaration lookup, finite
+  namespace-constrained wildcards, `##other` wildcards, wildcard datatype
+  lookup independent of XSD `processContents`, and namespace-aware type
+  resolution;
 - schema-typed string, boolean, integer, decimal, float, binary, date, time,
   date-time, partial Gregorian calendar, and list values, with the required
   String fallback for duration, QName, and NOTATION schema types and restricted
@@ -43,13 +44,13 @@ The current decoder stage supports:
 - XML reconstruction, including preserved namespace declarations.
 
 Datatype representation maps and user metadata remain unsupported. XSD
-imports/includes, simple-type facets other than enumeration and integer bounds,
-complex-content restriction, defaults and fixed values, substitution groups,
-abstract declarations and derivation controls, inherited wildcard unions
-involving `##other`, repetition of nullable compositors, non-strict and more
-general schema-informed grammars, relaxed element-fragment grammars for
-ambiguous declarations, pre-compression, and compression are also not yet
-available.
+imports/includes, simple-type facets other than enumeration, integer bounds,
+and Boolean patterns, complex-content restriction, defaults and fixed values,
+substitution groups, abstract declarations and derivation controls, inherited
+wildcard unions involving `##other`, repetition of nullable compositors,
+non-strict and more general schema-informed grammars, relaxed element-fragment
+grammars for ambiguous declarations, pre-compression, and compression are also
+not yet available.
 
 ```dart
 import 'dart:typed_data';
