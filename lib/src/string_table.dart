@@ -1,11 +1,65 @@
 import 'bit_input.dart';
 import 'model.dart';
+import 'schema.dart';
 
 const _xmlUri = 'http://www.w3.org/XML/1998/namespace';
 const _xsiUri = 'http://www.w3.org/2001/XMLSchema-instance';
+const _xsdUri = 'http://www.w3.org/2001/XMLSchema';
+const _xsdLocalNames = {
+  'ENTITIES',
+  'ENTITY',
+  'ID',
+  'IDREF',
+  'IDREFS',
+  'NCName',
+  'NMTOKEN',
+  'NMTOKENS',
+  'NOTATION',
+  'Name',
+  'QName',
+  'anySimpleType',
+  'anyType',
+  'anyURI',
+  'base64Binary',
+  'boolean',
+  'byte',
+  'date',
+  'dateTime',
+  'decimal',
+  'double',
+  'duration',
+  'float',
+  'gDay',
+  'gMonth',
+  'gMonthDay',
+  'gYear',
+  'gYearMonth',
+  'hexBinary',
+  'int',
+  'integer',
+  'language',
+  'long',
+  'negativeInteger',
+  'nonNegativeInteger',
+  'nonPositiveInteger',
+  'normalizedString',
+  'positiveInteger',
+  'short',
+  'string',
+  'time',
+  'token',
+  'unsignedByte',
+  'unsignedInt',
+  'unsignedLong',
+  'unsignedShort',
+};
 
 final class ExiStringTable {
-  ExiStringTable({this.preservePrefixes = false, this.valueMaxLength, this.valuePartitionCapacity});
+  ExiStringTable({this.preservePrefixes = false, this.valueMaxLength, this.valuePartitionCapacity, ExiSchema? schema}) {
+    if (schema != null) {
+      _prepopulateSchema(schema);
+    }
+  }
 
   final bool preservePrefixes;
   final int? valueMaxLength;
@@ -23,6 +77,83 @@ final class ExiStringTable {
   final List<_GlobalValue?> _globalValues = [];
   final Map<ExiQName, List<String?>> _localValues = {};
   var _globalId = 0;
+
+  void _prepopulateSchema(ExiSchema schema) {
+    _uris.add(_xsdUri);
+    final qNames = <ExiQName>{...schema.stringTableQNames};
+    final uris = <String>{...schema.stringTableUris};
+    final seenElements = Set<ExiElementDeclaration>.identity();
+    late void Function(ExiElementDeclaration) collectElement;
+    late void Function(ExiParticle?) collectParticle;
+
+    collectElement = (element) {
+      if (!seenElements.add(element)) {
+        return;
+      }
+      qNames.add(element.name);
+      uris.add(element.name.uri);
+      for (final attribute in element.attributes) {
+        qNames.add(attribute.name);
+        uris.add(attribute.name.uri);
+      }
+      final wildcardNamespaces = element.attributeWildcardNamespaces;
+      if (wildcardNamespaces != null) {
+        uris.addAll(wildcardNamespaces);
+      }
+      for (final child in element.children) {
+        collectElement(child);
+      }
+      collectParticle(element.content);
+      for (final alternative in element.typeAlternatives.values) {
+        collectElement(alternative);
+      }
+    };
+
+    collectParticle = (particle) {
+      switch (particle) {
+        case null:
+        case ExiEmptyParticle():
+          return;
+        case ExiElementParticle(:final element):
+          collectElement(element);
+        case ExiWildcardParticle(:final namespaces):
+          if (namespaces != null) {
+            uris.addAll(namespaces);
+          }
+        case ExiSequenceParticle(:final particles):
+        case ExiChoiceParticle(:final particles):
+        case ExiAllParticle(:final particles):
+          for (final child in particles) {
+            collectParticle(child);
+          }
+        case ExiRepeatedParticle(:final particle):
+          collectParticle(particle);
+      }
+    };
+
+    for (final element in schema.globalElements) {
+      collectElement(element);
+    }
+    for (final attribute in schema.globalAttributes) {
+      qNames.add(attribute.name);
+      uris.add(attribute.name.uri);
+    }
+
+    uris.removeAll(_uris);
+    uris.remove('');
+    _uris.addAll(uris.toList()..sort());
+
+    _localNames.putIfAbsent(_xsdUri, () => []).addAll(_xsdLocalNames);
+    for (final name in qNames) {
+      _localNames.putIfAbsent(name.uri, () => []).add(name.localName);
+    }
+    for (final partition in _localNames.values) {
+      final sorted = partition.toSet().toList()..sort();
+      partition
+        ..clear()
+        ..addAll(sorted);
+    }
+  }
 
   ExiQName readQName(BitInput input) {
     final uri = _readCompactOptimized(input, _uris);

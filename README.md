@@ -30,7 +30,8 @@ The current decoder stage supports:
   type resolution;
 - schema-typed string, boolean, integer, decimal, float, binary, date, time,
   and date-time values;
-- URI, local-name, and value string-table partitions;
+- URI, local-name, and value string-table partitions, including schema-informed
+  URI and declared-name prepopulation;
 - start/end document, start/end element, attribute, character, namespace,
   comment, processing-instruction, document-type, and entity-reference events;
 - XML reconstruction, including preserved namespace declarations.

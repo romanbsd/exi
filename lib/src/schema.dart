@@ -21,11 +21,19 @@ enum ExiDatatype {
 enum ExiProcessContents { strict, lax, skip }
 
 final class ExiSchema {
-  const ExiSchema({required this.id, required this.globalElements, this.globalAttributes = const []});
+  const ExiSchema({
+    required this.id,
+    required this.globalElements,
+    this.globalAttributes = const [],
+    this.stringTableQNames = const [],
+    this.stringTableUris = const {},
+  });
 
   final String id;
   final List<ExiElementDeclaration> globalElements;
   final List<ExiAttributeDeclaration> globalAttributes;
+  final List<ExiQName> stringTableQNames;
+  final Set<String> stringTableUris;
 }
 
 final class ExiElementDeclaration {

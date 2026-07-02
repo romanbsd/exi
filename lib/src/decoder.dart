@@ -133,6 +133,7 @@ final class _DecoderState {
         preservePrefixes: options.fidelity.prefixes,
         valueMaxLength: options.valueMaxLength,
         valuePartitionCapacity: options.valuePartitionCapacity,
+        schema: schema,
       );
 
   final BitInput input;

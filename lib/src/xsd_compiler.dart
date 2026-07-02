@@ -136,11 +136,63 @@ final class _Compiler {
     if (_globalElementNodes.isEmpty) {
       throw const FormatException('XML Schema contains no global elements');
     }
+    final stringTableQNames = _collectStringTableQNames();
     return ExiSchema(
       id: id,
       globalElements: [for (final name in _globalElementNodes.keys) _compileGlobalElement(name)],
       globalAttributes: [for (final name in _globalAttributeNodes.keys) _compileGlobalAttribute(name)],
+      stringTableQNames: stringTableQNames.toList(),
+      stringTableUris: _collectStringTableUris(stringTableQNames),
     );
+  }
+
+  Set<ExiQName> _collectStringTableQNames() {
+    final result = <ExiQName>{};
+    for (final declaration in root.descendants.whereType<XmlElement>()) {
+      if (declaration.name.namespaceUri != _xsdUri) {
+        continue;
+      }
+      final localName = declaration.getAttribute('name');
+      if (localName == null || localName.isEmpty) {
+        continue;
+      }
+      switch (declaration.name.local) {
+        case 'element':
+          final global = identical(declaration.parent, root);
+          final qualified = global
+              ? true
+              : _isQualifiedForm(declaration, defaultQualified: localElementsAreQualified, kind: 'element');
+          result.add(ExiQName(uri: qualified ? targetNamespace : '', localName: localName));
+        case 'attribute':
+          final global = identical(declaration.parent, root);
+          final qualified = global
+              ? true
+              : _isQualifiedForm(declaration, defaultQualified: localAttributesAreQualified, kind: 'attribute');
+          result.add(ExiQName(uri: qualified ? targetNamespace : '', localName: localName));
+        case 'complexType':
+        case 'simpleType':
+          if (identical(declaration.parent, root)) {
+            result.add(ExiQName(uri: targetNamespace, localName: localName));
+          }
+      }
+    }
+    return result;
+  }
+
+  Set<String> _collectStringTableUris(Set<ExiQName> qNames) {
+    final result = {for (final name in qNames) name.uri};
+    for (final wildcard in root.descendants.whereType<XmlElement>()) {
+      if (wildcard.name.namespaceUri != _xsdUri ||
+          (wildcard.name.local != 'any' && wildcard.name.local != 'anyAttribute')) {
+        continue;
+      }
+      final namespaces = _wildcardNamespaces(wildcard);
+      if (namespaces != null) {
+        result.addAll(namespaces);
+      }
+    }
+    result.remove('');
+    return result;
   }
 
   ExiElementDeclaration _compileGlobalElement(String localName) {

@@ -403,7 +403,7 @@ void main() {
     final bits = StringBuffer()
       // Root=0; AT(*)=0.
       ..write('00')
-      ..write(_qName('', 'extra'))
+      ..write(_schemaQName('', 'extra', localNames: ['root']))
       ..write(_value('7'))
       // EE=1 after the wildcard attribute.
       ..write('1');
@@ -425,7 +425,7 @@ void main() {
     final bits = StringBuffer()
       // Root=0; AT(*)=0; QName code.
       ..write('00')
-      ..write(_qName('', 'code'))
+      ..write(_schemaQName('', 'code', localNames: ['code', 'root']))
       // Positive integer 7.
       ..write('0')
       ..write(_unsigned(7))
@@ -485,7 +485,7 @@ void main() {
     final bits = StringBuffer()
       // Root=0; AT(*)=0; full QName in a permitted namespace.
       ..write('00')
-      ..write(_qName('urn:other', 'code'))
+      ..write(_schemaQName('urn:other', 'code', schemaUris: ['urn:example']))
       ..write(_value('7'))
       ..write('1');
 
@@ -541,7 +541,7 @@ void main() {
       // Global roots are child=00, root=01, SE(*)=10.
       ..write('01')
       // The wildcard QName is child.
-      ..write(_qName('', 'child'))
+      ..write(_schemaQName('', 'child', localNames: ['child', 'root']))
       // Positive integer 7.
       ..write('0')
       ..write(_unsigned(7));
@@ -563,7 +563,7 @@ void main() {
     ''');
     final bits = StringBuffer()
       ..write('0')
-      ..write(_qName('', 'missing'))
+      ..write(_schemaQName('', 'missing', localNames: ['root']))
       // The synthesized global element grammar starts with schema-less EE.
       ..write('00');
 
@@ -586,7 +586,7 @@ void main() {
     final bits = StringBuffer()
       // Root=01; SE(*) is implicit and names the global child.
       ..write('01')
-      ..write(_qName('', 'child'))
+      ..write(_schemaQName('', 'child', localNames: ['child', 'root']))
       // EXI wildcard semantics use the global integer grammar.
       ..write('0')
       ..write(_unsigned(7));
@@ -594,6 +594,41 @@ void main() {
     final document = _decode(schema, bits.toString());
 
     expect(document.toXmlString(), '<root><child>7</child></root>');
+  });
+
+  test('uses schema-prepopulated URI and local-name compact identifiers', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'particles',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:example">
+          <xs:element name="child"/>
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:any/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer()
+      // Global roots are child=00 and root=01.
+      ..write('01')
+      // URI compact ID 4 is encoded as 5 in the hit-optimized partition.
+      ..write('101')
+      // The child local name is compact ID 0 in ['child', 'root'].
+      ..write('00000000')
+      ..write('0');
+
+    final document = _decode(schema, bits.toString());
+
+    expect(document.events.whereType<ExiStartElement>().map((event) => event.name), [
+      const ExiQName(uri: 'urn:example', localName: 'root'),
+      const ExiQName(uri: 'urn:example', localName: 'child'),
+    ]);
   });
 
   test('decodes qualified local names from schema form overrides', () {
@@ -676,10 +711,35 @@ String _rawString(String value) {
   return '${_unsigned(codePoints.length)}${codePoints.map(_unsigned).join()}';
 }
 
-String _qName(String uri, String localName) {
-  final encodedUri = uri.isEmpty ? '01' : '00${_rawString(uri)}';
-  return '$encodedUri${_literal(localName, 1)}';
+String _schemaQName(
+  String uri,
+  String localName, {
+  List<String> schemaUris = const [],
+  List<String> localNames = const [],
+}) {
+  final initialUris = [
+    '',
+    'http://www.w3.org/XML/1998/namespace',
+    'http://www.w3.org/2001/XMLSchema-instance',
+    'http://www.w3.org/2001/XMLSchema',
+  ];
+  final additionalUris = schemaUris.where((candidate) => !initialUris.contains(candidate)).toSet().toList()..sort();
+  final uris = [...initialUris, ...additionalUris];
+  final uriWidth = _nBitWidth(uris.length + 1);
+  final uriIndex = uris.indexOf(uri);
+  final encodedUri = uriIndex == -1
+      ? '${''.padLeft(uriWidth, '0')}${_rawString(uri)}'
+      : (uriIndex + 1).toRadixString(2).padLeft(uriWidth, '0');
+
+  final names = localNames.toSet().toList()..sort();
+  final localNameIndex = names.indexOf(localName);
+  final encodedLocalName = localNameIndex == -1
+      ? _literal(localName, 1)
+      : '${_unsigned(0)}${localNameIndex.toRadixString(2).padLeft(_nBitWidth(names.length), '0')}';
+  return '$encodedUri$encodedLocalName';
 }
+
+int _nBitWidth(int valueCount) => valueCount <= 1 ? 0 : (valueCount - 1).bitLength;
 
 String _literal(String value, int lengthOffset) {
   final codePoints = value.runes.toList();

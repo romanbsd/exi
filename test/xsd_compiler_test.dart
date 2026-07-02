@@ -24,6 +24,7 @@ void main() {
       expect(root.children.map((child) => child.name.localName), ['flag', 'count']);
       expect(root.children[0].datatype, ExiDatatype.boolean);
       expect(root.children[1].datatype, ExiDatatype.integer);
+      expect(schema.stringTableQNames, contains(const ExiQName(localName: 'RootType')));
     });
 
     test('extends named complex types with attributes and particles', () {
@@ -334,7 +335,7 @@ void main() {
               <xs:complexType>
                 <xs:sequence>
                   <xs:any
-                      namespace="##local ##targetNamespace"
+                      namespace="##local ##targetNamespace urn:other"
                       processContents="lax"
                       minOccurs="0"
                       maxOccurs="unbounded"/>
@@ -348,11 +349,12 @@ void main() {
       final sequence = schema.globalElements.single.content as ExiSequenceParticle;
       final repeated = sequence.particles.single as ExiRepeatedParticle;
       final wildcard = repeated.particle as ExiWildcardParticle;
-      expect(wildcard.namespaces, {'', 'urn:example'});
+      expect(wildcard.namespaces, {'', 'urn:example', 'urn:other'});
       expect(wildcard.excludedNamespaces, isNull);
       expect(wildcard.processContents, ExiProcessContents.lax);
       expect(repeated.minOccurs, 0);
       expect(repeated.maxOccurs, isNull);
+      expect(schema.stringTableUris, {'urn:example', 'urn:other'});
     });
 
     test('rejects repeated children in an all compositor', () {
