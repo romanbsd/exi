@@ -7,6 +7,8 @@ The current decoder stage supports:
 
 - optional `$EXI` cookies and final EXI version 1 headers;
 - schema-less documents using the built-in document and element grammars;
+- schema-less self-contained elements with required byte boundaries and
+  isolated/restored string-table and learned-grammar state;
 - schema-less fragments with dynamic top-level QName learning and strict
   schema-informed fragments with unambiguous declared element QNames;
 - configurable out-of-band fidelity options for comments, processing
@@ -41,13 +43,12 @@ The current decoder stage supports:
 
 Datatype representation maps and user metadata remain unsupported. XSD
 imports/includes, simple-type facets other than enumeration and integer bounds,
-complex-content
-restriction, defaults and fixed values, substitution groups, abstract
-declarations and derivation controls, inherited wildcard unions involving
-`##other`, repetition of nullable compositors, non-strict and more general
-schema-informed grammars, relaxed element-fragment grammars for ambiguous
-declarations, self-contained elements, pre-compression, and compression are
-also not yet available.
+complex-content restriction, defaults and fixed values, substitution groups,
+abstract declarations and derivation controls, inherited wildcard unions
+involving `##other`, repetition of nullable compositors, non-strict and more
+general schema-informed grammars, relaxed element-fragment grammars for
+ambiguous declarations, pre-compression, and compression are also not yet
+available.
 
 ```dart
 import 'dart:typed_data';

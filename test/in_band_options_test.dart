@@ -78,6 +78,24 @@ void main() {
       expect(document.events.whereType<ExiComment>().single.text, 'note');
       expect(document.toXmlString(), '<root><!--note--></root>');
     });
+
+    test('applies self-contained mode to the following body', () {
+      final bits = StringBuffer('10100000')
+        // header/lesscommon/uncommon/selfContained, then close each sequence.
+        ..write('00000010111010')
+        // Document body: SE(root), then SC.
+        ..write(_qName('', 'root'))
+        ..write('010');
+      _alignBits(bits);
+      // Fresh root grammar -> EE.
+      bits.write('000');
+      _alignBits(bits);
+
+      final document = ExiDecoder().decode(_pack(bits.toString()));
+
+      expect(document.options.selfContained, isTrue);
+      expect(document.toXmlString(), '<root/>');
+    });
   });
 }
 
@@ -109,4 +127,10 @@ Uint8List _pack(String bits) {
   return Uint8List.fromList([
     for (var offset = 0; offset < padded.length; offset += 8) int.parse(padded.substring(offset, offset + 8), radix: 2),
   ]);
+}
+
+void _alignBits(StringBuffer bits) {
+  while (bits.length % 8 != 0) {
+    bits.write('0');
+  }
 }

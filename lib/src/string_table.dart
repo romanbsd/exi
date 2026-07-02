@@ -181,6 +181,20 @@ final class ExiStringTable {
     }
   }
 
+  void addQName(ExiQName name) {
+    if (!_uris.contains(name.uri)) {
+      _uris.add(name.uri);
+    }
+    final localNames = _localNames.putIfAbsent(name.uri, () => []);
+    if (!localNames.contains(name.localName)) {
+      localNames.add(name.localName);
+    }
+    final prefix = name.prefix;
+    if (preservePrefixes && prefix != null) {
+      addPrefix(name.uri, prefix);
+    }
+  }
+
   String readValue(BitInput input, ExiQName context) {
     final marker = _readLength(input);
     final local = _localValues.putIfAbsent(context, () => []);

@@ -103,9 +103,6 @@ void _validateOptions(ExiOptions options) {
   if (options.alignment == ExiAlignment.preCompression) {
     throw UnsupportedError('${options.alignment.name} alignment is not supported yet');
   }
-  if (options.selfContained) {
-    throw UnsupportedError('Self-contained EXI elements are not supported yet');
-  }
   if (options.blockSize < 1) {
     throw ArgumentError.value(options.blockSize, 'blockSize', 'must be at least 1');
   }
@@ -124,21 +121,22 @@ void _validateOptions(ExiOptions options) {
   }
 }
 
+ExiStringTable _newStringTable(ExiOptions options, ExiSchema? schema) => ExiStringTable(
+  preservePrefixes: options.fidelity.prefixes,
+  valueMaxLength: options.valueMaxLength,
+  valuePartitionCapacity: options.valuePartitionCapacity,
+  schema: schema,
+);
+
 final class _DecoderState {
-  _DecoderState(this.input, this.options, this.schema)
-    : strings = ExiStringTable(
-        preservePrefixes: options.fidelity.prefixes,
-        valueMaxLength: options.valueMaxLength,
-        valuePartitionCapacity: options.valuePartitionCapacity,
-        schema: schema,
-      );
+  _DecoderState(this.input, this.options, this.schema) : strings = _newStringTable(options, schema);
 
   final BitInput input;
   final ExiOptions options;
   final ExiSchema? schema;
-  final ExiStringTable strings;
-  final Map<ExiQName, _ElementGrammar> grammars = {};
-  final List<_Production> _fragmentElements = [];
+  ExiStringTable strings;
+  Map<ExiQName, _ElementGrammar> grammars = {};
+  List<_Production> _fragmentElements = [];
   late final List<ExiElementDeclaration> _fragmentDeclarations = _collectFragmentDeclarations(schema);
   final List<ExiEvent> events = [];
 
@@ -239,14 +237,17 @@ final class _DecoderState {
   }
 
   void _decodeElement(ExiQName initialName, {ExiElementDeclaration? declaration}) {
-    var elementName = initialName;
     final startEventIndex = events.length;
-    events.add(ExiStartElement(elementName));
+    events.add(ExiStartElement(initialName));
     if (declaration != null) {
-      _decodeDeclaredContent(elementName, declaration);
+      _decodeDeclaredContent(initialName, declaration);
       return;
     }
+    _decodeBuiltInContent(initialName, startEventIndex);
+  }
 
+  void _decodeBuiltInContent(ExiQName initialName, int startEventIndex) {
+    var elementName = initialName;
     final grammar = grammars.putIfAbsent(elementName, () => _ElementGrammar(options));
     var current = grammar.startTag;
 
@@ -284,6 +285,9 @@ final class _DecoderState {
             events[startEventIndex] = ExiStartElement(elementName);
           }
           events.add(ExiNamespaceDeclaration(uri: uri, prefix: prefix, localElementNamespace: localElementNamespace));
+        case _EventType.selfContained:
+          _decodeSelfContained(elementName, startEventIndex);
+          return;
         case _EventType.entityReference:
           events.add(ExiEntityReference(strings.readString(input)));
           current = grammar.elementContent;
@@ -296,6 +300,24 @@ final class _DecoderState {
         default:
           throw StateError('Invalid element production');
       }
+    }
+  }
+
+  void _decodeSelfContained(ExiQName elementName, int startEventIndex) {
+    final outerStrings = strings;
+    final outerGrammars = grammars;
+    final outerFragmentElements = _fragmentElements;
+    try {
+      strings = _newStringTable(options, schema)..addQName(elementName);
+      grammars = {};
+      _fragmentElements = [];
+      input.alignToByte();
+      _decodeBuiltInContent(elementName, startEventIndex);
+      input.alignToByte();
+    } finally {
+      strings = outerStrings;
+      grammars = outerGrammars;
+      _fragmentElements = outerFragmentElements;
     }
   }
 
@@ -885,6 +907,7 @@ enum _EventType {
   attribute,
   characters,
   namespaceDeclaration,
+  selfContained,
   comment,
   processingInstruction,
   documentType,
@@ -929,6 +952,7 @@ final class _GrammarState {
         const _Production(_EventType.endElement),
         const _Production(_EventType.attribute),
         if (options.fidelity.prefixes) const _Production(_EventType.namespaceDeclaration),
+        if (options.selfContained) const _Production(_EventType.selfContained),
       ],
       const _Production(_EventType.startElement),
       const _Production(_EventType.characters),

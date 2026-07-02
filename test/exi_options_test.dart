@@ -118,8 +118,39 @@ void main() {
     });
   });
 
-  test('rejects unsupported self-contained and pre-compression options', () {
-    expect(() => ExiDecoder(options: const ExiOptions(selfContained: true)), throwsA(isA<UnsupportedError>()));
+  test('decodes a self-contained element and restores the outer string table', () {
+    final bits = StringBuffer('10000000')
+      // DocContent -> SE(root).
+      ..write(_qName('', 'root'))
+      // StartTagContent -> AT(*), then the attribute QName and value.
+      ..write('001')
+      ..write(_qName('', 'id'))
+      ..write(_value('outer'))
+      // Learned start-tag branch -> SE(*).
+      ..write('1')
+      ..write('011')
+      ..write(_qName('', 'child'))
+      // Child StartTagContent -> SC.
+      ..write('010');
+    _alignBits(bits);
+    bits
+      // Fresh child grammar -> CH, followed by EE.
+      ..write('100')
+      ..write(_value('inner'))
+      ..write('01');
+    _alignBits(bits);
+    bits
+      // Restored root grammar -> CH using the outer global value, then EE.
+      ..write('11')
+      ..write(_unsigned(1))
+      ..write('01');
+
+    final document = ExiDecoder(options: const ExiOptions(selfContained: true)).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root id="outer"><child>inner</child>outer</root>');
+  });
+
+  test('rejects unsupported pre-compression options', () {
     expect(
       () => ExiDecoder(options: const ExiOptions(alignment: ExiAlignment.preCompression)),
       throwsA(isA<UnsupportedError>()),
@@ -171,4 +202,10 @@ Uint8List _pack(String bits) {
   return Uint8List.fromList([
     for (var offset = 0; offset < padded.length; offset += 8) int.parse(padded.substring(offset, offset + 8), radix: 2),
   ]);
+}
+
+void _alignBits(StringBuffer bits) {
+  while (bits.length % 8 != 0) {
+    bits.write('0');
+  }
 }
