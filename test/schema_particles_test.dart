@@ -413,6 +413,30 @@ void main() {
     expect(document.toXmlString(), '<root extra="7"/>');
   });
 
+  test('uses a global attribute datatype for a wildcard match', () {
+    final schema = _compile('''
+      <xs:attribute name="code" type="xs:integer"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:anyAttribute/>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Root=0; AT(*)=0; QName code.
+      ..write('00')
+      ..write(_qName('', 'code'))
+      // Positive integer 7.
+      ..write('0')
+      ..write(_unsigned(7))
+      // EE=1.
+      ..write('1');
+
+    final document = _decode(schema, bits.toString());
+
+    expect(document.toXmlString(), '<root code="7"/>');
+  });
+
   test('decodes qualified local names from schema form overrides', () {
     final schema = ExiSchemaCompiler.compile(
       id: 'forms',

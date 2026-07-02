@@ -396,7 +396,11 @@ final class _DecoderState {
           if (!seenAttributes.add(name)) {
             throw const FormatException('Duplicate wildcard attribute');
           }
-          events.add(ExiAttribute(name, strings.readValue(input, name)));
+          final globalAttribute = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
+          final value = globalAttribute == null
+              ? strings.readValue(input, name)
+              : ExiValueDecoder(input, strings).read(globalAttribute.datatype, name);
+          events.add(ExiAttribute(name, value));
         case _DeclaredEventKind.element:
           specialAttributesAllowed = false;
           attributeIndex = attributes.length;

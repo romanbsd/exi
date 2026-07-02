@@ -577,6 +577,21 @@ void main() {
       expect(schema.globalElements.single.anyAttribute, isTrue);
     });
 
+    test('exposes global attributes for wildcard datatype lookup', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'global-attributes.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:attribute name="code" type="xs:integer"/>
+            <xs:element name="root"/>
+          </xs:schema>
+        ''',
+      );
+
+      expect(schema.globalAttributes.single.name.localName, 'code');
+      expect(schema.globalAttributes.single.datatype, ExiDatatype.integer);
+    });
+
     test('rejects unresolved attribute references', () {
       expect(
         () => ExiSchemaCompiler.compile(

@@ -19,10 +19,11 @@ enum ExiDatatype {
 }
 
 final class ExiSchema {
-  const ExiSchema({required this.id, required this.globalElements});
+  const ExiSchema({required this.id, required this.globalElements, this.globalAttributes = const []});
 
   final String id;
   final List<ExiElementDeclaration> globalElements;
+  final List<ExiAttributeDeclaration> globalAttributes;
 }
 
 final class ExiElementDeclaration {

@@ -139,6 +139,7 @@ final class _Compiler {
     return ExiSchema(
       id: id,
       globalElements: [for (final name in _globalElementNodes.keys) _compileGlobalElement(name)],
+      globalAttributes: [for (final name in _globalAttributeNodes.keys) _compileGlobalAttribute(name)],
     );
   }
 
