@@ -237,7 +237,7 @@ final class _DecoderState {
     final startEventIndex = events.length;
     events.add(ExiStartElement(initialName));
     if (declaration != null) {
-      _decodeDeclaredContent(initialName, declaration);
+      _decodeDeclaredContent(initialName, declaration, startEventIndex: startEventIndex);
       return;
     }
     _decodeBuiltInContent(initialName, startEventIndex);
@@ -321,8 +321,10 @@ final class _DecoderState {
   void _decodeDeclaredContent(
     ExiQName elementName,
     ExiElementDeclaration declaration, {
+    required int startEventIndex,
     bool allowSpecialAttributes = true,
   }) {
+    var currentElementName = elementName;
     final datatype = declaration.datatype;
     final attributes = [...declaration.attributes]
       ..sort((left, right) {
@@ -391,13 +393,13 @@ final class _DecoderState {
         );
         switch (deviation) {
           case _NonStrictDeviation.endElement:
-            events.add(ExiEndElement(elementName));
+            events.add(ExiEndElement(currentElementName));
             return;
           case _NonStrictDeviation.characters:
             specialAttributesAllowed = false;
             contentStarted = true;
             attributeIndex = attributes.length;
-            events.add(ExiCharacters(strings.readValue(input, elementName)));
+            events.add(ExiCharacters(strings.readValue(input, currentElementName)));
             continue;
           case _NonStrictDeviation.startElement:
             specialAttributesAllowed = false;
@@ -453,7 +455,12 @@ final class _DecoderState {
             events.add(ExiAttribute(_xsiTypeName, lexicalValue));
             final target = declaration.typeAlternatives[targetName];
             if (target != null) {
-              _decodeDeclaredContent(elementName, target, allowSpecialAttributes: false);
+              _decodeDeclaredContent(
+                currentElementName,
+                target,
+                startEventIndex: startEventIndex,
+                allowSpecialAttributes: false,
+              );
               return;
             }
             specialAttributesAllowed = false;
@@ -492,6 +499,24 @@ final class _DecoderState {
               _decodeProcessingInstruction();
             }
             continue;
+          case _NonStrictDeviation.namespaceDeclaration:
+            final uri = strings.readString(input);
+            final prefix = strings.readString(input);
+            final localElementNamespace = input.readNBitUnsigned(1) == 1;
+            strings.addPrefix(uri, prefix);
+            if (localElementNamespace) {
+              if (uri != currentElementName.uri) {
+                throw const FormatException('Local namespace URI does not match the start-element URI');
+              }
+              currentElementName = ExiQName(
+                uri: currentElementName.uri,
+                localName: currentElementName.localName,
+                prefix: prefix,
+              );
+              events[startEventIndex] = ExiStartElement(currentElementName);
+            }
+            events.add(ExiNamespaceDeclaration(uri: uri, prefix: prefix, localElementNamespace: localElementNamespace));
+            continue;
           default:
             throw UnsupportedError('Non-strict ${deviation.name} productions are not supported yet');
         }
@@ -505,7 +530,12 @@ final class _DecoderState {
             throw FormatException('Unknown xsi:type "${targetName.localName}"');
           }
           events.add(ExiAttribute(_xsiTypeName, lexicalValue));
-          _decodeDeclaredContent(elementName, target, allowSpecialAttributes: false);
+          _decodeDeclaredContent(
+            currentElementName,
+            target,
+            startEventIndex: startEventIndex,
+            allowSpecialAttributes: false,
+          );
           return;
         }
         final nilIndex = canReadType ? 1 : 0;
@@ -613,14 +643,14 @@ final class _DecoderState {
           specialAttributesAllowed = false;
           contentStarted = true;
           attributeIndex = attributes.length;
-          events.add(ExiCharacters(strings.readValue(input, elementName)));
+          events.add(ExiCharacters(strings.readValue(input, currentElementName)));
         case _DeclaredEventKind.typedCharacters:
           specialAttributesAllowed = false;
           events.add(
             ExiCharacters(
               ExiValueDecoder(input, strings, preserveLexicalValues: options.fidelity.lexicalValues).read(
                 datatype!,
-                elementName,
+                currentElementName,
                 listItemDatatype: declaration.listItemDatatype,
                 enumerationValues: declaration.enumerationValues,
                 booleanPattern: declaration.booleanPattern,
@@ -630,11 +660,11 @@ final class _DecoderState {
               ),
             ),
           );
-          events.add(ExiEndElement(elementName));
+          events.add(ExiEndElement(currentElementName));
           return;
         case _DeclaredEventKind.end:
           specialAttributesAllowed = false;
-          events.add(ExiEndElement(elementName));
+          events.add(ExiEndElement(currentElementName));
           return;
       }
     }

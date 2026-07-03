@@ -250,6 +250,33 @@ void main() {
     expect(document.toXmlString(), '<root>&example;<!--note--><required/></root>');
   });
 
+  test('decodes a namespace declaration in a non-strict schema grammar', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'particles',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:example">
+          <xs:element name="root"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Document root=0; escape=1; second-level NS=100.
+      ..write('01100')
+      ..write(_rawString('urn:example'))
+      ..write(_rawString('p'))
+      // Local-element namespace=true; root EE=0.
+      ..write('10');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(schemaId: ExiSchemaId.named('particles'), fidelity: ExiFidelityOptions(prefixes: true)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<p:root xmlns:p="urn:example"/>');
+  });
+
   group('strict schema particles', () {
     test('decodes an optional child that is absent', () {
       final schema = _compile('''
