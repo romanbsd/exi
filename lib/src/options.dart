@@ -41,10 +41,15 @@ final class ExiFidelityOptions {
 }
 
 final class ExiDatatypeRepresentationMap {
-  const ExiDatatypeRepresentationMap({required this.schemaDatatype, required this.representation});
+  const ExiDatatypeRepresentationMap({required this.schemaDatatype, required this.representation})
+    : representationName = null;
+
+  const ExiDatatypeRepresentationMap.userDefined({required this.schemaDatatype, required this.representationName})
+    : representation = null;
 
   final ExiQName schemaDatatype;
-  final ExiDatatype representation;
+  final ExiDatatype? representation;
+  final ExiQName? representationName;
 }
 
 final class ExiOptions {

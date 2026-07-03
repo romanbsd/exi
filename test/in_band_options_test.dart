@@ -110,8 +110,128 @@ void main() {
       expect(document.options.selfContained, isTrue);
       expect(document.toXmlString(), '<root/>');
     });
+
+    test('applies a built-in datatype representation map to the following body', () {
+      const schemaId = 'mapped-options';
+      final schema = ExiSchemaCompiler.compile(
+        id: schemaId,
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="amount" type="xs:decimal"/>
+          </xs:schema>
+        ''',
+      );
+      final bits = StringBuffer('10100000')
+        // header/lesscommon/uncommon/datatypeRepresentationMap.
+        ..write('00000101')
+        // First wildcard child: xsd:decimal, then its built-in EE.
+        ..write(_optionsQName(_xsdUri, 'decimal'))
+        ..write('00')
+        // Second wildcard child: exi:string, then its built-in EE.
+        ..write(_optionsQName(_exiUri, 'string'))
+        ..write('00')
+        // Repeat datatypeRepresentationMap: xsd:boolean -> exi:integer.
+        ..write('0')
+        ..write(_optionsQName(_xsdUri, 'boolean'))
+        ..write('00')
+        ..write(_optionsQName(_exiUri, 'integer'))
+        ..write('00')
+        // Close uncommon and lesscommon; select common/schemaId.
+        ..write('1100010')
+        // schemaId CH production.
+        ..write('0')
+        ..write(_literal(schemaId, lengthOffset: 2))
+        // Select strict; header then closes implicitly.
+        ..write('0')
+        // Schema root selection followed by String-represented decimal content.
+        ..write('0')
+        ..write(_literal('12.50', lengthOffset: 2));
+
+      final document = ExiDecoder(schemaResolver: (_) => schema).decode(_pack(bits.toString()));
+
+      expect(document.options.datatypeRepresentationMap, hasLength(2));
+      expect(document.options.datatypeRepresentationMap.first.representation, ExiDatatype.string);
+      expect(document.options.datatypeRepresentationMap.last.representation, ExiDatatype.integer);
+      expect(document.toXmlString(), '<amount>12.50</amount>');
+    });
+
+    test('retains an unused user-defined datatype representation', () {
+      const schemaId = 'unused-custom-map';
+      const representation = ExiQName(uri: 'urn:representation', localName: 'custom');
+      final schema = ExiSchemaCompiler.compile(
+        id: schemaId,
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="amount" type="xs:decimal"/>
+          </xs:schema>
+        ''',
+      );
+      final bits = StringBuffer('10100000')
+        ..write('00000101')
+        ..write(_optionsQName(_xsdUri, 'boolean'))
+        ..write('00')
+        ..write(_literalOptionsQName(representation.uri, representation.localName))
+        // Wildcard content is skipped; the element QName remains the identifier.
+        ..write('11')
+        ..write(_literal('ignored', lengthOffset: 2))
+        ..write('0')
+        ..write('1100010')
+        ..write('0')
+        ..write(_literal(schemaId, lengthOffset: 2))
+        ..write('00')
+        // Decimal 1.25.
+        ..write('0')
+        ..write(_unsigned(1))
+        ..write(_unsigned(52));
+
+      final document = ExiDecoder(schemaResolver: (_) => schema).decode(_pack(bits.toString()));
+      final mapping = document.options.datatypeRepresentationMap.single;
+
+      expect(mapping.representation, isNull);
+      expect(mapping.representationName, representation);
+      expect(document.toXmlString(), '<amount>1.25</amount>');
+    });
+
+    test('rejects a user-defined representation when its typed value is encountered', () {
+      const schemaId = 'required-custom-map';
+      final schema = ExiSchemaCompiler.compile(
+        id: schemaId,
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="amount" type="xs:decimal"/>
+          </xs:schema>
+        ''',
+      );
+      final bits = StringBuffer('10100000')
+        ..write('00000101')
+        ..write(_optionsQName(_xsdUri, 'decimal'))
+        ..write('00')
+        ..write(_literalOptionsQName('urn:representation', 'custom'))
+        ..write('00')
+        ..write('1100010')
+        ..write('0')
+        ..write(_literal(schemaId, lengthOffset: 2))
+        ..write('00');
+
+      expect(() => ExiDecoder(schemaResolver: (_) => schema).decode(_pack(bits.toString())), throwsUnsupportedError);
+    });
   });
 }
+
+String _optionsQName(String uri, String localName) {
+  final uriIndex = [_emptyUri, _xmlUri, _xsiUri, _xsdUri, _exiUri].indexOf(uri);
+  final localNames = (uri == _xsdUri ? [..._xsdLocalNames] : [..._exiLocalNames])..sort();
+  final localNameIndex = localNames.indexOf(localName);
+  if (uriIndex == -1 || localNameIndex == -1) {
+    throw ArgumentError('QName is not prepopulated in the EXI options string table');
+  }
+  return '${(uriIndex + 1).toRadixString(2).padLeft(3, '0')}'
+      '${_unsigned(0)}'
+      '${localNameIndex.toRadixString(2).padLeft((localNames.length - 1).bitLength, '0')}';
+}
+
+String _literalOptionsQName(String uri, String localName) =>
+    '000${_rawString(uri)}${_literal(localName, lengthOffset: 1)}';
 
 String _qName(String uri, String localName) {
   final encodedUri = uri.isEmpty ? '01' : '00${_rawString(uri)}';
@@ -148,3 +268,100 @@ void _alignBits(StringBuffer bits) {
     bits.write('0');
   }
 }
+
+const _emptyUri = '';
+const _xmlUri = 'http://www.w3.org/XML/1998/namespace';
+const _xsiUri = 'http://www.w3.org/2001/XMLSchema-instance';
+const _xsdUri = 'http://www.w3.org/2001/XMLSchema';
+const _exiUri = 'http://www.w3.org/2009/exi';
+
+const _xsdLocalNames = [
+  'ENTITIES',
+  'ENTITY',
+  'ID',
+  'IDREF',
+  'IDREFS',
+  'NCName',
+  'NMTOKEN',
+  'NMTOKENS',
+  'NOTATION',
+  'Name',
+  'QName',
+  'anySimpleType',
+  'anyType',
+  'anyURI',
+  'base64Binary',
+  'boolean',
+  'byte',
+  'date',
+  'dateTime',
+  'decimal',
+  'double',
+  'duration',
+  'float',
+  'gDay',
+  'gMonth',
+  'gMonthDay',
+  'gYear',
+  'gYearMonth',
+  'hexBinary',
+  'int',
+  'integer',
+  'language',
+  'long',
+  'negativeInteger',
+  'nonNegativeInteger',
+  'nonPositiveInteger',
+  'normalizedString',
+  'positiveInteger',
+  'short',
+  'string',
+  'time',
+  'token',
+  'unsignedByte',
+  'unsignedInt',
+  'unsignedLong',
+  'unsignedShort',
+];
+
+const _exiLocalNames = [
+  'alignment',
+  'base64Binary',
+  'blockSize',
+  'boolean',
+  'byte',
+  'comments',
+  'common',
+  'compression',
+  'datatypeRepresentationMap',
+  'date',
+  'dateTime',
+  'decimal',
+  'double',
+  'dtd',
+  'fragment',
+  'gDay',
+  'gMonth',
+  'gMonthDay',
+  'gYear',
+  'gYearMonth',
+  'header',
+  'hexBinary',
+  'ieeeBinary32',
+  'ieeeBinary64',
+  'integer',
+  'lesscommon',
+  'lexicalValues',
+  'pis',
+  'pre-compress',
+  'prefixes',
+  'preserve',
+  'schemaId',
+  'selfContained',
+  'string',
+  'strict',
+  'time',
+  'uncommon',
+  'valueMaxLength',
+  'valuePartitionCapacity',
+];

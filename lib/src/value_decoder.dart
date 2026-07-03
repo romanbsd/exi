@@ -93,7 +93,13 @@ final class ExiValueDecoder {
     for (final schemaDatatype in effectiveHierarchy) {
       for (final mapping in datatypeRepresentationMap) {
         if (mapping.schemaDatatype == schemaDatatype) {
-          return mapping.representation;
+          return mapping.representation ??
+              (throw UnsupportedError(
+                'User-defined EXI datatype representation '
+                '"{${mapping.representationName!.uri}}${mapping.representationName!.localName}" '
+                'is required for schema datatype '
+                '"{${mapping.schemaDatatype.uri}}${mapping.schemaDatatype.localName}"',
+              ));
         }
       }
     }

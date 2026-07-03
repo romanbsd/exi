@@ -135,9 +135,10 @@ void _validateOptions(ExiOptions options) {
         'contains duplicate schema datatype mappings',
       );
     }
-    if (!supportedRepresentations.contains(mapping.representation)) {
+    final representation = mapping.representation;
+    if (representation != null && !supportedRepresentations.contains(representation)) {
       throw ArgumentError.value(
-        mapping.representation,
+        representation,
         'datatypeRepresentationMap',
         'is not an EXI datatype representation identifier',
       );

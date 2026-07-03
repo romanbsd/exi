@@ -1,5 +1,8 @@
 import 'bit_input.dart';
+import 'model.dart';
 import 'options.dart';
+import 'schema.dart';
+import 'string_table.dart';
 
 /// Decodes the schema-informed EXI body defined by Appendix C.
 ///
@@ -7,9 +10,11 @@ import 'options.dart';
 /// general-purpose XML Schema model here would add complexity without changing
 /// the wire grammar.
 final class HeaderOptionsDecoder {
-  HeaderOptionsDecoder(this._input);
+  HeaderOptionsDecoder(this._input) : _strings = ExiStringTable(schema: _optionsSchema);
 
   final BitInput _input;
+  final ExiStringTable _strings;
+  final _wildcardGrammars = <ExiQName, _SkippedElementGrammar>{};
 
   var _alignment = ExiAlignment.bitPacked;
   var _compression = false;
@@ -25,6 +30,7 @@ final class HeaderOptionsDecoder {
   int? _valueMaxLength;
   int? _valuePartitionCapacity;
   var _schemaId = ExiSchemaId.absent;
+  final _datatypeRepresentationMap = <ExiDatatypeRepresentationMap>[];
 
   ExiOptions decode() {
     // The strict schema-informed document grammar contains SE(header) and the
@@ -51,6 +57,7 @@ final class HeaderOptionsDecoder {
       valueMaxLength: _valueMaxLength,
       valuePartitionCapacity: _valuePartitionCapacity,
       schemaId: _schemaId,
+      datatypeRepresentationMap: List.unmodifiable(_datatypeRepresentationMap),
     );
   }
 
@@ -94,7 +101,7 @@ final class HeaderOptionsDecoder {
       case _OptionElement.valuePartitionCapacity:
         _valuePartitionCapacity = _readUnsignedInt(name: 'valuePartitionCapacity');
       case _OptionElement.datatypeRepresentationMap:
-        throw UnsupportedError('Datatype representation maps are not supported yet');
+        _readDatatypeRepresentationMap();
       default:
         throw StateError('Invalid uncommon child: $element');
     }
@@ -143,8 +150,9 @@ final class HeaderOptionsDecoder {
       }
 
       final childIndex = position + selected;
-      readChild(children[childIndex]);
-      position = childIndex + 1;
+      final child = children[childIndex];
+      readChild(child);
+      position = child == _OptionElement.datatypeRepresentationMap ? childIndex : childIndex + 1;
     }
   }
 
@@ -190,6 +198,49 @@ final class HeaderOptionsDecoder {
     }
     final value = String.fromCharCodes(codePoints);
     _schemaId = value.isEmpty ? ExiSchemaId.builtInTypes : ExiSchemaId.named(value);
+  }
+
+  void _readDatatypeRepresentationMap() {
+    final schemaDatatype = _readWildcardElement();
+    if (schemaDatatype.uri == _exiUri) {
+      throw const FormatException('EXI datatype-map source must match the ##other namespace wildcard');
+    }
+    final representationName = _readWildcardElement();
+    final representation = _builtInRepresentation(representationName);
+    _datatypeRepresentationMap.add(
+      representation == null
+          ? ExiDatatypeRepresentationMap.userDefined(
+              schemaDatatype: schemaDatatype,
+              representationName: representationName,
+            )
+          : ExiDatatypeRepresentationMap(schemaDatatype: schemaDatatype, representation: representation),
+    );
+  }
+
+  ExiQName _readWildcardElement([ExiQName? knownName]) {
+    final name = knownName ?? _strings.readQName(_input);
+    final grammar = _wildcardGrammars.putIfAbsent(name, _SkippedElementGrammar.new);
+    var state = grammar.startTag;
+    while (true) {
+      final production = state.read(_input);
+      switch (production.event) {
+        case _SkippedEvent.endElement:
+          return name;
+        case _SkippedEvent.attribute:
+          final attributeName = production.name ?? _strings.readQName(_input);
+          _strings.readValue(_input, attributeName);
+          state.learn(_SkippedProduction(_SkippedEvent.attribute, attributeName));
+        case _SkippedEvent.startElement:
+          final childName = production.name ?? _strings.readQName(_input);
+          _readWildcardElement(childName);
+          state.learn(_SkippedProduction(_SkippedEvent.startElement, childName));
+          state = grammar.elementContent;
+        case _SkippedEvent.characters:
+          _strings.readValue(_input, name);
+          state.learn(production);
+          state = grammar.elementContent;
+      }
+    }
   }
 }
 
@@ -244,4 +295,136 @@ int _bitWidth(int valueCount) {
     return 0;
   }
   return (valueCount - 1).bitLength;
+}
+
+ExiDatatype? _builtInRepresentation(ExiQName name) {
+  if (name.uri != _exiUri) {
+    return null;
+  }
+  return switch (name.localName) {
+    'base64Binary' => ExiDatatype.base64Binary,
+    'hexBinary' => ExiDatatype.hexBinary,
+    'boolean' => ExiDatatype.boolean,
+    'decimal' => ExiDatatype.decimal,
+    'double' => ExiDatatype.float,
+    'integer' => ExiDatatype.integer,
+    'string' => ExiDatatype.string,
+    'dateTime' => ExiDatatype.dateTime,
+    'date' => ExiDatatype.date,
+    'time' => ExiDatatype.time,
+    'gYearMonth' => ExiDatatype.gYearMonth,
+    'gMonthDay' => ExiDatatype.gMonthDay,
+    'gYear' => ExiDatatype.gYear,
+    'gMonth' => ExiDatatype.gMonth,
+    'gDay' => ExiDatatype.gDay,
+    _ => null,
+  };
+}
+
+const _exiUri = 'http://www.w3.org/2009/exi';
+
+final _optionsSchema = ExiSchema(
+  id: 'http://www.w3.org/2009/exi/options',
+  globalElements: const [],
+  stringTableQNames: [for (final localName in _optionsSchemaLocalNames) ExiQName(uri: _exiUri, localName: localName)],
+  stringTableUris: const {_exiUri},
+);
+
+const _optionsSchemaLocalNames = [
+  'alignment',
+  'base64Binary',
+  'blockSize',
+  'boolean',
+  'byte',
+  'comments',
+  'common',
+  'compression',
+  'datatypeRepresentationMap',
+  'date',
+  'dateTime',
+  'decimal',
+  'double',
+  'dtd',
+  'fragment',
+  'gDay',
+  'gMonth',
+  'gMonthDay',
+  'gYear',
+  'gYearMonth',
+  'header',
+  'hexBinary',
+  'ieeeBinary32',
+  'ieeeBinary64',
+  'integer',
+  'lesscommon',
+  'lexicalValues',
+  'pis',
+  'pre-compress',
+  'prefixes',
+  'preserve',
+  'schemaId',
+  'selfContained',
+  'string',
+  'strict',
+  'time',
+  'uncommon',
+  'valueMaxLength',
+  'valuePartitionCapacity',
+];
+
+enum _SkippedEvent { endElement, attribute, startElement, characters }
+
+final class _SkippedElementGrammar {
+  final startTag = _SkippedGrammarState(startTag: true);
+  final elementContent = _SkippedGrammarState(startTag: false);
+}
+
+final class _SkippedGrammarState {
+  _SkippedGrammarState({required this.startTag});
+
+  final bool startTag;
+  final _learned = <_SkippedProduction>[];
+
+  _SkippedProduction read(BitInput input) {
+    final firstPartCount = _learned.length + (startTag ? 1 : 2);
+    final firstPart = input.readNBitUnsigned(_bitWidth(firstPartCount));
+    if (firstPart >= firstPartCount) {
+      throw const FormatException('Invalid event code in EXI datatype-map QName element');
+    }
+    if (firstPart < _learned.length) {
+      return _learned[firstPart];
+    }
+    if (!startTag && firstPart == _learned.length) {
+      return const _SkippedProduction(_SkippedEvent.endElement);
+    }
+
+    final undeclared = startTag
+        ? const [
+            _SkippedEvent.endElement,
+            _SkippedEvent.attribute,
+            _SkippedEvent.startElement,
+            _SkippedEvent.characters,
+          ]
+        : const [_SkippedEvent.startElement, _SkippedEvent.characters];
+    final secondPart = input.readNBitUnsigned(_bitWidth(undeclared.length));
+    if (secondPart >= undeclared.length) {
+      throw const FormatException('Invalid event code in EXI datatype-map QName element');
+    }
+    return _SkippedProduction(undeclared[secondPart]);
+  }
+
+  void learn(_SkippedProduction production) {
+    if (production.event == _SkippedEvent.endElement ||
+        _learned.any((candidate) => candidate.event == production.event && candidate.name == production.name)) {
+      return;
+    }
+    _learned.insert(0, production);
+  }
+}
+
+final class _SkippedProduction {
+  const _SkippedProduction(this.event, [this.name]);
+
+  final _SkippedEvent event;
+  final ExiQName? name;
 }
