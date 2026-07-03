@@ -21,11 +21,11 @@ The current decoder stage supports:
 - strict compiled schemas and schema-valid first-level paths plus common
   non-strict deviations, including early end elements, untyped characters,
   wildcard elements, typed/untyped attributes, `xsi:type`, `xsi:nil`, entity
-  references, namespace declarations, comments, and processing instructions;
-  schemas can contain global elements, attributes, sequences, choices,
-  unordered `all` groups, and optional, bounded, or unbounded element and
-  compositor particles, including mixed and nillable content and named
-  derived-type selection;
+  references, namespace declarations, self-contained content, comments, and
+  processing instructions; schemas can contain global elements, attributes,
+  sequences, choices, unordered `all` groups, and optional, bounded, or
+  unbounded element and compositor particles, including mixed and nillable
+  content and named derived-type selection;
 - XSD compilation for global elements, named/inline complex types, attributes,
   global element and attribute references, named model and attribute groups,
   nested sequences and choices, `all` compositors, empty content, occurrence
@@ -52,9 +52,9 @@ imports/includes, simple-type facets other than enumeration, integer bounds,
 and Boolean patterns, complex-content restriction, defaults and fixed values,
 substitution groups, abstract declarations and derivation controls, inherited
 wildcard unions involving `##other`, repetition of nullable compositors,
-non-strict schema self-contained deviations and more general schema-informed
-grammars, relaxed element-fragment grammars for ambiguous declarations,
-pre-compression, and compression are also not yet available.
+schema-informed grammars requiring unsupported XSD features, relaxed
+element-fragment grammars for ambiguous declarations, pre-compression, and
+compression are also not yet available.
 
 ```dart
 import 'dart:typed_data';

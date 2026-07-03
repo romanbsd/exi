@@ -277,6 +277,32 @@ void main() {
     expect(document.toXmlString(), '<p:root xmlns:p="urn:example"/>');
   });
 
+  test('decodes a self-contained non-strict schema element', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="required"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer('10000000')
+      // Document root=0; escape=1; second-level SC=101.
+      ..write('01101');
+    _alignBits(bits);
+    // Fresh declared grammar: required child, child EE, root EE.
+    bits.write('000');
+    _alignBits(bits);
+
+    final document = ExiDecoder(
+      options: const ExiOptions(schemaId: ExiSchemaId.named('particles'), selfContained: true),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root><required/></root>');
+  });
+
   group('strict schema particles', () {
     test('decodes an optional child that is absent', () {
       final schema = _compile('''
@@ -1241,4 +1267,10 @@ Uint8List _pack(String bits) {
   return Uint8List.fromList([
     for (var offset = 0; offset < padded.length; offset += 8) int.parse(padded.substring(offset, offset + 8), radix: 2),
   ]);
+}
+
+void _alignBits(StringBuffer bits) {
+  while (bits.length % 8 != 0) {
+    bits.write('0');
+  }
 }

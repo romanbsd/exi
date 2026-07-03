@@ -318,6 +318,24 @@ final class _DecoderState {
     }
   }
 
+  void _decodeDeclaredSelfContained(ExiQName elementName, ExiElementDeclaration declaration, int startEventIndex) {
+    final outerStrings = strings;
+    final outerGrammars = grammars;
+    final outerFragmentElements = _fragmentElements;
+    try {
+      strings = _newStringTable(options, schema)..addQName(elementName);
+      grammars = {};
+      _fragmentElements = [];
+      input.alignToByte();
+      _decodeDeclaredContent(elementName, declaration, startEventIndex: startEventIndex);
+      input.alignToByte();
+    } finally {
+      strings = outerStrings;
+      grammars = outerGrammars;
+      _fragmentElements = outerFragmentElements;
+    }
+  }
+
   void _decodeDeclaredContent(
     ExiQName elementName,
     ExiElementDeclaration declaration, {
@@ -517,8 +535,9 @@ final class _DecoderState {
             }
             events.add(ExiNamespaceDeclaration(uri: uri, prefix: prefix, localElementNamespace: localElementNamespace));
             continue;
-          default:
-            throw UnsupportedError('Non-strict ${deviation.name} productions are not supported yet');
+          case _NonStrictDeviation.selfContained:
+            _decodeDeclaredSelfContained(currentElementName, declaration, startEventIndex);
+            return;
         }
       }
       if (specialCount > 0 && selected == candidates.length) {
