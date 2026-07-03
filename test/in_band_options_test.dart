@@ -171,10 +171,7 @@ void main() {
         ..write(_optionsQName(_xsdUri, 'boolean'))
         ..write('00')
         ..write(_literalOptionsQName(representation.uri, representation.localName))
-        // Wildcard content is skipped; the element QName remains the identifier.
-        ..write('11')
-        ..write(_literal('ignored', lengthOffset: 2))
-        ..write('0')
+        ..write('00')
         ..write('1100010')
         ..write('0')
         ..write(_literal(schemaId, lengthOffset: 2))
@@ -214,6 +211,36 @@ void main() {
         ..write('00');
 
       expect(() => ExiDecoder(schemaResolver: (_) => schema).decode(_pack(bits.toString())), throwsUnsupportedError);
+    });
+
+    test('preserves repeated user-defined metadata elements', () {
+      final bits = StringBuffer('10100000')
+        // header/lesscommon/uncommon/metadata wildcard.
+        ..write('00000000')
+        ..write(_literalOptionsQName('urn:meta:first', 'first'))
+        ..write('11')
+        ..write(_literal('alpha', lengthOffset: 2))
+        ..write('0')
+        // Repeat the metadata wildcard.
+        ..write('000')
+        ..write(_literalOptionsQName('urn:meta:second', 'second'))
+        ..write('11')
+        ..write(_literal('beta', lengthOffset: 2))
+        ..write('0')
+        // Close uncommon, lesscommon, and header.
+        ..write('1101010')
+        // Empty schema-less body.
+        ..write(_qName('', 'root'))
+        ..write('00');
+
+      final document = ExiDecoder().decode(_pack(bits.toString()));
+
+      expect(document.options.metadata, hasLength(2));
+      expect(document.options.metadata.first.name, const ExiQName(uri: 'urn:meta:first', localName: 'first'));
+      expect(document.options.metadata.first.events.whereType<ExiCharacters>().single.value, 'alpha');
+      expect(document.options.metadata.last.name, const ExiQName(uri: 'urn:meta:second', localName: 'second'));
+      expect(document.options.metadata.last.events.whereType<ExiCharacters>().single.value, 'beta');
+      expect(document.toXmlString(), '<root/>');
     });
   });
 }

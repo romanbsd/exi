@@ -52,6 +52,13 @@ final class ExiDatatypeRepresentationMap {
   final ExiQName? representationName;
 }
 
+final class ExiHeaderMetadata {
+  const ExiHeaderMetadata({required this.name, required this.events});
+
+  final ExiQName name;
+  final List<ExiEvent> events;
+}
+
 final class ExiOptions {
   const ExiOptions({
     this.alignment = ExiAlignment.bitPacked,
@@ -65,6 +72,7 @@ final class ExiOptions {
     this.valuePartitionCapacity,
     this.schemaId = ExiSchemaId.absent,
     this.datatypeRepresentationMap = const [],
+    this.metadata = const [],
   });
 
   final ExiAlignment alignment;
@@ -78,4 +86,5 @@ final class ExiOptions {
   final int? valuePartitionCapacity;
   final ExiSchemaId schemaId;
   final List<ExiDatatypeRepresentationMap> datatypeRepresentationMap;
+  final List<ExiHeaderMetadata> metadata;
 }

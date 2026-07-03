@@ -31,6 +31,7 @@ final class HeaderOptionsDecoder {
   int? _valuePartitionCapacity;
   var _schemaId = ExiSchemaId.absent;
   final _datatypeRepresentationMap = <ExiDatatypeRepresentationMap>[];
+  final _metadata = <ExiHeaderMetadata>[];
 
   ExiOptions decode() {
     // The strict schema-informed document grammar contains SE(header) and the
@@ -58,6 +59,7 @@ final class HeaderOptionsDecoder {
       valuePartitionCapacity: _valuePartitionCapacity,
       schemaId: _schemaId,
       datatypeRepresentationMap: List.unmodifiable(_datatypeRepresentationMap),
+      metadata: List.unmodifiable(_metadata),
     );
   }
 
@@ -90,7 +92,7 @@ final class HeaderOptionsDecoder {
   void _readUncommonChild(_OptionElement element) {
     switch (element) {
       case _OptionElement.metadata:
-        throw UnsupportedError('User-defined EXI header metadata is not supported yet');
+        _readMetadata();
       case _OptionElement.alignment:
         final selected = _input.readBits(1);
         _alignment = selected == 0 ? ExiAlignment.byteAligned : ExiAlignment.preCompression;
@@ -152,7 +154,9 @@ final class HeaderOptionsDecoder {
       final childIndex = position + selected;
       final child = children[childIndex];
       readChild(child);
-      position = child == _OptionElement.datatypeRepresentationMap ? childIndex : childIndex + 1;
+      position = child == _OptionElement.datatypeRepresentationMap || child == _OptionElement.metadata
+          ? childIndex
+          : childIndex + 1;
     }
   }
 
@@ -217,26 +221,38 @@ final class HeaderOptionsDecoder {
     );
   }
 
-  ExiQName _readWildcardElement([ExiQName? knownName]) {
+  void _readMetadata() {
+    final events = <ExiEvent>[];
+    final name = _readWildcardElement(null, events);
+    if (name.uri == _exiUri) {
+      throw const FormatException('EXI header metadata must match the ##other namespace wildcard');
+    }
+    _metadata.add(ExiHeaderMetadata(name: name, events: List.unmodifiable(events)));
+  }
+
+  ExiQName _readWildcardElement([ExiQName? knownName, List<ExiEvent>? events]) {
     final name = knownName ?? _strings.readQName(_input);
+    events?.add(ExiStartElement(name));
     final grammar = _wildcardGrammars.putIfAbsent(name, _SkippedElementGrammar.new);
     var state = grammar.startTag;
     while (true) {
       final production = state.read(_input);
       switch (production.event) {
         case _SkippedEvent.endElement:
+          events?.add(ExiEndElement(name));
           return name;
         case _SkippedEvent.attribute:
           final attributeName = production.name ?? _strings.readQName(_input);
-          _strings.readValue(_input, attributeName);
+          final value = _strings.readValue(_input, attributeName);
+          events?.add(ExiAttribute(attributeName, value));
           state.learn(_SkippedProduction(_SkippedEvent.attribute, attributeName));
         case _SkippedEvent.startElement:
           final childName = production.name ?? _strings.readQName(_input);
-          _readWildcardElement(childName);
+          _readWildcardElement(childName, events);
           state.learn(_SkippedProduction(_SkippedEvent.startElement, childName));
           state = grammar.elementContent;
         case _SkippedEvent.characters:
-          _strings.readValue(_input, name);
+          events?.add(ExiCharacters(_strings.readValue(_input, name)));
           state.learn(production);
           state = grammar.elementContent;
       }
