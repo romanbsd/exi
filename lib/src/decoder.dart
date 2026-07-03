@@ -1,5 +1,6 @@
-import 'dart:io';
 import 'dart:typed_data';
+
+import 'package:archive/archive.dart' show Inflate, InputMemoryStream;
 
 import 'bit_input.dart';
 import 'header_options.dart';
@@ -26,12 +27,13 @@ final class ExiDecoder {
     var input = BitInput(bytes, byteOffset: hasCookie ? _cookie.length : 0);
     final parsedHeader = _readHeader(input, hasCookie: hasCookie);
     _validateOptions(parsedHeader.options);
+    _CompressedStreams? compressedStreams;
     if (parsedHeader.options.compression) {
-      final inflated = ZLibDecoder(raw: true).convert(input.readRemainingBytes());
-      input = BitInput(Uint8List.fromList(inflated))..useByteAlignment();
+      compressedStreams = _CompressedStreams(input.readRemainingBytes());
+      input = compressedStreams.read();
     }
     final schema = _resolveSchema(parsedHeader.options.schemaId);
-    final state = _DecoderState(input, parsedHeader.options, schema);
+    final state = _DecoderState(input, parsedHeader.options, schema, compressedStreams: compressedStreams);
     final events = state.decode();
     return ExiDocument(header: parsedHeader.header, events: events, options: parsedHeader.options);
   }
@@ -162,11 +164,13 @@ ExiStringTable _newStringTable(ExiOptions options, ExiSchema? schema) => ExiStri
 );
 
 final class _DecoderState {
-  _DecoderState(this.input, this.options, this.schema) : strings = _newStringTable(options, schema);
+  _DecoderState(this.input, this.options, this.schema, {this._compressedStreams})
+    : strings = _newStringTable(options, schema);
 
-  final BitInput input;
+  BitInput input;
   final ExiOptions options;
   final ExiSchema? schema;
+  final _CompressedStreams? _compressedStreams;
   ExiStringTable strings;
   Map<ExiQName, _ElementGrammar> grammars = {};
   List<_Production> _fragmentElements = [];
@@ -195,9 +199,6 @@ final class _DecoderState {
     if (_deferredValueCount >= options.blockSize) {
       throw UnsupportedError('Multi-block EXI compression streams are not supported yet');
     }
-    if (options.compression && _deferredValueCount > 100) {
-      throw UnsupportedError('Multi-stream EXI compression blocks are not supported yet');
-    }
     final marker = '\u0000exi-deferred:${_deferredValueCount - 1}';
     _deferredChannels.putIfAbsent(channel, () => []).add(_DeferredValue(marker, read));
     return marker;
@@ -208,9 +209,23 @@ final class _DecoderState {
       return;
     }
     final values = <String, String>{};
-    for (final channel in _deferredChannels.values) {
-      for (final deferred in channel) {
-        values[deferred.marker] = deferred.read();
+    final channels = _deferredChannels.values.toList();
+    if (options.compression && _deferredValueCount > 100) {
+      final smallChannels = channels.where((channel) => channel.length <= 100);
+      final largeChannels = channels.where((channel) => channel.length > 100);
+      if (smallChannels.isNotEmpty) {
+        input = _compressedStreams!.read();
+        for (final channel in smallChannels) {
+          _readDeferredChannel(channel, values);
+        }
+      }
+      for (final channel in largeChannels) {
+        input = _compressedStreams!.read();
+        _readDeferredChannel(channel, values);
+      }
+    } else {
+      for (final channel in channels) {
+        _readDeferredChannel(channel, values);
       }
     }
     for (var index = 0; index < events.length; index++) {
@@ -222,6 +237,12 @@ final class _DecoderState {
         default:
           break;
       }
+    }
+  }
+
+  void _readDeferredChannel(List<_DeferredValue> channel, Map<String, String> values) {
+    for (final deferred in channel) {
+      values[deferred.marker] = deferred.read();
     }
   }
 
@@ -1372,6 +1393,20 @@ final class _ElementGrammar {
 
   final _GrammarState startTag;
   final _GrammarState elementContent;
+}
+
+final class _CompressedStreams {
+  _CompressedStreams(Uint8List bytes) : _input = InputMemoryStream(bytes);
+
+  final InputMemoryStream _input;
+
+  BitInput read() {
+    if (_input.isEOS) {
+      throw const FormatException('Missing EXI compressed stream');
+    }
+    final bytes = Inflate.stream(_input).getBytes();
+    return BitInput(bytes)..useByteAlignment();
+  }
 }
 
 final class _DeferredValue {

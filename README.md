@@ -17,8 +17,8 @@ The current decoder stage supports:
   value-table limits, including nilled, empty, named, and explicitly non-nilled
   schema IDs;
 - bit-packed and byte-aligned event/content decoding, including header padding,
-  plus single-final-block pre-compression and single-stream DEFLATE compression
-  with QName-grouped value channels;
+  plus single-final-block pre-compression and DEFLATE compression with
+  QName-grouped small and large value-channel streams;
 - absent, schema-less, built-in-types, and named schema IDs with resolver-based
   schema selection;
 - strict compiled schemas and schema-valid first-level paths plus common
@@ -63,8 +63,7 @@ substitution groups, abstract
 declarations and derivation controls, inherited wildcard unions involving
 `##other`, schema-informed grammars requiring unsupported XSD features, relaxed
 element-fragment grammars for ambiguous declarations, multi-block
-pre-compression, multi-block compression, and compression blocks requiring
-multiple DEFLATE streams are also not yet available.
+pre-compression, and multi-block compression are also not yet available.
 
 ```dart
 import 'dart:typed_data';

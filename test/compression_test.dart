@@ -54,6 +54,64 @@ void main() {
 
     expect(document.toXmlString(), '<root><first>one</first><second>two</second><first>three</first></root>');
   });
+
+  test('decodes a large value channel from its own compressed stream', () {
+    const schemaId = 'compressed-large-channel';
+    const value = ExiElementDeclaration.value(ExiQName(localName: 'value'), ExiDatatype.string);
+    final schema = ExiSchema(
+      id: schemaId,
+      globalElements: [ExiElementDeclaration.sequence(const ExiQName(localName: 'root'), List.filled(101, value))],
+    );
+    final structureStream = ZLibEncoder(raw: true).convert([0x00]);
+    final valueStream = ZLibEncoder(
+      raw: true,
+    ).convert([for (var index = 0; index < 101; index++) ..._stringValue('$index')]);
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        compression: true,
+        strict: true,
+        schemaId: ExiSchemaId.named(schemaId),
+        blockSize: 1000,
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(Uint8List.fromList([0x80, ...structureStream, ...valueStream]));
+
+    expect(document.toXmlString(), '<root>${List.generate(101, (index) => '<value>$index</value>').join()}</root>');
+  });
+
+  test('decodes small channels before separately compressed large channels', () {
+    const schemaId = 'compressed-mixed-channels';
+    const small = ExiElementDeclaration.value(ExiQName(localName: 'small'), ExiDatatype.string);
+    const large = ExiElementDeclaration.value(ExiQName(localName: 'large'), ExiDatatype.string);
+    final children = [small, ...List.filled(101, large), small];
+    final schema = ExiSchema(
+      id: schemaId,
+      globalElements: [ExiElementDeclaration.sequence(const ExiQName(localName: 'root'), children)],
+    );
+    final structureStream = ZLibEncoder(raw: true).convert([0x00]);
+    final smallStream = ZLibEncoder(raw: true).convert([..._stringValue('before'), ..._stringValue('after')]);
+    final largeStream = ZLibEncoder(
+      raw: true,
+    ).convert([for (var index = 0; index < 101; index++) ..._stringValue('$index')]);
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        compression: true,
+        strict: true,
+        schemaId: ExiSchemaId.named(schemaId),
+        blockSize: 1000,
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(Uint8List.fromList([0x80, ...structureStream, ...smallStream, ...largeStream]));
+
+    expect(
+      document.toXmlString(),
+      '<root><small>before</small>'
+      '${List.generate(101, (index) => '<large>$index</large>').join()}'
+      '<small>after</small></root>',
+    );
+  });
 }
 
 List<int> _stringValue(String value) => [value.runes.length + 2, ...value.runes];
