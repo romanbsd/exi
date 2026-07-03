@@ -150,11 +150,8 @@ void main() {
     expect(document.toXmlString(), '<root id="outer"><child>inner</child>outer</root>');
   });
 
-  test('rejects unsupported pre-compression options', () {
-    expect(
-      () => ExiDecoder(options: const ExiOptions(alignment: ExiAlignment.preCompression)),
-      throwsA(isA<UnsupportedError>()),
-    );
+  test('accepts pre-compression options', () {
+    expect(ExiDecoder(options: const ExiOptions(alignment: ExiAlignment.preCompression)), isA<ExiDecoder>());
   });
 
   test('enforces a zero value-partition capacity', () {

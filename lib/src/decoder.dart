@@ -76,7 +76,8 @@ final class ExiDecoder {
     if (effectiveOptions.compression || effectiveOptions.alignment != ExiAlignment.bitPacked) {
       input.alignToByte();
     }
-    if (effectiveOptions.alignment == ExiAlignment.byteAligned) {
+    if (effectiveOptions.alignment == ExiAlignment.byteAligned ||
+        effectiveOptions.alignment == ExiAlignment.preCompression) {
       input.useByteAlignment();
     }
     return (
@@ -96,9 +97,6 @@ void _validateOptions(ExiOptions options) {
   }
   if (options.compression) {
     throw UnsupportedError('EXI compression is not supported yet');
-  }
-  if (options.alignment == ExiAlignment.preCompression) {
-    throw UnsupportedError('${options.alignment.name} alignment is not supported yet');
   }
   if (options.blockSize < 1) {
     throw ArgumentError.value(options.blockSize, 'blockSize', 'must be at least 1');
@@ -171,6 +169,8 @@ final class _DecoderState {
   List<_Production> _fragmentElements = [];
   late final List<ExiElementDeclaration> _fragmentDeclarations = _collectFragmentDeclarations(schema);
   final List<ExiEvent> events = [];
+  final Map<ExiQName, List<_DeferredValue>> _deferredChannels = {};
+  var _deferredValueCount = 0;
 
   List<ExiEvent> decode() {
     events.add(const ExiStartDocument());
@@ -180,7 +180,43 @@ final class _DecoderState {
       _decodeDocument();
     }
     events.add(const ExiEndDocument());
+    _readDeferredValueChannels();
     return events;
+  }
+
+  String _readValue(ExiQName channel, String Function() read) {
+    if (options.alignment != ExiAlignment.preCompression) {
+      return read();
+    }
+    _deferredValueCount++;
+    if (_deferredValueCount >= options.blockSize) {
+      throw UnsupportedError('Multi-block EXI pre-compression streams are not supported yet');
+    }
+    final marker = '\u0000exi-deferred:${_deferredValueCount - 1}';
+    _deferredChannels.putIfAbsent(channel, () => []).add(_DeferredValue(marker, read));
+    return marker;
+  }
+
+  void _readDeferredValueChannels() {
+    if (options.alignment != ExiAlignment.preCompression) {
+      return;
+    }
+    final values = <String, String>{};
+    for (final channel in _deferredChannels.values) {
+      for (final deferred in channel) {
+        values[deferred.marker] = deferred.read();
+      }
+    }
+    for (var index = 0; index < events.length; index++) {
+      switch (events[index]) {
+        case ExiAttribute(:final name, :final value) when values.containsKey(value):
+          events[index] = ExiAttribute(name, values[value]!);
+        case ExiCharacters(:final value) when values.containsKey(value):
+          events[index] = ExiCharacters(values[value]!);
+        default:
+          break;
+      }
+    }
   }
 
   void _decodeDocument() {
@@ -293,7 +329,7 @@ final class _DecoderState {
         case _EventType.attribute:
           final name = production.name ?? strings.readQName(input);
           current.learn(_Production(_EventType.attribute, name));
-          events.add(ExiAttribute(name, strings.readValue(input, name)));
+          events.add(ExiAttribute(name, _readValue(name, () => strings.readValue(input, name))));
         case _EventType.startElement:
           final name = production.name ?? strings.readQName(input);
           current.learn(_Production(_EventType.startElement, name));
@@ -302,7 +338,7 @@ final class _DecoderState {
           current = grammar.elementContent;
         case _EventType.characters:
           current.learn(production);
-          events.add(ExiCharacters(strings.readValue(input, elementName)));
+          events.add(ExiCharacters(_readValue(elementName, () => strings.readValue(input, elementName))));
           current = grammar.elementContent;
         case _EventType.namespaceDeclaration:
           final uri = strings.readString(input);
@@ -452,7 +488,9 @@ final class _DecoderState {
             specialAttributesAllowed = false;
             contentStarted = true;
             attributeIndex = attributes.length;
-            events.add(ExiCharacters(strings.readValue(input, currentElementName)));
+            events.add(
+              ExiCharacters(_readValue(currentElementName, () => strings.readValue(input, currentElementName))),
+            );
             continue;
           case _NonStrictDeviation.startElement:
             specialAttributesAllowed = false;
@@ -470,25 +508,29 @@ final class _DecoderState {
             }
             final globalAttribute = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
             final value = globalAttribute == null
-                ? strings.readValue(input, name)
-                : ExiValueDecoder(
-                    input,
-                    strings,
-                    preserveLexicalValues: options.fidelity.lexicalValues,
-                    datatypeRepresentationMap: options.datatypeRepresentationMap,
-                  ).read(
-                    globalAttribute.datatype,
+                ? _readValue(name, () => strings.readValue(input, name))
+                : _readValue(
                     name,
-                    listItemDatatype: globalAttribute.listItemDatatype,
-                    schemaDatatypeHierarchy: globalAttribute.schemaDatatypeHierarchy,
-                    listItemSchemaDatatypeHierarchy: globalAttribute.listItemSchemaDatatypeHierarchy,
-                    restrictedCharacters: globalAttribute.restrictedCharacters,
-                    listItemRestrictedCharacters: globalAttribute.listItemRestrictedCharacters,
-                    enumerationValues: globalAttribute.enumerationValues,
-                    booleanPattern: globalAttribute.booleanPattern,
-                    listItemBooleanPattern: globalAttribute.listItemBooleanPattern,
-                    integerMinInclusive: globalAttribute.integerMinInclusive,
-                    integerMaxInclusive: globalAttribute.integerMaxInclusive,
+                    () =>
+                        ExiValueDecoder(
+                          input,
+                          strings,
+                          preserveLexicalValues: options.fidelity.lexicalValues,
+                          datatypeRepresentationMap: options.datatypeRepresentationMap,
+                        ).read(
+                          globalAttribute.datatype,
+                          name,
+                          listItemDatatype: globalAttribute.listItemDatatype,
+                          schemaDatatypeHierarchy: globalAttribute.schemaDatatypeHierarchy,
+                          listItemSchemaDatatypeHierarchy: globalAttribute.listItemSchemaDatatypeHierarchy,
+                          restrictedCharacters: globalAttribute.restrictedCharacters,
+                          listItemRestrictedCharacters: globalAttribute.listItemRestrictedCharacters,
+                          enumerationValues: globalAttribute.enumerationValues,
+                          booleanPattern: globalAttribute.booleanPattern,
+                          listItemBooleanPattern: globalAttribute.listItemBooleanPattern,
+                          integerMinInclusive: globalAttribute.integerMinInclusive,
+                          integerMaxInclusive: globalAttribute.integerMaxInclusive,
+                        ),
                   );
             events.add(ExiAttribute(name, value));
             continue;
@@ -510,7 +552,7 @@ final class _DecoderState {
             if (!seenAttributes.add(name)) {
               throw const FormatException('Duplicate non-strict schema attribute');
             }
-            events.add(ExiAttribute(name, strings.readValue(input, name)));
+            events.add(ExiAttribute(name, _readValue(name, () => strings.readValue(input, name))));
             continue;
           case _NonStrictDeviation.xsiType:
             final (:targetName, :lexicalValue) = _readXsiType(declaration);
@@ -633,26 +675,29 @@ final class _DecoderState {
           specialAttributesAllowed = false;
           final attribute = event.attribute!;
           attributeIndex = event.attributeIndex! + 1;
-          final value =
-              ExiValueDecoder(
-                input,
-                strings,
-                preserveLexicalValues: options.fidelity.lexicalValues,
-                datatypeRepresentationMap: options.datatypeRepresentationMap,
-              ).read(
-                attribute.datatype,
-                attribute.name,
-                listItemDatatype: attribute.listItemDatatype,
-                schemaDatatypeHierarchy: attribute.schemaDatatypeHierarchy,
-                listItemSchemaDatatypeHierarchy: attribute.listItemSchemaDatatypeHierarchy,
-                restrictedCharacters: attribute.restrictedCharacters,
-                listItemRestrictedCharacters: attribute.listItemRestrictedCharacters,
-                enumerationValues: attribute.enumerationValues,
-                booleanPattern: attribute.booleanPattern,
-                listItemBooleanPattern: attribute.listItemBooleanPattern,
-                integerMinInclusive: attribute.integerMinInclusive,
-                integerMaxInclusive: attribute.integerMaxInclusive,
-              );
+          final value = _readValue(
+            attribute.name,
+            () =>
+                ExiValueDecoder(
+                  input,
+                  strings,
+                  preserveLexicalValues: options.fidelity.lexicalValues,
+                  datatypeRepresentationMap: options.datatypeRepresentationMap,
+                ).read(
+                  attribute.datatype,
+                  attribute.name,
+                  listItemDatatype: attribute.listItemDatatype,
+                  schemaDatatypeHierarchy: attribute.schemaDatatypeHierarchy,
+                  listItemSchemaDatatypeHierarchy: attribute.listItemSchemaDatatypeHierarchy,
+                  restrictedCharacters: attribute.restrictedCharacters,
+                  listItemRestrictedCharacters: attribute.listItemRestrictedCharacters,
+                  enumerationValues: attribute.enumerationValues,
+                  booleanPattern: attribute.booleanPattern,
+                  listItemBooleanPattern: attribute.listItemBooleanPattern,
+                  integerMinInclusive: attribute.integerMinInclusive,
+                  integerMaxInclusive: attribute.integerMaxInclusive,
+                ),
+          );
           if (!seenAttributes.add(attribute.name)) {
             throw const FormatException('Duplicate schema attribute');
           }
@@ -672,25 +717,29 @@ final class _DecoderState {
           }
           final globalAttribute = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
           final value = globalAttribute == null
-              ? strings.readValue(input, name)
-              : ExiValueDecoder(
-                  input,
-                  strings,
-                  preserveLexicalValues: options.fidelity.lexicalValues,
-                  datatypeRepresentationMap: options.datatypeRepresentationMap,
-                ).read(
-                  globalAttribute.datatype,
+              ? _readValue(name, () => strings.readValue(input, name))
+              : _readValue(
                   name,
-                  listItemDatatype: globalAttribute.listItemDatatype,
-                  schemaDatatypeHierarchy: globalAttribute.schemaDatatypeHierarchy,
-                  listItemSchemaDatatypeHierarchy: globalAttribute.listItemSchemaDatatypeHierarchy,
-                  restrictedCharacters: globalAttribute.restrictedCharacters,
-                  listItemRestrictedCharacters: globalAttribute.listItemRestrictedCharacters,
-                  enumerationValues: globalAttribute.enumerationValues,
-                  booleanPattern: globalAttribute.booleanPattern,
-                  listItemBooleanPattern: globalAttribute.listItemBooleanPattern,
-                  integerMinInclusive: globalAttribute.integerMinInclusive,
-                  integerMaxInclusive: globalAttribute.integerMaxInclusive,
+                  () =>
+                      ExiValueDecoder(
+                        input,
+                        strings,
+                        preserveLexicalValues: options.fidelity.lexicalValues,
+                        datatypeRepresentationMap: options.datatypeRepresentationMap,
+                      ).read(
+                        globalAttribute.datatype,
+                        name,
+                        listItemDatatype: globalAttribute.listItemDatatype,
+                        schemaDatatypeHierarchy: globalAttribute.schemaDatatypeHierarchy,
+                        listItemSchemaDatatypeHierarchy: globalAttribute.listItemSchemaDatatypeHierarchy,
+                        restrictedCharacters: globalAttribute.restrictedCharacters,
+                        listItemRestrictedCharacters: globalAttribute.listItemRestrictedCharacters,
+                        enumerationValues: globalAttribute.enumerationValues,
+                        booleanPattern: globalAttribute.booleanPattern,
+                        listItemBooleanPattern: globalAttribute.listItemBooleanPattern,
+                        integerMinInclusive: globalAttribute.integerMinInclusive,
+                        integerMaxInclusive: globalAttribute.integerMaxInclusive,
+                      ),
                 );
           events.add(ExiAttribute(name, value));
         case _DeclaredEventKind.element:
@@ -727,29 +776,33 @@ final class _DecoderState {
           specialAttributesAllowed = false;
           contentStarted = true;
           attributeIndex = attributes.length;
-          events.add(ExiCharacters(strings.readValue(input, currentElementName)));
+          events.add(ExiCharacters(_readValue(currentElementName, () => strings.readValue(input, currentElementName))));
         case _DeclaredEventKind.typedCharacters:
           specialAttributesAllowed = false;
           events.add(
             ExiCharacters(
-              ExiValueDecoder(
-                input,
-                strings,
-                preserveLexicalValues: options.fidelity.lexicalValues,
-                datatypeRepresentationMap: options.datatypeRepresentationMap,
-              ).read(
-                datatype!,
+              _readValue(
                 currentElementName,
-                listItemDatatype: declaration.listItemDatatype,
-                schemaDatatypeHierarchy: declaration.schemaDatatypeHierarchy,
-                listItemSchemaDatatypeHierarchy: declaration.listItemSchemaDatatypeHierarchy,
-                restrictedCharacters: declaration.restrictedCharacters,
-                listItemRestrictedCharacters: declaration.listItemRestrictedCharacters,
-                enumerationValues: declaration.enumerationValues,
-                booleanPattern: declaration.booleanPattern,
-                listItemBooleanPattern: declaration.listItemBooleanPattern,
-                integerMinInclusive: declaration.integerMinInclusive,
-                integerMaxInclusive: declaration.integerMaxInclusive,
+                () =>
+                    ExiValueDecoder(
+                      input,
+                      strings,
+                      preserveLexicalValues: options.fidelity.lexicalValues,
+                      datatypeRepresentationMap: options.datatypeRepresentationMap,
+                    ).read(
+                      datatype!,
+                      currentElementName,
+                      listItemDatatype: declaration.listItemDatatype,
+                      schemaDatatypeHierarchy: declaration.schemaDatatypeHierarchy,
+                      listItemSchemaDatatypeHierarchy: declaration.listItemSchemaDatatypeHierarchy,
+                      restrictedCharacters: declaration.restrictedCharacters,
+                      listItemRestrictedCharacters: declaration.listItemRestrictedCharacters,
+                      enumerationValues: declaration.enumerationValues,
+                      booleanPattern: declaration.booleanPattern,
+                      listItemBooleanPattern: declaration.listItemBooleanPattern,
+                      integerMinInclusive: declaration.integerMinInclusive,
+                      integerMaxInclusive: declaration.integerMaxInclusive,
+                    ),
               ),
             ),
           );
@@ -1311,6 +1364,13 @@ final class _ElementGrammar {
 
   final _GrammarState startTag;
   final _GrammarState elementContent;
+}
+
+final class _DeferredValue {
+  const _DeferredValue(this.marker, this.read);
+
+  final String marker;
+  final String Function() read;
 }
 
 void _learn(List<_Production> productions, _Production production) {
