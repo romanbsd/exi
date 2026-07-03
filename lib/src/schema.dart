@@ -56,6 +56,8 @@ final class ExiElementDeclaration {
   }) : children = const [],
        datatype = null,
        listItemDatatype = null,
+       schemaDatatypeHierarchy = const [],
+       listItemSchemaDatatypeHierarchy = const [],
        restrictedCharacters = null,
        listItemRestrictedCharacters = null,
        enumerationValues = const [],
@@ -78,6 +80,8 @@ final class ExiElementDeclaration {
     this.attributeProcessContents = ExiProcessContents.strict,
   }) : datatype = null,
        listItemDatatype = null,
+       schemaDatatypeHierarchy = const [],
+       listItemSchemaDatatypeHierarchy = const [],
        restrictedCharacters = null,
        listItemRestrictedCharacters = null,
        enumerationValues = const [],
@@ -93,6 +97,8 @@ final class ExiElementDeclaration {
     this.name,
     this.datatype, {
     this.listItemDatatype,
+    this.schemaDatatypeHierarchy = const [],
+    this.listItemSchemaDatatypeHierarchy = const [],
     this.restrictedCharacters,
     this.listItemRestrictedCharacters,
     this.enumerationValues = const [],
@@ -116,6 +122,8 @@ final class ExiElementDeclaration {
     this.name,
     this.datatype, {
     this.listItemDatatype,
+    this.schemaDatatypeHierarchy = const [],
+    this.listItemSchemaDatatypeHierarchy = const [],
     this.restrictedCharacters,
     this.listItemRestrictedCharacters,
     this.enumerationValues = const [],
@@ -149,6 +157,8 @@ final class ExiElementDeclaration {
   }) : children = const [],
        datatype = null,
        listItemDatatype = null,
+       schemaDatatypeHierarchy = const [],
+       listItemSchemaDatatypeHierarchy = const [],
        restrictedCharacters = null,
        listItemRestrictedCharacters = null,
        enumerationValues = const [],
@@ -161,6 +171,8 @@ final class ExiElementDeclaration {
   final List<ExiElementDeclaration> children;
   final ExiDatatype? datatype;
   final ExiDatatype? listItemDatatype;
+  final List<ExiQName> schemaDatatypeHierarchy;
+  final List<ExiQName> listItemSchemaDatatypeHierarchy;
   final List<int>? restrictedCharacters;
   final List<int>? listItemRestrictedCharacters;
   final List<String> enumerationValues;
@@ -184,6 +196,8 @@ final class ExiAttributeDeclaration {
     required this.name,
     required this.datatype,
     this.listItemDatatype,
+    this.schemaDatatypeHierarchy = const [],
+    this.listItemSchemaDatatypeHierarchy = const [],
     this.restrictedCharacters,
     this.listItemRestrictedCharacters,
     this.enumerationValues = const [],
@@ -197,6 +211,8 @@ final class ExiAttributeDeclaration {
   final ExiQName name;
   final ExiDatatype datatype;
   final ExiDatatype? listItemDatatype;
+  final List<ExiQName> schemaDatatypeHierarchy;
+  final List<ExiQName> listItemSchemaDatatypeHierarchy;
   final List<int>? restrictedCharacters;
   final List<int>? listItemRestrictedCharacters;
   final List<String> enumerationValues;

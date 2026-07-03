@@ -42,13 +42,16 @@ The current decoder stage supports:
   date-time, partial Gregorian calendar, and list values, with the required
   String fallback for duration, QName, and NOTATION schema types and restricted
   String representations for preserved lexical values;
+- out-of-band datatype representation maps targeting built-in EXI datatype
+  identifiers, including closest-ancestor selection for named schema types and
+  mapped list-item representations;
 - URI, local-name, and value string-table partitions, including schema-informed
   URI and declared-name prepopulation;
 - start/end document, start/end element, attribute, character, namespace,
   comment, processing-instruction, document-type, and entity-reference events;
 - XML reconstruction, including preserved namespace declarations.
 
-Datatype representation maps and user metadata remain unsupported. XSD
+In-band datatype representation maps and user metadata remain unsupported. XSD
 imports/includes, complex-content restriction, defaults and fixed values,
 substitution groups, abstract
 declarations and derivation controls, inherited wildcard unions involving

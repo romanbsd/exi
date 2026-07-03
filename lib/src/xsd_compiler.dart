@@ -8,6 +8,8 @@ const _xsdUri = 'http://www.w3.org/2001/XMLSchema';
 typedef _SimpleType = ({
   ExiDatatype datatype,
   ExiDatatype? listItemDatatype,
+  List<ExiQName> schemaDatatypeHierarchy,
+  List<ExiQName> listItemSchemaDatatypeHierarchy,
   List<int>? restrictedCharacters,
   List<int>? listItemRestrictedCharacters,
   List<String> enumerationValues,
@@ -274,6 +276,8 @@ final class _Compiler {
           name,
           simpleDatatype.datatype,
           listItemDatatype: simpleDatatype.listItemDatatype,
+          schemaDatatypeHierarchy: simpleDatatype.schemaDatatypeHierarchy,
+          listItemSchemaDatatypeHierarchy: simpleDatatype.listItemSchemaDatatypeHierarchy,
           restrictedCharacters: simpleDatatype.restrictedCharacters,
           listItemRestrictedCharacters: simpleDatatype.listItemRestrictedCharacters,
           enumerationValues: simpleDatatype.enumerationValues,
@@ -314,6 +318,8 @@ final class _Compiler {
         name,
         simpleType.datatype,
         listItemDatatype: simpleType.listItemDatatype,
+        schemaDatatypeHierarchy: simpleType.schemaDatatypeHierarchy,
+        listItemSchemaDatatypeHierarchy: simpleType.listItemSchemaDatatypeHierarchy,
         restrictedCharacters: simpleType.restrictedCharacters,
         listItemRestrictedCharacters: simpleType.listItemRestrictedCharacters,
         enumerationValues: simpleType.enumerationValues,
@@ -366,6 +372,8 @@ final class _Compiler {
         declaration.name,
         declaration.datatype,
         listItemDatatype: declaration.listItemDatatype,
+        schemaDatatypeHierarchy: declaration.schemaDatatypeHierarchy,
+        listItemSchemaDatatypeHierarchy: declaration.listItemSchemaDatatypeHierarchy,
         restrictedCharacters: declaration.restrictedCharacters,
         listItemRestrictedCharacters: declaration.listItemRestrictedCharacters,
         enumerationValues: declaration.enumerationValues,
@@ -632,6 +640,8 @@ final class _Compiler {
       name,
       simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
+      schemaDatatypeHierarchy: simpleType.schemaDatatypeHierarchy,
+      listItemSchemaDatatypeHierarchy: simpleType.listItemSchemaDatatypeHierarchy,
       restrictedCharacters: simpleType.restrictedCharacters,
       listItemRestrictedCharacters: simpleType.listItemRestrictedCharacters,
       enumerationValues: simpleType.enumerationValues,
@@ -979,6 +989,8 @@ final class _Compiler {
         name: declaration.name,
         datatype: declaration.datatype,
         listItemDatatype: declaration.listItemDatatype,
+        schemaDatatypeHierarchy: declaration.schemaDatatypeHierarchy,
+        listItemSchemaDatatypeHierarchy: declaration.listItemSchemaDatatypeHierarchy,
         restrictedCharacters: declaration.restrictedCharacters,
         listItemRestrictedCharacters: declaration.listItemRestrictedCharacters,
         enumerationValues: declaration.enumerationValues,
@@ -1012,6 +1024,8 @@ final class _Compiler {
       ),
       datatype: simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
+      schemaDatatypeHierarchy: simpleType.schemaDatatypeHierarchy,
+      listItemSchemaDatatypeHierarchy: simpleType.listItemSchemaDatatypeHierarchy,
       restrictedCharacters: simpleType.restrictedCharacters,
       listItemRestrictedCharacters: simpleType.listItemRestrictedCharacters,
       enumerationValues: simpleType.enumerationValues,
@@ -1061,6 +1075,8 @@ final class _Compiler {
       name: ExiQName(uri: targetNamespace, localName: localName),
       datatype: simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
+      schemaDatatypeHierarchy: simpleType.schemaDatatypeHierarchy,
+      listItemSchemaDatatypeHierarchy: simpleType.listItemSchemaDatatypeHierarchy,
       restrictedCharacters: simpleType.restrictedCharacters,
       listItemRestrictedCharacters: simpleType.listItemRestrictedCharacters,
       enumerationValues: simpleType.enumerationValues,
@@ -1166,6 +1182,8 @@ final class _Compiler {
       return (
         datatype: ExiDatatype.list,
         listItemDatatype: itemType.datatype,
+        schemaDatatypeHierarchy: const [],
+        listItemSchemaDatatypeHierarchy: itemType.schemaDatatypeHierarchy,
         restrictedCharacters: null,
         listItemRestrictedCharacters: itemType.restrictedCharacters,
         enumerationValues: const [],
@@ -1297,6 +1315,8 @@ final class _Compiler {
     return (
       datatype: baseType.datatype,
       listItemDatatype: baseType.listItemDatatype,
+      schemaDatatypeHierarchy: baseType.schemaDatatypeHierarchy,
+      listItemSchemaDatatypeHierarchy: baseType.listItemSchemaDatatypeHierarchy,
       restrictedCharacters: patternValues.isNotEmpty && baseType.patternCharsetEligible
           ? deriveXsdPatternCharacters(patternValues)
           : patternValues.isEmpty
@@ -1368,7 +1388,11 @@ final class _Compiler {
       throw UnsupportedError('Recursive XSD simple type "$localName" is not supported');
     }
     try {
-      return _compiledSimpleTypes[localName] = _compileSimpleType(simpleType);
+      final compiled = _compileSimpleType(simpleType);
+      return _compiledSimpleTypes[localName] = _withSchemaDatatype(
+        compiled,
+        ExiQName(uri: targetNamespace, localName: localName),
+      );
     } finally {
       _compilingSimpleTypes.remove(localName);
     }
@@ -1399,7 +1423,7 @@ final class _Compiler {
       return null;
     }
     final localName = _localPart(qualifiedName);
-    return switch (localName) {
+    final _SimpleType? simpleType = switch (localName) {
       'string' ||
       'normalizedString' ||
       'token' ||
@@ -1414,6 +1438,12 @@ final class _Compiler {
       'NMTOKENS' || 'IDREFS' || 'ENTITIES' => (
         datatype: ExiDatatype.list,
         listItemDatatype: ExiDatatype.string,
+        schemaDatatypeHierarchy: const [],
+        listItemSchemaDatatypeHierarchy: _builtinDatatypeHierarchy(switch (localName) {
+          'NMTOKENS' => 'NMTOKEN',
+          'IDREFS' => 'IDREF',
+          _ => 'ENTITY',
+        }),
         restrictedCharacters: null,
         listItemRestrictedCharacters: null,
         enumerationValues: const [],
@@ -1486,6 +1516,7 @@ final class _Compiler {
       'QName' || 'NOTATION' => _scalarType(ExiDatatype.string, enumerationEligible: false),
       _ => null,
     };
+    return simpleType == null ? null : _withSchemaDatatypeHierarchy(simpleType, _builtinDatatypeHierarchy(localName));
   }
 }
 
@@ -1498,6 +1529,8 @@ _SimpleType _scalarType(
 }) => (
   datatype: datatype,
   listItemDatatype: null,
+  schemaDatatypeHierarchy: const [],
+  listItemSchemaDatatypeHierarchy: const [],
   restrictedCharacters: null,
   listItemRestrictedCharacters: null,
   enumerationValues: const [],
@@ -1508,6 +1541,117 @@ _SimpleType _scalarType(
   integerMinInclusive: integerMinInclusive,
   integerMaxInclusive: integerMaxInclusive,
 );
+
+_SimpleType _withSchemaDatatype(_SimpleType type, ExiQName datatype) =>
+    _withSchemaDatatypeHierarchy(type, [datatype, ...type.schemaDatatypeHierarchy]);
+
+_SimpleType _withSchemaDatatypeHierarchy(_SimpleType type, List<ExiQName> hierarchy) => (
+  datatype: type.datatype,
+  listItemDatatype: type.listItemDatatype,
+  schemaDatatypeHierarchy: List.unmodifiable(hierarchy),
+  listItemSchemaDatatypeHierarchy: type.listItemSchemaDatatypeHierarchy,
+  restrictedCharacters: type.restrictedCharacters,
+  listItemRestrictedCharacters: type.listItemRestrictedCharacters,
+  enumerationValues: type.enumerationValues,
+  enumerationEligible: type.enumerationEligible,
+  patternCharsetEligible: type.patternCharsetEligible,
+  booleanPattern: type.booleanPattern,
+  listItemBooleanPattern: type.listItemBooleanPattern,
+  integerMinInclusive: type.integerMinInclusive,
+  integerMaxInclusive: type.integerMaxInclusive,
+);
+
+List<ExiQName> _builtinDatatypeHierarchy(String localName) {
+  final hierarchy = <ExiQName>[];
+  final boundary = _defaultRepresentationAncestor(localName);
+  String? current = localName;
+  while (current != null) {
+    hierarchy.add(ExiQName(uri: _xsdUri, localName: current));
+    if (current == boundary) {
+      break;
+    }
+    current = _builtinDatatypeParent(current);
+  }
+  return hierarchy;
+}
+
+String _defaultRepresentationAncestor(String localName) {
+  if (const {
+    'normalizedString',
+    'token',
+    'language',
+    'Name',
+    'NCName',
+    'NMTOKEN',
+    'ID',
+    'IDREF',
+    'ENTITY',
+  }.contains(localName)) {
+    return 'string';
+  }
+  if (const {
+    'nonPositiveInteger',
+    'negativeInteger',
+    'long',
+    'int',
+    'short',
+    'byte',
+    'nonNegativeInteger',
+    'unsignedLong',
+    'unsignedInt',
+    'unsignedShort',
+    'unsignedByte',
+    'positiveInteger',
+  }.contains(localName)) {
+    return 'integer';
+  }
+  if (const {'duration', 'anyURI', 'QName', 'NOTATION'}.contains(localName)) {
+    return 'anySimpleType';
+  }
+  return localName;
+}
+
+String? _builtinDatatypeParent(String localName) => switch (localName) {
+  'normalizedString' => 'string',
+  'token' => 'normalizedString',
+  'language' || 'Name' || 'NMTOKEN' => 'token',
+  'NCName' => 'Name',
+  'ID' || 'IDREF' || 'ENTITY' => 'NCName',
+  'nonPositiveInteger' || 'long' || 'nonNegativeInteger' => 'integer',
+  'negativeInteger' => 'nonPositiveInteger',
+  'int' => 'long',
+  'short' => 'int',
+  'byte' => 'short',
+  'unsignedLong' || 'positiveInteger' => 'nonNegativeInteger',
+  'unsignedInt' => 'unsignedLong',
+  'unsignedShort' => 'unsignedInt',
+  'unsignedByte' => 'unsignedShort',
+  'integer' => 'decimal',
+  'string' ||
+  'boolean' ||
+  'decimal' ||
+  'float' ||
+  'double' ||
+  'duration' ||
+  'dateTime' ||
+  'time' ||
+  'date' ||
+  'gYearMonth' ||
+  'gYear' ||
+  'gMonthDay' ||
+  'gDay' ||
+  'gMonth' ||
+  'hexBinary' ||
+  'base64Binary' ||
+  'anyURI' ||
+  'QName' ||
+  'NOTATION' ||
+  'NMTOKENS' ||
+  'IDREFS' ||
+  'ENTITIES' => 'anySimpleType',
+  'anySimpleType' => null,
+  _ => null,
+};
 
 Iterable<XmlElement> _children(XmlElement parent, String localName) => parent.children.whereType<XmlElement>().where(
   (element) => element.name.local == localName && element.name.namespaceUri == _xsdUri,

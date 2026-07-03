@@ -2,20 +2,29 @@ import 'dart:convert';
 
 import 'bit_input.dart';
 import 'model.dart';
+import 'options.dart';
 import 'schema.dart';
 import 'string_table.dart';
 
 final class ExiValueDecoder {
-  ExiValueDecoder(this.input, this.strings, {this.preserveLexicalValues = false});
+  ExiValueDecoder(
+    this.input,
+    this.strings, {
+    this.preserveLexicalValues = false,
+    this.datatypeRepresentationMap = const [],
+  });
 
   final BitInput input;
   final ExiStringTable strings;
   final bool preserveLexicalValues;
+  final List<ExiDatatypeRepresentationMap> datatypeRepresentationMap;
 
   String read(
     ExiDatatype datatype,
     ExiQName context, {
     ExiDatatype? listItemDatatype,
+    List<ExiQName> schemaDatatypeHierarchy = const [],
+    List<ExiQName> listItemSchemaDatatypeHierarchy = const [],
     List<int>? restrictedCharacters,
     List<int>? listItemRestrictedCharacters,
     List<String> enumerationValues = const [],
@@ -24,11 +33,15 @@ final class ExiValueDecoder {
     BigInt? integerMinInclusive,
     BigInt? integerMaxInclusive,
   }) {
+    final representation = _representationFor(datatype, schemaDatatypeHierarchy);
+    final itemRepresentation = listItemDatatype == null
+        ? null
+        : _representationFor(listItemDatatype, listItemSchemaDatatypeHierarchy);
     if (preserveLexicalValues) {
       return strings.readValue(
         input,
         context,
-        restrictedCharacters: _restrictedCharacters(datatype, listItemDatatype: listItemDatatype),
+        restrictedCharacters: _restrictedCharacters(representation, listItemDatatype: itemRepresentation),
       );
     }
     if (enumerationValues.isNotEmpty) {
@@ -38,7 +51,7 @@ final class ExiValueDecoder {
       }
       return enumerationValues[ordinal];
     }
-    return switch (datatype) {
+    return switch (representation) {
       ExiDatatype.string => strings.readValue(input, context, restrictedCharacters: restrictedCharacters),
       ExiDatatype.boolean =>
         booleanPattern
@@ -54,7 +67,7 @@ final class ExiValueDecoder {
       ExiDatatype.decimal => _readDecimal(),
       ExiDatatype.float => _readFloat(),
       ExiDatatype.integer || ExiDatatype.unsignedInteger || ExiDatatype.byte || ExiDatatype.unsignedByte =>
-        _readIntegerValue(datatype, minimum: integerMinInclusive, maximum: integerMaxInclusive),
+        _readIntegerValue(representation, minimum: integerMinInclusive, maximum: integerMaxInclusive),
       ExiDatatype.base64Binary => base64Encode(_readBinary()),
       ExiDatatype.hexBinary => _readBinary().map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(),
       ExiDatatype.dateTime => _readDateTime(includeDate: true, includeTime: true),
@@ -68,15 +81,29 @@ final class ExiValueDecoder {
       ExiDatatype.list => _readList(
         listItemDatatype ?? (throw StateError('EXI list datatype is missing its item datatype')),
         context,
+        itemSchemaDatatypeHierarchy: listItemSchemaDatatypeHierarchy,
         itemBooleanPattern: listItemBooleanPattern,
         itemRestrictedCharacters: listItemRestrictedCharacters,
       ),
     };
   }
 
+  ExiDatatype _representationFor(ExiDatatype datatype, List<ExiQName> hierarchy) {
+    final effectiveHierarchy = hierarchy.isEmpty ? _defaultSchemaDatatypeHierarchy(datatype) : hierarchy;
+    for (final schemaDatatype in effectiveHierarchy) {
+      for (final mapping in datatypeRepresentationMap) {
+        if (mapping.schemaDatatype == schemaDatatype) {
+          return mapping.representation;
+        }
+      }
+    }
+    return datatype;
+  }
+
   String _readList(
     ExiDatatype itemDatatype,
     ExiQName context, {
+    required List<ExiQName> itemSchemaDatatypeHierarchy,
     required bool itemBooleanPattern,
     List<int>? itemRestrictedCharacters,
   }) {
@@ -84,11 +111,17 @@ final class ExiValueDecoder {
     if (encodedLength > BigInt.from(0x7fffffff)) {
       throw const FormatException('EXI list value is too large to materialize');
     }
+    final itemRepresentation = _representationFor(itemDatatype, itemSchemaDatatypeHierarchy);
     return [
       for (var index = 0; index < encodedLength.toInt(); index++)
-        itemDatatype == ExiDatatype.string
+        itemRepresentation == ExiDatatype.string
             ? strings.readString(input, restrictedCharacters: itemRestrictedCharacters)
-            : read(itemDatatype, context, booleanPattern: itemBooleanPattern),
+            : read(
+                itemDatatype,
+                context,
+                schemaDatatypeHierarchy: itemSchemaDatatypeHierarchy,
+                booleanPattern: itemBooleanPattern,
+              ),
     ].join(' ');
   }
 
@@ -386,4 +419,37 @@ String _year(int value) {
     return '-${(-value).toString().padLeft(4, '0')}';
   }
   return value.toString().padLeft(4, '0');
+}
+
+List<ExiQName> _defaultSchemaDatatypeHierarchy(ExiDatatype datatype) {
+  const uri = 'http://www.w3.org/2001/XMLSchema';
+  final localNames = switch (datatype) {
+    ExiDatatype.string => const ['string'],
+    ExiDatatype.boolean => const ['boolean'],
+    ExiDatatype.decimal => const ['decimal'],
+    ExiDatatype.float => const ['double'],
+    ExiDatatype.integer => const ['integer'],
+    ExiDatatype.unsignedInteger => const ['nonNegativeInteger', 'integer'],
+    ExiDatatype.byte => const ['byte', 'short', 'int', 'long', 'integer'],
+    ExiDatatype.unsignedByte => const [
+      'unsignedByte',
+      'unsignedShort',
+      'unsignedInt',
+      'unsignedLong',
+      'nonNegativeInteger',
+      'integer',
+    ],
+    ExiDatatype.base64Binary => const ['base64Binary'],
+    ExiDatatype.hexBinary => const ['hexBinary'],
+    ExiDatatype.dateTime => const ['dateTime'],
+    ExiDatatype.date => const ['date'],
+    ExiDatatype.time => const ['time'],
+    ExiDatatype.gYear => const ['gYear'],
+    ExiDatatype.gYearMonth => const ['gYearMonth'],
+    ExiDatatype.gMonth => const ['gMonth'],
+    ExiDatatype.gMonthDay => const ['gMonthDay'],
+    ExiDatatype.gDay => const ['gDay'],
+    ExiDatatype.list => const [],
+  };
+  return [for (final localName in localNames) ExiQName(uri: uri, localName: localName)];
 }

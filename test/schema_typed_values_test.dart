@@ -1168,6 +1168,207 @@ void main() {
 
     expect(document.toXmlString(), '<root code="B1"><values>A0 C1</values></root>');
   });
+
+  test('applies an out-of-band built-in datatype representation map', () {
+    const schemaId = 'decimal-as-string';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="amount" type="xs:decimal"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = '100000000${_value('12.50')}';
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: true,
+        schemaId: ExiSchemaId.named(schemaId),
+        datatypeRepresentationMap: [
+          ExiDatatypeRepresentationMap(
+            schemaDatatype: ExiQName(uri: 'http://www.w3.org/2001/XMLSchema', localName: 'decimal'),
+            representation: ExiDatatype.string,
+          ),
+        ],
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits));
+
+    expect(document.toXmlString(), '<amount>12.50</amount>');
+  });
+
+  test('uses the closest mapped datatype in a named type hierarchy', () {
+    const schemaId = 'named-representation-map';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            xmlns:t="urn:types"
+            targetNamespace="urn:types">
+          <xs:simpleType name="Base">
+            <xs:restriction base="xs:decimal"/>
+          </xs:simpleType>
+          <xs:simpleType name="Derived">
+            <xs:restriction base="t:Base"/>
+          </xs:simpleType>
+          <xs:element name="value" type="t:Derived"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('100000000')
+      // The closest Derived mapping selects the Integer representation.
+      ..write('0')
+      ..write(_unsigned(7));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: true,
+        schemaId: ExiSchemaId.named(schemaId),
+        datatypeRepresentationMap: [
+          ExiDatatypeRepresentationMap(
+            schemaDatatype: ExiQName(uri: 'urn:types', localName: 'Base'),
+            representation: ExiDatatype.string,
+          ),
+          ExiDatatypeRepresentationMap(
+            schemaDatatype: ExiQName(uri: 'urn:types', localName: 'Derived'),
+            representation: ExiDatatype.integer,
+          ),
+        ],
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.events.whereType<ExiCharacters>().single.value, '7');
+  });
+
+  test('does not cross a closer default datatype association', () {
+    const schemaId = 'representation-map-boundary';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="count" type="xs:int"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('100000000')
+      ..write('0')
+      ..write(_unsigned(7));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: true,
+        schemaId: ExiSchemaId.named(schemaId),
+        datatypeRepresentationMap: [
+          ExiDatatypeRepresentationMap(
+            schemaDatatype: ExiQName(uri: 'http://www.w3.org/2001/XMLSchema', localName: 'decimal'),
+            representation: ExiDatatype.string,
+          ),
+        ],
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<count>7</count>');
+  });
+
+  test('applies datatype representation maps to list item types', () {
+    const schemaId = 'mapped-list-items';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Code">
+            <xs:restriction base="xs:string"/>
+          </xs:simpleType>
+          <xs:simpleType name="Codes">
+            <xs:list itemType="Code"/>
+          </xs:simpleType>
+          <xs:element name="values" type="Codes"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('100000000')
+      ..write(_unsigned(2))
+      ..write('0')
+      ..write(_unsigned(7))
+      ..write('1')
+      ..write(_unsigned(1));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: true,
+        schemaId: ExiSchemaId.named(schemaId),
+        datatypeRepresentationMap: [
+          ExiDatatypeRepresentationMap(
+            schemaDatatype: ExiQName(localName: 'Code'),
+            representation: ExiDatatype.integer,
+          ),
+        ],
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<values>7 -2</values>');
+  });
+
+  test('uses the mapped representation charset when preserving lexical values', () {
+    const schemaId = 'mapped-lexical-value';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="amount" type="xs:decimal"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = '100000000${_restrictedValue('1', _booleanCharacters)}';
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: true,
+        schemaId: ExiSchemaId.named(schemaId),
+        fidelity: ExiFidelityOptions(lexicalValues: true),
+        datatypeRepresentationMap: [
+          ExiDatatypeRepresentationMap(
+            schemaDatatype: ExiQName(uri: 'http://www.w3.org/2001/XMLSchema', localName: 'decimal'),
+            representation: ExiDatatype.boolean,
+          ),
+        ],
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits));
+
+    expect(document.toXmlString(), '<amount>1</amount>');
+  });
+
+  test('rejects invalid out-of-band datatype representation maps', () {
+    const datatype = ExiQName(uri: 'http://www.w3.org/2001/XMLSchema', localName: 'integer');
+
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(
+          datatypeRepresentationMap: [
+            ExiDatatypeRepresentationMap(schemaDatatype: datatype, representation: ExiDatatype.unsignedInteger),
+          ],
+        ),
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(
+          datatypeRepresentationMap: [
+            ExiDatatypeRepresentationMap(schemaDatatype: datatype, representation: ExiDatatype.string),
+            ExiDatatypeRepresentationMap(schemaDatatype: datatype, representation: ExiDatatype.integer),
+          ],
+        ),
+      ),
+      throwsArgumentError,
+    );
+  });
 }
 
 String _unsigned(int value) {

@@ -1,3 +1,6 @@
+import 'model.dart';
+import 'schema.dart';
+
 enum ExiAlignment { bitPacked, byteAligned, preCompression }
 
 enum ExiSchemaIdKind { absent, schemaLess, builtInTypes, named }
@@ -37,6 +40,13 @@ final class ExiFidelityOptions {
   final bool lexicalValues;
 }
 
+final class ExiDatatypeRepresentationMap {
+  const ExiDatatypeRepresentationMap({required this.schemaDatatype, required this.representation});
+
+  final ExiQName schemaDatatype;
+  final ExiDatatype representation;
+}
+
 final class ExiOptions {
   const ExiOptions({
     this.alignment = ExiAlignment.bitPacked,
@@ -49,6 +59,7 @@ final class ExiOptions {
     this.valueMaxLength,
     this.valuePartitionCapacity,
     this.schemaId = ExiSchemaId.absent,
+    this.datatypeRepresentationMap = const [],
   });
 
   final ExiAlignment alignment;
@@ -61,4 +72,5 @@ final class ExiOptions {
   final int? valueMaxLength;
   final int? valuePartitionCapacity;
   final ExiSchemaId schemaId;
+  final List<ExiDatatypeRepresentationMap> datatypeRepresentationMap;
 }

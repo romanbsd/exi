@@ -109,6 +109,40 @@ void _validateOptions(ExiOptions options) {
   if (options.valuePartitionCapacity case final value? when value < 0) {
     throw ArgumentError.value(value, 'valuePartitionCapacity', 'must be non-negative');
   }
+  final mappedDatatypes = <ExiQName>{};
+  const supportedRepresentations = {
+    ExiDatatype.string,
+    ExiDatatype.boolean,
+    ExiDatatype.decimal,
+    ExiDatatype.float,
+    ExiDatatype.integer,
+    ExiDatatype.base64Binary,
+    ExiDatatype.hexBinary,
+    ExiDatatype.dateTime,
+    ExiDatatype.date,
+    ExiDatatype.time,
+    ExiDatatype.gYear,
+    ExiDatatype.gYearMonth,
+    ExiDatatype.gMonth,
+    ExiDatatype.gMonthDay,
+    ExiDatatype.gDay,
+  };
+  for (final mapping in options.datatypeRepresentationMap) {
+    if (!mappedDatatypes.add(mapping.schemaDatatype)) {
+      throw ArgumentError.value(
+        mapping.schemaDatatype,
+        'datatypeRepresentationMap',
+        'contains duplicate schema datatype mappings',
+      );
+    }
+    if (!supportedRepresentations.contains(mapping.representation)) {
+      throw ArgumentError.value(
+        mapping.representation,
+        'datatypeRepresentationMap',
+        'is not an EXI datatype representation identifier',
+      );
+    }
+  }
   if (options.strict &&
       (options.fidelity.comments ||
           options.fidelity.processingInstructions ||
@@ -436,10 +470,17 @@ final class _DecoderState {
             final globalAttribute = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
             final value = globalAttribute == null
                 ? strings.readValue(input, name)
-                : ExiValueDecoder(input, strings, preserveLexicalValues: options.fidelity.lexicalValues).read(
+                : ExiValueDecoder(
+                    input,
+                    strings,
+                    preserveLexicalValues: options.fidelity.lexicalValues,
+                    datatypeRepresentationMap: options.datatypeRepresentationMap,
+                  ).read(
                     globalAttribute.datatype,
                     name,
                     listItemDatatype: globalAttribute.listItemDatatype,
+                    schemaDatatypeHierarchy: globalAttribute.schemaDatatypeHierarchy,
+                    listItemSchemaDatatypeHierarchy: globalAttribute.listItemSchemaDatatypeHierarchy,
                     restrictedCharacters: globalAttribute.restrictedCharacters,
                     listItemRestrictedCharacters: globalAttribute.listItemRestrictedCharacters,
                     enumerationValues: globalAttribute.enumerationValues,
@@ -490,6 +531,7 @@ final class _DecoderState {
               input,
               strings,
               preserveLexicalValues: options.fidelity.lexicalValues,
+              datatypeRepresentationMap: options.datatypeRepresentationMap,
             ).read(ExiDatatype.boolean, _xsiNilName);
             final normalized = value.trim();
             if (normalized != 'true' && normalized != '1' && normalized != 'false' && normalized != '0') {
@@ -567,6 +609,7 @@ final class _DecoderState {
           input,
           strings,
           preserveLexicalValues: options.fidelity.lexicalValues,
+          datatypeRepresentationMap: options.datatypeRepresentationMap,
         ).read(ExiDatatype.boolean, _xsiNilName);
         events.add(ExiAttribute(_xsiNilName, value));
         nilSeen = true;
@@ -589,18 +632,26 @@ final class _DecoderState {
           specialAttributesAllowed = false;
           final attribute = event.attribute!;
           attributeIndex = event.attributeIndex! + 1;
-          final value = ExiValueDecoder(input, strings, preserveLexicalValues: options.fidelity.lexicalValues).read(
-            attribute.datatype,
-            attribute.name,
-            listItemDatatype: attribute.listItemDatatype,
-            restrictedCharacters: attribute.restrictedCharacters,
-            listItemRestrictedCharacters: attribute.listItemRestrictedCharacters,
-            enumerationValues: attribute.enumerationValues,
-            booleanPattern: attribute.booleanPattern,
-            listItemBooleanPattern: attribute.listItemBooleanPattern,
-            integerMinInclusive: attribute.integerMinInclusive,
-            integerMaxInclusive: attribute.integerMaxInclusive,
-          );
+          final value =
+              ExiValueDecoder(
+                input,
+                strings,
+                preserveLexicalValues: options.fidelity.lexicalValues,
+                datatypeRepresentationMap: options.datatypeRepresentationMap,
+              ).read(
+                attribute.datatype,
+                attribute.name,
+                listItemDatatype: attribute.listItemDatatype,
+                schemaDatatypeHierarchy: attribute.schemaDatatypeHierarchy,
+                listItemSchemaDatatypeHierarchy: attribute.listItemSchemaDatatypeHierarchy,
+                restrictedCharacters: attribute.restrictedCharacters,
+                listItemRestrictedCharacters: attribute.listItemRestrictedCharacters,
+                enumerationValues: attribute.enumerationValues,
+                booleanPattern: attribute.booleanPattern,
+                listItemBooleanPattern: attribute.listItemBooleanPattern,
+                integerMinInclusive: attribute.integerMinInclusive,
+                integerMaxInclusive: attribute.integerMaxInclusive,
+              );
           if (!seenAttributes.add(attribute.name)) {
             throw const FormatException('Duplicate schema attribute');
           }
@@ -621,10 +672,17 @@ final class _DecoderState {
           final globalAttribute = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
           final value = globalAttribute == null
               ? strings.readValue(input, name)
-              : ExiValueDecoder(input, strings, preserveLexicalValues: options.fidelity.lexicalValues).read(
+              : ExiValueDecoder(
+                  input,
+                  strings,
+                  preserveLexicalValues: options.fidelity.lexicalValues,
+                  datatypeRepresentationMap: options.datatypeRepresentationMap,
+                ).read(
                   globalAttribute.datatype,
                   name,
                   listItemDatatype: globalAttribute.listItemDatatype,
+                  schemaDatatypeHierarchy: globalAttribute.schemaDatatypeHierarchy,
+                  listItemSchemaDatatypeHierarchy: globalAttribute.listItemSchemaDatatypeHierarchy,
                   restrictedCharacters: globalAttribute.restrictedCharacters,
                   listItemRestrictedCharacters: globalAttribute.listItemRestrictedCharacters,
                   enumerationValues: globalAttribute.enumerationValues,
@@ -673,10 +731,17 @@ final class _DecoderState {
           specialAttributesAllowed = false;
           events.add(
             ExiCharacters(
-              ExiValueDecoder(input, strings, preserveLexicalValues: options.fidelity.lexicalValues).read(
+              ExiValueDecoder(
+                input,
+                strings,
+                preserveLexicalValues: options.fidelity.lexicalValues,
+                datatypeRepresentationMap: options.datatypeRepresentationMap,
+              ).read(
                 datatype!,
                 currentElementName,
                 listItemDatatype: declaration.listItemDatatype,
+                schemaDatatypeHierarchy: declaration.schemaDatatypeHierarchy,
+                listItemSchemaDatatypeHierarchy: declaration.listItemSchemaDatatypeHierarchy,
                 restrictedCharacters: declaration.restrictedCharacters,
                 listItemRestrictedCharacters: declaration.listItemRestrictedCharacters,
                 enumerationValues: declaration.enumerationValues,
