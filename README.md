@@ -14,7 +14,8 @@ The current decoder stage supports:
 - configurable out-of-band fidelity options for comments, processing
   instructions, DTD/entity events, and namespace prefixes;
 - in-band EXI options for strict mode, fragments, fidelity preservation, and
-  value-table limits;
+  value-table limits, including nilled, empty, named, and explicitly non-nilled
+  schema IDs;
 - bit-packed and byte-aligned event/content decoding, including header padding;
 - absent, schema-less, built-in-types, and named schema IDs with resolver-based
   schema selection;

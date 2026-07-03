@@ -242,6 +242,45 @@ void main() {
       expect(document.options.metadata.last.events.whereType<ExiCharacters>().single.value, 'beta');
       expect(document.toXmlString(), '<root/>');
     });
+
+    test('reads schemaId content after xsi:nil false', () {
+      const schemaId = 'false-nil-schema';
+      final schema = ExiSchemaCompiler.compile(
+        id: schemaId,
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="root"/>
+          </xs:schema>
+        ''',
+      );
+      final bits = StringBuffer('10100000')
+        // header/common/schemaId, AT(xsi:nil), Boolean false.
+        ..write('0011010')
+        // The normal schemaId content follows the false nil value.
+        ..write(_literal(schemaId, lengthOffset: 2))
+        // Select strict; header closes implicitly. Select the schema root.
+        ..write('00');
+
+      final document = ExiDecoder(schemaResolver: (_) => schema).decode(_pack(bits.toString()));
+
+      expect(document.options.schemaId, const ExiSchemaId.named(schemaId));
+      expect(document.toXmlString(), '<root/>');
+    });
+
+    test('reads an empty built-in-types schemaId after xsi:nil false', () {
+      final bits = StringBuffer('10100000')
+        ..write('0011010')
+        ..write(_literal('', lengthOffset: 2))
+        // Close header, then encode an empty schema-less root.
+        ..write('1')
+        ..write(_qName('', 'root'))
+        ..write('00');
+
+      final document = ExiDecoder().decode(_pack(bits.toString()));
+
+      expect(document.options.schemaId, ExiSchemaId.builtInTypes);
+      expect(document.toXmlString(), '<root/>');
+    });
   });
 }
 

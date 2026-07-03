@@ -176,11 +176,10 @@ final class HeaderOptionsDecoder {
     final eventCode = _input.readBits(1);
     if (eventCode == 1) {
       final isNilled = _input.readBit() == 1;
-      if (!isNilled) {
-        throw UnsupportedError('A false xsi:nil schemaId followed by content is not supported yet');
+      if (isNilled) {
+        _schemaId = ExiSchemaId.schemaLess;
+        return;
       }
-      _schemaId = ExiSchemaId.schemaLess;
-      return;
     }
 
     final marker = _input.readUnsignedInteger();
