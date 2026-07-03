@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'bit_input.dart';
@@ -22,9 +23,13 @@ final class ExiDecoder {
 
   ExiDocument decode(Uint8List bytes) {
     final hasCookie = bytes.length >= _cookie.length && _matchesCookie(bytes);
-    final input = BitInput(bytes, byteOffset: hasCookie ? _cookie.length : 0);
+    var input = BitInput(bytes, byteOffset: hasCookie ? _cookie.length : 0);
     final parsedHeader = _readHeader(input, hasCookie: hasCookie);
     _validateOptions(parsedHeader.options);
+    if (parsedHeader.options.compression) {
+      final inflated = ZLibDecoder(raw: true).convert(input.readRemainingBytes());
+      input = BitInput(Uint8List.fromList(inflated))..useByteAlignment();
+    }
     final schema = _resolveSchema(parsedHeader.options.schemaId);
     final state = _DecoderState(input, parsedHeader.options, schema);
     final events = state.decode();
@@ -76,7 +81,8 @@ final class ExiDecoder {
     if (effectiveOptions.compression || effectiveOptions.alignment != ExiAlignment.bitPacked) {
       input.alignToByte();
     }
-    if (effectiveOptions.alignment == ExiAlignment.byteAligned ||
+    if (effectiveOptions.compression ||
+        effectiveOptions.alignment == ExiAlignment.byteAligned ||
         effectiveOptions.alignment == ExiAlignment.preCompression) {
       input.useByteAlignment();
     }
@@ -94,9 +100,6 @@ void _validateOptions(ExiOptions options) {
   if (options.selfContained &&
       (options.compression || options.alignment == ExiAlignment.preCompression || options.strict)) {
     throw ArgumentError('Self-contained mode cannot be combined with compression, pre-compression, or strict mode');
-  }
-  if (options.compression) {
-    throw UnsupportedError('EXI compression is not supported yet');
   }
   if (options.blockSize < 1) {
     throw ArgumentError.value(options.blockSize, 'blockSize', 'must be at least 1');
@@ -185,12 +188,15 @@ final class _DecoderState {
   }
 
   String _readValue(ExiQName channel, String Function() read) {
-    if (options.alignment != ExiAlignment.preCompression) {
+    if (!_usesChannels) {
       return read();
     }
     _deferredValueCount++;
     if (_deferredValueCount >= options.blockSize) {
-      throw UnsupportedError('Multi-block EXI pre-compression streams are not supported yet');
+      throw UnsupportedError('Multi-block EXI compression streams are not supported yet');
+    }
+    if (options.compression && _deferredValueCount > 100) {
+      throw UnsupportedError('Multi-stream EXI compression blocks are not supported yet');
     }
     final marker = '\u0000exi-deferred:${_deferredValueCount - 1}';
     _deferredChannels.putIfAbsent(channel, () => []).add(_DeferredValue(marker, read));
@@ -198,7 +204,7 @@ final class _DecoderState {
   }
 
   void _readDeferredValueChannels() {
-    if (options.alignment != ExiAlignment.preCompression) {
+    if (!_usesChannels) {
       return;
     }
     final values = <String, String>{};
@@ -218,6 +224,8 @@ final class _DecoderState {
       }
     }
   }
+
+  bool get _usesChannels => options.compression || options.alignment == ExiAlignment.preCompression;
 
   void _decodeDocument() {
     final currentSchema = schema;

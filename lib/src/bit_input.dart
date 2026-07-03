@@ -32,6 +32,15 @@ final class BitInput {
     _byteAligned = true;
   }
 
+  Uint8List readRemainingBytes() {
+    if (_bitOffset & 7 != 0) {
+      throw StateError('Remaining EXI bytes can be read only on a byte boundary');
+    }
+    final remaining = Uint8List.sublistView(_bytes, _bitOffset >> 3);
+    _bitOffset = _bytes.length * 8;
+    return remaining;
+  }
+
   int readNBitUnsigned(int bitCount) {
     if (!_byteAligned) {
       return readBits(bitCount);
