@@ -448,6 +448,50 @@ final class _DecoderState {
             }
             events.add(ExiAttribute(name, strings.readValue(input, name)));
             continue;
+          case _NonStrictDeviation.xsiType:
+            final (:targetName, :lexicalValue) = _readXsiType(declaration);
+            events.add(ExiAttribute(_xsiTypeName, lexicalValue));
+            final target = declaration.typeAlternatives[targetName];
+            if (target != null) {
+              _decodeDeclaredContent(elementName, target, allowSpecialAttributes: false);
+              return;
+            }
+            specialAttributesAllowed = false;
+            continue;
+          case _NonStrictDeviation.xsiNil:
+            final value = ExiValueDecoder(
+              input,
+              strings,
+              preserveLexicalValues: options.fidelity.lexicalValues,
+            ).read(ExiDatatype.boolean, _xsiNilName);
+            final normalized = value.trim();
+            if (normalized != 'true' && normalized != '1' && normalized != 'false' && normalized != '0') {
+              throw FormatException('Invalid xsi:nil value "$value"');
+            }
+            events.add(ExiAttribute(_xsiNilName, value));
+            nilSeen = true;
+            if (normalized == 'true' || normalized == '1') {
+              content = const ExiEmptyParticle();
+              nilled = true;
+            }
+            continue;
+          case _NonStrictDeviation.entityReference:
+            specialAttributesAllowed = false;
+            contentStarted = true;
+            attributeIndex = attributes.length;
+            events.add(ExiEntityReference(strings.readString(input)));
+            continue;
+          case _NonStrictDeviation.commentOrPi:
+            specialAttributesAllowed = false;
+            contentStarted = true;
+            attributeIndex = attributes.length;
+            final production = _readCommentOrPi();
+            if (production.type == _EventType.comment) {
+              events.add(ExiComment(strings.readString(input)));
+            } else {
+              _decodeProcessingInstruction();
+            }
+            continue;
           default:
             throw UnsupportedError('Non-strict ${deviation.name} productions are not supported yet');
         }

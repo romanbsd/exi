@@ -167,6 +167,89 @@ void main() {
     expect(document.toXmlString(), '<root count="not-an-integer"/>');
   });
 
+  test('switches a non-strict element grammar through xsi:type', () {
+    final schema = _compile('''
+      <xs:complexType name="Base"/>
+      <xs:complexType name="Derived">
+        <xs:complexContent>
+          <xs:extension base="Base">
+            <xs:sequence>
+              <xs:element name="child"/>
+            </xs:sequence>
+          </xs:extension>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:element name="root" type="Base"/>
+    ''');
+    final bits = StringBuffer('10000000')
+      // Document root=0; first-level escape=1; second-level xsi:type=000.
+      ..write('01000')
+      ..write(_schemaQName('', 'Derived', localNames: ['Base', 'Derived', 'child', 'root']))
+      // Derived child, child EE, and root EE first-level productions.
+      ..write('000');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(schemaId: ExiSchemaId.named('particles')),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.events.whereType<ExiAttribute>().single.value, 'Derived');
+    expect(document.toXmlString(), contains('<child/>'));
+  });
+
+  test('applies xsi:nil to a non-nillable element in non-strict mode', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="required"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    ''');
+
+    // Document root=0; first-level escape=1; second-level xsi:nil=010;
+    // Boolean true=1; empty-type EE=0.
+    final document = ExiDecoder(
+      options: const ExiOptions(schemaId: ExiSchemaId.named('particles')),
+      schemaResolver: (_) => schema,
+    ).decode(_pack('100000000101010'));
+
+    expect(document.events.whereType<ExiAttribute>().single.value, 'true');
+    expect(document.events.whereType<ExiStartElement>().map((event) => event.name.localName), ['root']);
+  });
+
+  test('decodes non-strict entity and comment deviations', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="required"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer('10000000')
+      // Document root=0; escape=1; second-level ER=0111.
+      ..write('010111')
+      ..write(_rawString('example'))
+      // Content2 escape=1; comment/PI branch=100; CM=0.
+      ..write('11000')
+      ..write(_rawString('note'))
+      // Required child, child EE, and root EE.
+      ..write('000');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        schemaId: ExiSchemaId.named('particles'),
+        fidelity: ExiFidelityOptions(dtd: true, comments: true, processingInstructions: true),
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root>&example;<!--note--><required/></root>');
+  });
+
   group('strict schema particles', () {
     test('decodes an optional child that is absent', () {
       final schema = _compile('''
