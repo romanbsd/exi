@@ -16,6 +16,8 @@ final class ExiValueDecoder {
     ExiDatatype datatype,
     ExiQName context, {
     ExiDatatype? listItemDatatype,
+    List<int>? restrictedCharacters,
+    List<int>? listItemRestrictedCharacters,
     List<String> enumerationValues = const [],
     bool booleanPattern = false,
     bool listItemBooleanPattern = false,
@@ -37,7 +39,7 @@ final class ExiValueDecoder {
       return enumerationValues[ordinal];
     }
     return switch (datatype) {
-      ExiDatatype.string => strings.readValue(input, context),
+      ExiDatatype.string => strings.readValue(input, context, restrictedCharacters: restrictedCharacters),
       ExiDatatype.boolean =>
         booleanPattern
             ? switch (input.readNBitUnsigned(2)) {
@@ -67,11 +69,17 @@ final class ExiValueDecoder {
         listItemDatatype ?? (throw StateError('EXI list datatype is missing its item datatype')),
         context,
         itemBooleanPattern: listItemBooleanPattern,
+        itemRestrictedCharacters: listItemRestrictedCharacters,
       ),
     };
   }
 
-  String _readList(ExiDatatype itemDatatype, ExiQName context, {required bool itemBooleanPattern}) {
+  String _readList(
+    ExiDatatype itemDatatype,
+    ExiQName context, {
+    required bool itemBooleanPattern,
+    List<int>? itemRestrictedCharacters,
+  }) {
     final encodedLength = input.readUnsignedInteger();
     if (encodedLength > BigInt.from(0x7fffffff)) {
       throw const FormatException('EXI list value is too large to materialize');
@@ -79,7 +87,7 @@ final class ExiValueDecoder {
     return [
       for (var index = 0; index < encodedLength.toInt(); index++)
         itemDatatype == ExiDatatype.string
-            ? strings.readString(input)
+            ? strings.readString(input, restrictedCharacters: itemRestrictedCharacters)
             : read(itemDatatype, context, booleanPattern: itemBooleanPattern),
     ].join(' ');
   }

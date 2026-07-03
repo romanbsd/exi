@@ -56,6 +56,8 @@ final class ExiElementDeclaration {
   }) : children = const [],
        datatype = null,
        listItemDatatype = null,
+       restrictedCharacters = null,
+       listItemRestrictedCharacters = null,
        enumerationValues = const [],
        booleanPattern = false,
        listItemBooleanPattern = false,
@@ -76,6 +78,8 @@ final class ExiElementDeclaration {
     this.attributeProcessContents = ExiProcessContents.strict,
   }) : datatype = null,
        listItemDatatype = null,
+       restrictedCharacters = null,
+       listItemRestrictedCharacters = null,
        enumerationValues = const [],
        booleanPattern = false,
        listItemBooleanPattern = false,
@@ -89,6 +93,8 @@ final class ExiElementDeclaration {
     this.name,
     this.datatype, {
     this.listItemDatatype,
+    this.restrictedCharacters,
+    this.listItemRestrictedCharacters,
     this.enumerationValues = const [],
     this.booleanPattern = false,
     this.listItemBooleanPattern = false,
@@ -110,6 +116,8 @@ final class ExiElementDeclaration {
     this.name,
     this.datatype, {
     this.listItemDatatype,
+    this.restrictedCharacters,
+    this.listItemRestrictedCharacters,
     this.enumerationValues = const [],
     this.booleanPattern = false,
     this.listItemBooleanPattern = false,
@@ -141,6 +149,8 @@ final class ExiElementDeclaration {
   }) : children = const [],
        datatype = null,
        listItemDatatype = null,
+       restrictedCharacters = null,
+       listItemRestrictedCharacters = null,
        enumerationValues = const [],
        booleanPattern = false,
        listItemBooleanPattern = false,
@@ -151,6 +161,8 @@ final class ExiElementDeclaration {
   final List<ExiElementDeclaration> children;
   final ExiDatatype? datatype;
   final ExiDatatype? listItemDatatype;
+  final List<int>? restrictedCharacters;
+  final List<int>? listItemRestrictedCharacters;
   final List<String> enumerationValues;
   final bool booleanPattern;
   final bool listItemBooleanPattern;
@@ -172,6 +184,8 @@ final class ExiAttributeDeclaration {
     required this.name,
     required this.datatype,
     this.listItemDatatype,
+    this.restrictedCharacters,
+    this.listItemRestrictedCharacters,
     this.enumerationValues = const [],
     this.booleanPattern = false,
     this.listItemBooleanPattern = false,
@@ -183,6 +197,8 @@ final class ExiAttributeDeclaration {
   final ExiQName name;
   final ExiDatatype datatype;
   final ExiDatatype? listItemDatatype;
+  final List<int>? restrictedCharacters;
+  final List<int>? listItemRestrictedCharacters;
   final List<String> enumerationValues;
   final bool booleanPattern;
   final bool listItemBooleanPattern;

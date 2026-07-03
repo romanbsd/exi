@@ -1042,6 +1042,132 @@ void main() {
       expect(document.toXmlString(), '<flag>$lexical</flag>');
     }
   });
+
+  test('uses a restricted character set derived from a string pattern', () {
+    const schemaId = 'patterned-string';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Code">
+            <xs:restriction base="xs:string">
+              <xs:pattern value="[A-F-[DE]][0-2]+"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="code" type="Code"/>
+        </xs:schema>
+      ''',
+    );
+    const characters = [48, 49, 50, 65, 66, 67, 70];
+    final bits = '100000000${_restrictedValue('B20', characters)}';
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits));
+
+    expect(document.toXmlString(), '<code>B20</code>');
+  });
+
+  test('uses only the most-derived immediate string patterns', () {
+    const schemaId = 'derived-patterned-string';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="BaseCode">
+            <xs:restriction base="xs:string">
+              <xs:pattern value="[A-C]"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="InheritedCode">
+            <xs:restriction base="BaseCode"/>
+          </xs:simpleType>
+          <xs:simpleType name="DerivedCode">
+            <xs:restriction base="InheritedCode">
+              <xs:pattern value="(X|[Y-Z])"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="code" type="DerivedCode"/>
+        </xs:schema>
+      ''',
+    );
+    const characters = [88, 89, 90];
+    final bits = '100000000${_restrictedValue('Y', characters)}';
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits));
+
+    expect(document.toXmlString(), '<code>Y</code>');
+  });
+
+  test('falls back to the normal String representation for an unbounded pattern charset', () {
+    const schemaId = 'unbounded-patterned-string';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: r'''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Digits">
+            <xs:restriction base="xs:string">
+              <xs:pattern value="\d+"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="value" type="Digits"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = '100000000${_value('123')}';
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits));
+
+    expect(document.toXmlString(), '<value>123</value>');
+  });
+
+  test('propagates the union of immediate pattern charsets to attributes and list items', () {
+    const schemaId = 'patterned-attribute-list';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Code">
+            <xs:restriction base="xs:string">
+              <xs:pattern value="[A-C]+"/>
+              <xs:pattern value="[0-1]+"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="Codes">
+            <xs:list itemType="Code"/>
+          </xs:simpleType>
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="values" type="Codes"/>
+              </xs:sequence>
+              <xs:attribute name="code" type="Code" use="required"/>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    const characters = [48, 49, 65, 66, 67];
+    final bits = StringBuffer('100000000')
+      ..write(_restrictedValue('B1', characters))
+      ..write(_unsigned(2))
+      ..write(_restrictedString('A0', characters))
+      ..write(_restrictedString('C1', characters));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root code="B1"><values>A0 C1</values></root>');
+  });
 }
 
 String _unsigned(int value) {
@@ -1089,4 +1215,9 @@ const _booleanCharacters = [9, 10, 13, 32, 48, 49, 97, 101, 102, 108, 114, 115, 
 String _restrictedValue(String value, List<int> characters) {
   final width = characters.length.bitLength;
   return '${_unsigned(value.runes.length + 2)}${value.runes.map((character) => characters.indexOf(character).toRadixString(2).padLeft(width, '0')).join()}';
+}
+
+String _restrictedString(String value, List<int> characters) {
+  final width = characters.length.bitLength;
+  return '${_unsigned(value.runes.length)}${value.runes.map((character) => characters.indexOf(character).toRadixString(2).padLeft(width, '0')).join()}';
 }

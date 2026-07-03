@@ -172,7 +172,8 @@ final class ExiStringTable {
     return ExiQName(uri: uri, localName: localName, prefix: prefix);
   }
 
-  String readString(BitInput input) => _readString(input);
+  String readString(BitInput input, {List<int>? restrictedCharacters}) =>
+      _readCharacters(input, _readLength(input), restrictedCharacters: restrictedCharacters);
 
   void addPrefix(String uri, String prefix) {
     final partition = _prefixes.putIfAbsent(uri, () => []);

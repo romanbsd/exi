@@ -179,8 +179,8 @@ void main() {
           source: '''
             <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
               <xs:simpleType name="Code">
-                <xs:restriction base="xs:string">
-                  <xs:pattern value="[A-Z]+"/>
+                <xs:restriction base="xs:decimal">
+                  <xs:maxScale value="2"/>
                 </xs:restriction>
               </xs:simpleType>
               <xs:element name="code" type="Code"/>

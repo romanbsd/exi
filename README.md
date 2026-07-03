@@ -31,7 +31,8 @@ The current decoder stage supports:
   nested sequences and choices, `all` compositors, empty content, occurrence
   ranges, local namespace form overrides, and primitive, named, and chained
   simple types, schema-order enumerations, integer range and Boolean pattern
-  facets, typed lists, and String-represented unions, plus attributed
+  facets, string-pattern restricted character sets, typed lists, and
+  String-represented unions, plus attributed
   `simpleContent` and `complexContent` extension, unconstrained element and
   attribute wildcards with global declaration lookup, finite
   namespace-constrained wildcards, `##other` wildcards, wildcard datatype
@@ -48,8 +49,8 @@ The current decoder stage supports:
 - XML reconstruction, including preserved namespace declarations.
 
 Datatype representation maps and user metadata remain unsupported. XSD
-imports/includes, string-pattern restricted character sets, complex-content
-restriction, defaults and fixed values, substitution groups, abstract
+imports/includes, complex-content restriction, defaults and fixed values,
+substitution groups, abstract
 declarations and derivation controls, inherited wildcard unions involving
 `##other`, repetition of nullable compositors, schema-informed grammars
 requiring unsupported XSD features, relaxed element-fragment grammars for

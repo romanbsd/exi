@@ -2,13 +2,17 @@ import 'package:xml/xml.dart';
 
 import 'model.dart';
 import 'schema.dart';
+import 'xsd_pattern.dart';
 
 const _xsdUri = 'http://www.w3.org/2001/XMLSchema';
 typedef _SimpleType = ({
   ExiDatatype datatype,
   ExiDatatype? listItemDatatype,
+  List<int>? restrictedCharacters,
+  List<int>? listItemRestrictedCharacters,
   List<String> enumerationValues,
   bool enumerationEligible,
+  bool patternCharsetEligible,
   bool booleanPattern,
   bool listItemBooleanPattern,
   BigInt? integerMinInclusive,
@@ -270,6 +274,8 @@ final class _Compiler {
           name,
           simpleDatatype.datatype,
           listItemDatatype: simpleDatatype.listItemDatatype,
+          restrictedCharacters: simpleDatatype.restrictedCharacters,
+          listItemRestrictedCharacters: simpleDatatype.listItemRestrictedCharacters,
           enumerationValues: simpleDatatype.enumerationValues,
           booleanPattern: simpleDatatype.booleanPattern,
           listItemBooleanPattern: simpleDatatype.listItemBooleanPattern,
@@ -308,6 +314,8 @@ final class _Compiler {
         name,
         simpleType.datatype,
         listItemDatatype: simpleType.listItemDatatype,
+        restrictedCharacters: simpleType.restrictedCharacters,
+        listItemRestrictedCharacters: simpleType.listItemRestrictedCharacters,
         enumerationValues: simpleType.enumerationValues,
         booleanPattern: simpleType.booleanPattern,
         listItemBooleanPattern: simpleType.listItemBooleanPattern,
@@ -358,6 +366,8 @@ final class _Compiler {
         declaration.name,
         declaration.datatype,
         listItemDatatype: declaration.listItemDatatype,
+        restrictedCharacters: declaration.restrictedCharacters,
+        listItemRestrictedCharacters: declaration.listItemRestrictedCharacters,
         enumerationValues: declaration.enumerationValues,
         booleanPattern: declaration.booleanPattern,
         listItemBooleanPattern: declaration.listItemBooleanPattern,
@@ -622,6 +632,8 @@ final class _Compiler {
       name,
       simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
+      restrictedCharacters: simpleType.restrictedCharacters,
+      listItemRestrictedCharacters: simpleType.listItemRestrictedCharacters,
       enumerationValues: simpleType.enumerationValues,
       booleanPattern: simpleType.booleanPattern,
       listItemBooleanPattern: simpleType.listItemBooleanPattern,
@@ -967,6 +979,8 @@ final class _Compiler {
         name: declaration.name,
         datatype: declaration.datatype,
         listItemDatatype: declaration.listItemDatatype,
+        restrictedCharacters: declaration.restrictedCharacters,
+        listItemRestrictedCharacters: declaration.listItemRestrictedCharacters,
         enumerationValues: declaration.enumerationValues,
         booleanPattern: declaration.booleanPattern,
         listItemBooleanPattern: declaration.listItemBooleanPattern,
@@ -985,7 +999,7 @@ final class _Compiler {
         ? _resolveSimpleDatatype(attribute, typeName)
         : inlineSimple != null
         ? _compileSimpleType(inlineSimple)
-        : _scalarType(ExiDatatype.string);
+        : _scalarType(ExiDatatype.string, patternCharsetEligible: true);
     if (simpleType == null) {
       throw UnsupportedError('Unsupported XSD attribute type "$typeName"');
     }
@@ -998,6 +1012,8 @@ final class _Compiler {
       ),
       datatype: simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
+      restrictedCharacters: simpleType.restrictedCharacters,
+      listItemRestrictedCharacters: simpleType.listItemRestrictedCharacters,
       enumerationValues: simpleType.enumerationValues,
       booleanPattern: simpleType.booleanPattern,
       listItemBooleanPattern: simpleType.listItemBooleanPattern,
@@ -1037,7 +1053,7 @@ final class _Compiler {
         ? _resolveSimpleDatatype(attribute, typeName)
         : inlineSimple != null
         ? _compileSimpleType(inlineSimple)
-        : _scalarType(ExiDatatype.string);
+        : _scalarType(ExiDatatype.string, patternCharsetEligible: true);
     if (simpleType == null) {
       throw UnsupportedError('Unsupported XSD attribute type "$typeName"');
     }
@@ -1045,6 +1061,8 @@ final class _Compiler {
       name: ExiQName(uri: targetNamespace, localName: localName),
       datatype: simpleType.datatype,
       listItemDatatype: simpleType.listItemDatatype,
+      restrictedCharacters: simpleType.restrictedCharacters,
+      listItemRestrictedCharacters: simpleType.listItemRestrictedCharacters,
       enumerationValues: simpleType.enumerationValues,
       booleanPattern: simpleType.booleanPattern,
       listItemBooleanPattern: simpleType.listItemBooleanPattern,
@@ -1148,8 +1166,11 @@ final class _Compiler {
       return (
         datatype: ExiDatatype.list,
         listItemDatatype: itemType.datatype,
+        restrictedCharacters: null,
+        listItemRestrictedCharacters: itemType.restrictedCharacters,
         enumerationValues: const [],
         enumerationEligible: false,
+        patternCharsetEligible: false,
         booleanPattern: false,
         listItemBooleanPattern: itemType.booleanPattern,
         integerMinInclusive: null,
@@ -1190,13 +1211,11 @@ final class _Compiler {
         facet.getAttribute('value') ?? (throw const FormatException('An XSD enumeration facet must specify a value')),
     ];
     final patterns = facets.where((facet) => facet.name.local == 'pattern').toList();
-    if (patterns.isNotEmpty && baseType.datatype != ExiDatatype.boolean) {
-      throw UnsupportedError('Pattern facets are currently supported only for Boolean XSD types');
-    }
+    final patternValues = <String>[];
     for (final pattern in patterns) {
-      if (pattern.getAttribute('value') == null) {
-        throw const FormatException('An XSD pattern facet must specify a value');
-      }
+      patternValues.add(
+        pattern.getAttribute('value') ?? (throw const FormatException('An XSD pattern facet must specify a value')),
+      );
     }
     for (final facet in facets.where(
       (facet) =>
@@ -1278,11 +1297,18 @@ final class _Compiler {
     return (
       datatype: baseType.datatype,
       listItemDatatype: baseType.listItemDatatype,
+      restrictedCharacters: patternValues.isNotEmpty && baseType.patternCharsetEligible
+          ? deriveXsdPatternCharacters(patternValues)
+          : patternValues.isEmpty
+          ? baseType.restrictedCharacters
+          : null,
+      listItemRestrictedCharacters: baseType.listItemRestrictedCharacters,
       enumerationValues: values.isNotEmpty && baseType.enumerationEligible
           ? List.unmodifiable(values)
           : baseType.enumerationValues,
       enumerationEligible: baseType.enumerationEligible,
-      booleanPattern: baseType.booleanPattern || patterns.isNotEmpty,
+      patternCharsetEligible: baseType.patternCharsetEligible,
+      booleanPattern: baseType.booleanPattern || (baseType.datatype == ExiDatatype.boolean && patterns.isNotEmpty),
       listItemBooleanPattern: baseType.listItemBooleanPattern,
       integerMinInclusive: minimum,
       integerMaxInclusive: maximum,
@@ -1375,7 +1401,6 @@ final class _Compiler {
     final localName = _localPart(qualifiedName);
     return switch (localName) {
       'string' ||
-      'anySimpleType' ||
       'normalizedString' ||
       'token' ||
       'language' ||
@@ -1384,13 +1409,16 @@ final class _Compiler {
       'NMTOKEN' ||
       'ID' ||
       'IDREF' ||
-      'ENTITY' ||
-      'anyURI' => _scalarType(ExiDatatype.string),
+      'ENTITY' => _scalarType(ExiDatatype.string, patternCharsetEligible: true),
+      'anySimpleType' || 'anyURI' => _scalarType(ExiDatatype.string),
       'NMTOKENS' || 'IDREFS' || 'ENTITIES' => (
         datatype: ExiDatatype.list,
         listItemDatatype: ExiDatatype.string,
+        restrictedCharacters: null,
+        listItemRestrictedCharacters: null,
         enumerationValues: const [],
         enumerationEligible: false,
+        patternCharsetEligible: false,
         booleanPattern: false,
         listItemBooleanPattern: false,
         integerMinInclusive: null,
@@ -1464,13 +1492,17 @@ final class _Compiler {
 _SimpleType _scalarType(
   ExiDatatype datatype, {
   bool enumerationEligible = true,
+  bool patternCharsetEligible = false,
   BigInt? integerMinInclusive,
   BigInt? integerMaxInclusive,
 }) => (
   datatype: datatype,
   listItemDatatype: null,
+  restrictedCharacters: null,
+  listItemRestrictedCharacters: null,
   enumerationValues: const [],
   enumerationEligible: enumerationEligible,
+  patternCharsetEligible: patternCharsetEligible,
   booleanPattern: false,
   listItemBooleanPattern: false,
   integerMinInclusive: integerMinInclusive,
