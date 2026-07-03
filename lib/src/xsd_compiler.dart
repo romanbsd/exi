@@ -1167,7 +1167,20 @@ final class _Compiler {
         .whereType<XmlElement>()
         .where((child) => child.name.namespaceUri == _xsdUri && child.name.local != 'annotation')
         .toList();
-    const supportedFacets = {'enumeration', 'minInclusive', 'minExclusive', 'maxInclusive', 'maxExclusive', 'pattern'};
+    const supportedFacets = {
+      'enumeration',
+      'minInclusive',
+      'minExclusive',
+      'maxInclusive',
+      'maxExclusive',
+      'pattern',
+      'length',
+      'minLength',
+      'maxLength',
+      'whiteSpace',
+      'totalDigits',
+      'fractionDigits',
+    };
     final unsupported = facets.where((facet) => !supportedFacets.contains(facet.name.local)).firstOrNull;
     if (unsupported != null) {
       throw UnsupportedError('Unsupported XSD simple-type facet "${unsupported.name.local}"');
@@ -1185,6 +1198,31 @@ final class _Compiler {
         throw const FormatException('An XSD pattern facet must specify a value');
       }
     }
+    for (final facet in facets.where(
+      (facet) =>
+          facet.name.local == 'length' ||
+          facet.name.local == 'minLength' ||
+          facet.name.local == 'maxLength' ||
+          facet.name.local == 'whiteSpace' ||
+          facet.name.local == 'totalDigits' ||
+          facet.name.local == 'fractionDigits',
+    )) {
+      final lexical = facet.getAttribute('value');
+      if (lexical == null) {
+        throw FormatException('An XSD ${facet.name.local} facet must specify a value');
+      }
+      if (facet.name.local == 'whiteSpace') {
+        if (lexical != 'preserve' && lexical != 'replace' && lexical != 'collapse') {
+          throw FormatException('Invalid XSD whiteSpace facet "$lexical"');
+        }
+      } else {
+        final parsed = int.tryParse(lexical.trim());
+        final minimum = facet.name.local == 'totalDigits' ? 1 : 0;
+        if (parsed == null || parsed < minimum) {
+          throw FormatException('Invalid XSD ${facet.name.local} facet "$lexical"');
+        }
+      }
+    }
     var minimum = baseType.integerMinInclusive;
     var maximum = baseType.integerMaxInclusive;
     final boundFacets = facets
@@ -1196,36 +1234,42 @@ final class _Compiler {
               facet.name.local == 'maxExclusive',
         )
         .toList();
-    if (boundFacets.isNotEmpty &&
-        baseType.datatype != ExiDatatype.integer &&
-        baseType.datatype != ExiDatatype.unsignedInteger &&
-        baseType.datatype != ExiDatatype.byte &&
-        baseType.datatype != ExiDatatype.unsignedByte) {
-      throw UnsupportedError('Integer range facets require an integer XSD base type');
-    }
-    final seenBounds = <String>{};
-    for (final facet in boundFacets) {
-      if (!seenBounds.add(facet.name.local)) {
-        throw FormatException('Duplicate XSD ${facet.name.local} facet');
+    final integerDatatype =
+        baseType.datatype == ExiDatatype.integer ||
+        baseType.datatype == ExiDatatype.unsignedInteger ||
+        baseType.datatype == ExiDatatype.byte ||
+        baseType.datatype == ExiDatatype.unsignedByte;
+    if (integerDatatype) {
+      final seenBounds = <String>{};
+      for (final facet in boundFacets) {
+        if (!seenBounds.add(facet.name.local)) {
+          throw FormatException('Duplicate XSD ${facet.name.local} facet');
+        }
+        final lexical =
+            facet.getAttribute('value') ??
+            (throw FormatException('An XSD ${facet.name.local} facet must specify a value'));
+        final parsed = BigInt.tryParse(lexical.trim());
+        if (parsed == null) {
+          throw FormatException('Invalid XSD integer bound "$lexical"');
+        }
+        switch (facet.name.local) {
+          case 'minInclusive':
+            minimum = minimum == null || parsed > minimum ? parsed : minimum;
+          case 'minExclusive':
+            final inclusive = parsed + BigInt.one;
+            minimum = minimum == null || inclusive > minimum ? inclusive : minimum;
+          case 'maxInclusive':
+            maximum = maximum == null || parsed < maximum ? parsed : maximum;
+          case 'maxExclusive':
+            final inclusive = parsed - BigInt.one;
+            maximum = maximum == null || inclusive < maximum ? inclusive : maximum;
+        }
       }
-      final lexical =
-          facet.getAttribute('value') ??
-          (throw FormatException('An XSD ${facet.name.local} facet must specify a value'));
-      final parsed = BigInt.tryParse(lexical.trim());
-      if (parsed == null) {
-        throw FormatException('Invalid XSD integer bound "$lexical"');
-      }
-      switch (facet.name.local) {
-        case 'minInclusive':
-          minimum = minimum == null || parsed > minimum ? parsed : minimum;
-        case 'minExclusive':
-          final inclusive = parsed + BigInt.one;
-          minimum = minimum == null || inclusive > minimum ? inclusive : minimum;
-        case 'maxInclusive':
-          maximum = maximum == null || parsed < maximum ? parsed : maximum;
-        case 'maxExclusive':
-          final inclusive = parsed - BigInt.one;
-          maximum = maximum == null || inclusive < maximum ? inclusive : maximum;
+    } else {
+      for (final facet in boundFacets) {
+        if (facet.getAttribute('value') == null) {
+          throw FormatException('An XSD ${facet.name.local} facet must specify a value');
+        }
       }
     }
     if (minimum != null && maximum != null && maximum < minimum) {

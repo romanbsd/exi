@@ -48,13 +48,13 @@ The current decoder stage supports:
 - XML reconstruction, including preserved namespace declarations.
 
 Datatype representation maps and user metadata remain unsupported. XSD
-imports/includes, simple-type facets other than enumeration, integer bounds,
-and Boolean patterns, complex-content restriction, defaults and fixed values,
-substitution groups, abstract declarations and derivation controls, inherited
-wildcard unions involving `##other`, repetition of nullable compositors,
-schema-informed grammars requiring unsupported XSD features, relaxed
-element-fragment grammars for ambiguous declarations, pre-compression, and
-compression are also not yet available.
+imports/includes, string-pattern restricted character sets, complex-content
+restriction, defaults and fixed values, substitution groups, abstract
+declarations and derivation controls, inherited wildcard unions involving
+`##other`, repetition of nullable compositors, schema-informed grammars
+requiring unsupported XSD features, relaxed element-fragment grammars for
+ambiguous declarations, pre-compression, and compression are also not yet
+available.
 
 ```dart
 import 'dart:typed_data';

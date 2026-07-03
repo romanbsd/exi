@@ -356,6 +356,54 @@ void main() {
     expect(document.toXmlString(), '<count>7</count>');
   });
 
+  test('accepts representation-neutral XSD facets', () {
+    const schemaId = 'neutral-facets';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Amount">
+            <xs:restriction base="xs:decimal">
+              <xs:minExclusive value="-10"/>
+              <xs:maxInclusive value="10"/>
+              <xs:totalDigits value="3"/>
+              <xs:fractionDigits value="2"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="Label">
+            <xs:restriction base="xs:string">
+              <xs:minLength value="1"/>
+              <xs:maxLength value="10"/>
+              <xs:whiteSpace value="preserve"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="amount" type="Amount"/>
+                <xs:element name="label" type="Label"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      ..write('0')
+      // Decimal 1.25: positive sign, integral, reversed fraction.
+      ..write('0')
+      ..write(_unsigned(1))
+      ..write(_unsigned(52))
+      ..write(_value('example'));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root><amount>1.25</amount><label>example</label></root>');
+  });
+
   test('uses the String representation for schema QName and NOTATION values', () {
     const schemaId = 'qname-element';
     final schema = ExiSchemaCompiler.compile(
