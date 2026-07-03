@@ -827,25 +827,7 @@ final class _Compiler {
     if (maxOccurs == 0) {
       return const ExiEmptyParticle();
     }
-    if (_particleIsNullable(particle)) {
-      if (minOccurs == 0 && maxOccurs == 1) {
-        return particle;
-      }
-      throw UnsupportedError('Occurrence constraints on nullable XSD compositors are not supported yet');
-    }
     return ExiRepeatedParticle(particle, minOccurs: minOccurs, maxOccurs: maxOccurs);
-  }
-
-  bool _particleIsNullable(ExiParticle particle) {
-    return switch (particle) {
-      ExiEmptyParticle() => true,
-      ExiElementParticle(:final minOccurs) => minOccurs == 0,
-      ExiWildcardParticle() => false,
-      ExiSequenceParticle(:final particles) => particles.every(_particleIsNullable),
-      ExiChoiceParticle(:final particles) => particles.any(_particleIsNullable),
-      ExiAllParticle(:final particles) => particles.every(_particleIsNullable),
-      ExiRepeatedParticle(:final particle, :final minOccurs) => minOccurs == 0 || _particleIsNullable(particle),
-    };
   }
 
   ExiParticle _compileWildcardParticle(XmlElement wildcard) {

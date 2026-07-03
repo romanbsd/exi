@@ -30,8 +30,9 @@ The current decoder stage supports:
 - XSD compilation for global elements, named/inline complex types, attributes,
   global element and attribute references, named model and attribute groups,
   nested sequences and choices, `all` compositors, empty content, occurrence
-  ranges, local namespace form overrides, and primitive, named, and chained
-  simple types, schema-order enumerations, integer range and Boolean pattern
+  ranges including repeated nullable compositors, local namespace form
+  overrides, and primitive, named, and chained simple types, schema-order
+  enumerations, integer range and Boolean pattern
   facets, string-pattern restricted character sets, typed lists, and
   String-represented unions, plus attributed
   `simpleContent` and `complexContent` extension, unconstrained element and
@@ -58,10 +59,9 @@ User-defined datatype representation implementations remain unsupported. XSD
 imports/includes, complex-content restriction, defaults and fixed values,
 substitution groups, abstract
 declarations and derivation controls, inherited wildcard unions involving
-`##other`, repetition of nullable compositors, schema-informed grammars
-requiring unsupported XSD features, relaxed element-fragment grammars for
-ambiguous declarations, pre-compression, and compression are also not yet
-available.
+`##other`, schema-informed grammars requiring unsupported XSD features, relaxed
+element-fragment grammars for ambiguous declarations, pre-compression, and
+compression are also not yet available.
 
 ```dart
 import 'dart:typed_data';

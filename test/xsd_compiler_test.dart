@@ -921,24 +921,25 @@ void main() {
       expect(repeated.maxOccurs, 2);
     });
 
-    test('rejects repetition of a nullable compositor', () {
-      expect(
-        () => ExiSchemaCompiler.compile(
-          id: 'nullable-repetition.xsd',
-          source: '''
-            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
-              <xs:element name="root">
-                <xs:complexType>
-                  <xs:sequence maxOccurs="unbounded">
-                    <xs:element name="child" minOccurs="0"/>
-                  </xs:sequence>
-                </xs:complexType>
-              </xs:element>
-            </xs:schema>
-          ''',
-        ),
-        throwsUnsupportedError,
+    test('compiles repetition of a nullable compositor', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'nullable-repetition.xsd',
+        source: '''
+          <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:sequence maxOccurs="unbounded">
+                  <xs:element name="child" minOccurs="0"/>
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
+          </xs:schema>
+        ''',
       );
+
+      final repeated = schema.globalElements.single.content as ExiRepeatedParticle;
+      expect(repeated.minOccurs, 1);
+      expect(repeated.maxOccurs, isNull);
     });
   });
 }

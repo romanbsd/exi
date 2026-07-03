@@ -1165,9 +1165,6 @@ ExiParticle? _derive(ExiParticle particle, Object selected) {
       if (maxOccurs == 0) {
         return null;
       }
-      if (_isNullable(particle)) {
-        throw UnsupportedError('Repeating a nullable schema particle is not supported yet');
-      }
       final derivative = _derive(particle, selected);
       if (derivative == null) {
         return null;

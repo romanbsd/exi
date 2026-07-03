@@ -338,6 +338,10 @@ void main() {
       final document = _decode(schema, '0001');
 
       expect(document.toXmlString(), '<root><item/><item/></root>');
+
+      // Two empty sequence occurrences also satisfy minOccurs=2.
+      final emptyDocument = _decode(schema, '01');
+      expect(emptyDocument.toXmlString(), '<root/>');
     });
 
     test('selects a branch from an XSD choice', () {
@@ -487,6 +491,24 @@ void main() {
       final document = _decode(schema, '0001');
 
       expect(document.toXmlString(), '<root><first/><second/><first/><second/></root>');
+    });
+
+    test('decodes repetition of a nullable sequence', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:sequence minOccurs="2" maxOccurs="3">
+              <xs:element name="item" minOccurs="0"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      // Root=0, two item events=0/0, then EE=1. Empty occurrences satisfy
+      // the remaining minimum count because the repeated sequence is nullable.
+      final document = _decode(schema, '0001');
+
+      expect(document.toXmlString(), '<root><item/><item/></root>');
     });
   });
 
