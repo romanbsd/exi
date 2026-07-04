@@ -112,6 +112,45 @@ void main() {
       '<small>after</small></root>',
     );
   });
+
+  test('continues the active grammar across compressed blocks', () {
+    const schemaId = 'compressed-blocks';
+    const value = ExiElementDeclaration.value(ExiQName(localName: 'value'), ExiDatatype.string);
+    final schema = ExiSchema(
+      id: schemaId,
+      globalElements: [
+        ExiElementDeclaration.sequence(const ExiQName(localName: 'root'), const [value, value, value]),
+      ],
+    );
+    final firstBlock = ZLibEncoder(raw: true).convert([0x00, ..._stringValue('one'), ..._stringValue('two')]);
+    final finalBlock = ZLibEncoder(raw: true).convert(_stringValue('three'));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(compression: true, strict: true, schemaId: ExiSchemaId.named(schemaId), blockSize: 2),
+      schemaResolver: (_) => schema,
+    ).decode(Uint8List.fromList([0x80, ...firstBlock, ...finalBlock]));
+
+    expect(document.toXmlString(), '<root><value>one</value><value>two</value><value>three</value></root>');
+  });
+
+  test('does not require an empty final compressed stream', () {
+    const schemaId = 'compressed-exact-block';
+    const value = ExiElementDeclaration.value(ExiQName(localName: 'value'), ExiDatatype.string);
+    const schema = ExiSchema(
+      id: schemaId,
+      globalElements: [
+        ExiElementDeclaration.sequence(ExiQName(localName: 'root'), [value, value]),
+      ],
+    );
+    final block = ZLibEncoder(raw: true).convert([0x00, ..._stringValue('one'), ..._stringValue('two')]);
+
+    final document = ExiDecoder(
+      options: const ExiOptions(compression: true, strict: true, schemaId: ExiSchemaId.named(schemaId), blockSize: 2),
+      schemaResolver: (_) => schema,
+    ).decode(Uint8List.fromList([0x80, ...block]));
+
+    expect(document.toXmlString(), '<root><value>one</value><value>two</value></root>');
+  });
 }
 
 List<int> _stringValue(String value) => [value.runes.length + 2, ...value.runes];

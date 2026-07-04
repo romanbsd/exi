@@ -178,6 +178,8 @@ final class _DecoderState {
   final List<ExiEvent> events = [];
   final Map<ExiQName, List<_DeferredValue>> _deferredChannels = {};
   var _deferredValueCount = 0;
+  var _deferredMarkerCount = 0;
+  var _deferredEventStartIndex = 0;
 
   List<ExiEvent> decode() {
     events.add(const ExiStartDocument());
@@ -196,31 +198,43 @@ final class _DecoderState {
       return read();
     }
     _deferredValueCount++;
-    if (_deferredValueCount >= options.blockSize) {
-      throw UnsupportedError('Multi-block EXI compression streams are not supported yet');
-    }
-    final marker = '\u0000exi-deferred:${_deferredValueCount - 1}';
+    final marker = '\u0000exi-deferred:${_deferredMarkerCount++}';
     _deferredChannels.putIfAbsent(channel, () => []).add(_DeferredValue(marker, read));
+    if (_deferredValueCount == options.blockSize) {
+      final values = _finishDeferredBlock();
+      if (options.compression && _compressedStreams!.hasRemaining) {
+        input = _compressedStreams.read();
+      }
+      return values[marker]!;
+    }
     return marker;
   }
 
   void _readDeferredValueChannels() {
-    if (!_usesChannels) {
+    if (!_usesChannels || _deferredValueCount == 0) {
       return;
     }
+    _finishDeferredBlock();
+  }
+
+  Map<String, String> _finishDeferredBlock() {
     final values = <String, String>{};
     final channels = _deferredChannels.values.toList();
-    if (options.compression && _deferredValueCount > 100) {
+    if (_deferredValueCount > 100) {
       final smallChannels = channels.where((channel) => channel.length <= 100);
       final largeChannels = channels.where((channel) => channel.length > 100);
       if (smallChannels.isNotEmpty) {
-        input = _compressedStreams!.read();
+        if (options.compression) {
+          input = _compressedStreams!.read();
+        }
         for (final channel in smallChannels) {
           _readDeferredChannel(channel, values);
         }
       }
       for (final channel in largeChannels) {
-        input = _compressedStreams!.read();
+        if (options.compression) {
+          input = _compressedStreams!.read();
+        }
         _readDeferredChannel(channel, values);
       }
     } else {
@@ -228,7 +242,14 @@ final class _DecoderState {
         _readDeferredChannel(channel, values);
       }
     }
-    for (var index = 0; index < events.length; index++) {
+    _replaceDeferredValues(values);
+    _deferredChannels.clear();
+    _deferredValueCount = 0;
+    return values;
+  }
+
+  void _replaceDeferredValues(Map<String, String> values) {
+    for (var index = _deferredEventStartIndex; index < events.length; index++) {
       switch (events[index]) {
         case ExiAttribute(:final name, :final value) when values.containsKey(value):
           events[index] = ExiAttribute(name, values[value]!);
@@ -238,6 +259,7 @@ final class _DecoderState {
           break;
       }
     }
+    _deferredEventStartIndex = events.length;
   }
 
   void _readDeferredChannel(List<_DeferredValue> channel, Map<String, String> values) {
@@ -1399,6 +1421,8 @@ final class _CompressedStreams {
   _CompressedStreams(Uint8List bytes) : _input = InputMemoryStream(bytes);
 
   final InputMemoryStream _input;
+
+  bool get hasRemaining => !_input.isEOS;
 
   BitInput read() {
     if (_input.isEOS) {

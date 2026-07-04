@@ -75,30 +75,73 @@ void main() {
     expect(document.toXmlString(), '<root><first>one</first><second>two</second><first>three</first></root>');
   });
 
-  test('reports multi-block pre-compression streams explicitly', () {
-    const schemaId = 'pre-compression-block-limit';
-    const schema = ExiSchema(
+  test('reads small channels before large channels in a large block', () {
+    const schemaId = 'pre-compression-large-block';
+    const large = ExiElementDeclaration.value(ExiQName(localName: 'large'), ExiDatatype.string);
+    const small = ExiElementDeclaration.value(ExiQName(localName: 'small'), ExiDatatype.string);
+    final schema = ExiSchema(
       id: schemaId,
       globalElements: [
-        ExiElementDeclaration.sequence(ExiQName(localName: 'root'), [
-          ExiElementDeclaration.value(ExiQName(localName: 'first'), ExiDatatype.string),
-          ExiElementDeclaration.value(ExiQName(localName: 'second'), ExiDatatype.string),
-        ]),
+        ExiElementDeclaration.sequence(const ExiQName(localName: 'root'), [...List.filled(101, large), small]),
       ],
     );
 
+    final document =
+        ExiDecoder(
+          options: const ExiOptions(
+            alignment: ExiAlignment.preCompression,
+            strict: true,
+            schemaId: ExiSchemaId.named(schemaId),
+          ),
+          schemaResolver: (_) => schema,
+        ).decode(
+          Uint8List.fromList([
+            0x80,
+            0x00,
+            ..._stringValue('small'),
+            for (var index = 0; index < 101; index++) ..._stringValue('$index'),
+          ]),
+        );
+
     expect(
-      () => ExiDecoder(
-        options: const ExiOptions(
-          alignment: ExiAlignment.preCompression,
-          blockSize: 2,
-          strict: true,
-          schemaId: ExiSchemaId.named(schemaId),
-        ),
-        schemaResolver: (_) => schema,
-      ).decode(Uint8List.fromList([0x80, 0x00])),
-      throwsUnsupportedError,
+      document.toXmlString(),
+      '<root>${List.generate(101, (index) => '<large>$index</large>').join()}'
+      '<small>small</small></root>',
     );
+  });
+
+  test('continues the active grammar across pre-compression blocks', () {
+    const schemaId = 'pre-compression-blocks';
+    const value = ExiElementDeclaration.value(ExiQName(localName: 'value'), ExiDatatype.string);
+    final schema = ExiSchema(
+      id: schemaId,
+      globalElements: [
+        ExiElementDeclaration.sequence(const ExiQName(localName: 'root'), const [value, value, value]),
+      ],
+    );
+
+    final document =
+        ExiDecoder(
+          options: const ExiOptions(
+            alignment: ExiAlignment.preCompression,
+            blockSize: 2,
+            strict: true,
+            schemaId: ExiSchemaId.named(schemaId),
+          ),
+          schemaResolver: (_) => schema,
+        ).decode(
+          Uint8List.fromList([
+            0x80,
+            // First block structure and value channel.
+            0x00,
+            ..._stringValue('one'),
+            ..._stringValue('two'),
+            // Final block has an implicit structure channel and one value.
+            ..._stringValue('three'),
+          ]),
+        );
+
+    expect(document.toXmlString(), '<root><value>one</value><value>two</value><value>three</value></root>');
   });
 }
 
