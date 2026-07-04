@@ -174,7 +174,11 @@ final class _DecoderState {
   ExiStringTable strings;
   Map<ExiQName, _ElementGrammar> grammars = {};
   List<_Production> _fragmentElements = [];
-  late final List<ExiElementDeclaration> _fragmentDeclarations = _collectFragmentDeclarations(schema);
+  late final List<_FragmentElementGroup> _fragmentDeclarations = _collectFragmentDeclarations(schema);
+  late final List<_FragmentAttributeGroup> _fragmentAttributes = _collectFragmentAttributes(
+    schema,
+    _fragmentDeclarations,
+  );
   final List<ExiEvent> events = [];
   final Map<ExiQName, List<_DeferredValue>> _deferredChannels = {};
   var _deferredValueCount = 0;
@@ -336,15 +340,21 @@ final class _DecoderState {
           return;
         case _EventType.startElement:
           final name = production.name ?? strings.readQName(input);
-          final declaration = schema == null
-              ? null
-              : production.name == null
-              ? schema!.globalElements.where((element) => element.name == name).firstOrNull
-              : _fragmentDeclarations.where((element) => element.name == name).firstOrNull;
           if (schema == null) {
             _learn(_fragmentElements, _Production(_EventType.startElement, name));
+            _decodeElement(name);
+            continue;
           }
-          _decodeElement(name, declaration: declaration);
+          if (production.name == null) {
+            final declaration = schema!.globalElements.where((element) => element.name == name).firstOrNull;
+            _decodeElement(name, declaration: declaration);
+            continue;
+          }
+          final group = _fragmentDeclarations.where((element) => element.name == name).firstOrNull;
+          if (group == null) {
+            throw const FormatException('Unknown schema-informed fragment element');
+          }
+          _decodeFragmentElement(group);
         case _EventType.comment:
           events.add(ExiComment(strings.readString(input)));
         case _EventType.processingInstruction:
@@ -354,6 +364,96 @@ final class _DecoderState {
       }
     }
   }
+
+  void _decodeFragmentElement(_FragmentElementGroup group) {
+    final declaration = group.declaration;
+    if (declaration != null) {
+      _decodeElement(group.name, declaration: declaration);
+      return;
+    }
+    _decodeRelaxedFragmentElement(group.name);
+  }
+
+  void _decodeRelaxedFragmentElement(ExiQName elementName) {
+    events.add(ExiStartElement(elementName));
+    final seenAttributes = <ExiQName>{};
+    var attributesAllowed = true;
+
+    while (true) {
+      final attributeCount = attributesAllowed ? _fragmentAttributes.length + 1 : 0;
+      final selected = input.readNBitUnsigned(_bitWidth(attributeCount + _fragmentDeclarations.length + 3));
+      if (attributesAllowed && selected < _fragmentAttributes.length) {
+        final attribute = _fragmentAttributes[selected];
+        if (!seenAttributes.add(attribute.name)) {
+          throw const FormatException('Duplicate relaxed fragment attribute');
+        }
+        final declaration = attribute.declaration;
+        final value = declaration == null
+            ? _readValue(attribute.name, () => strings.readValue(input, attribute.name))
+            : _readValue(attribute.name, () => _readTypedAttribute(declaration));
+        events.add(ExiAttribute(attribute.name, value));
+        continue;
+      }
+      if (attributesAllowed && selected == _fragmentAttributes.length) {
+        final name = strings.readQName(input);
+        if (name == _xsiTypeName || name == _xsiNilName) {
+          throw const FormatException('xsi:type and xsi:nil cannot use the relaxed wildcard attribute');
+        }
+        if (!seenAttributes.add(name)) {
+          throw const FormatException('Duplicate relaxed fragment attribute');
+        }
+        final declaration = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
+        final value = declaration == null
+            ? _readValue(name, () => strings.readValue(input, name))
+            : _readValue(name, () => _readTypedAttribute(declaration));
+        events.add(ExiAttribute(name, value));
+        continue;
+      }
+
+      attributesAllowed = false;
+      final contentIndex = selected - attributeCount;
+      if (contentIndex < _fragmentDeclarations.length) {
+        _decodeFragmentElement(_fragmentDeclarations[contentIndex]);
+        continue;
+      }
+      if (contentIndex == _fragmentDeclarations.length) {
+        final name = strings.readQName(input);
+        final declaration = schema?.globalElements.where((element) => element.name == name).firstOrNull;
+        _decodeElement(name, declaration: declaration);
+        continue;
+      }
+      if (contentIndex == _fragmentDeclarations.length + 1) {
+        events.add(ExiEndElement(elementName));
+        return;
+      }
+      if (contentIndex == _fragmentDeclarations.length + 2) {
+        events.add(ExiCharacters(_readValue(elementName, () => strings.readValue(input, elementName))));
+        continue;
+      }
+      throw const FormatException('Invalid relaxed element-fragment event code');
+    }
+  }
+
+  String _readTypedAttribute(ExiAttributeDeclaration attribute) =>
+      ExiValueDecoder(
+        input,
+        strings,
+        preserveLexicalValues: options.fidelity.lexicalValues,
+        datatypeRepresentationMap: options.datatypeRepresentationMap,
+      ).read(
+        attribute.datatype,
+        attribute.name,
+        listItemDatatype: attribute.listItemDatatype,
+        schemaDatatypeHierarchy: attribute.schemaDatatypeHierarchy,
+        listItemSchemaDatatypeHierarchy: attribute.listItemSchemaDatatypeHierarchy,
+        restrictedCharacters: attribute.restrictedCharacters,
+        listItemRestrictedCharacters: attribute.listItemRestrictedCharacters,
+        enumerationValues: attribute.enumerationValues,
+        booleanPattern: attribute.booleanPattern,
+        listItemBooleanPattern: attribute.listItemBooleanPattern,
+        integerMinInclusive: attribute.integerMinInclusive,
+        integerMaxInclusive: attribute.integerMaxInclusive,
+      );
 
   void _decodeElement(ExiQName initialName, {ExiElementDeclaration? declaration}) {
     final startEventIndex = events.length;
@@ -1076,7 +1176,7 @@ ExiParticle _legacyContent(List<ExiElementDeclaration> children) {
   return ExiSequenceParticle([for (final child in children) ExiElementParticle(child)]);
 }
 
-List<ExiElementDeclaration> _collectFragmentDeclarations(ExiSchema? schema) {
+List<_FragmentElementGroup> _collectFragmentDeclarations(ExiSchema? schema) {
   if (schema == null) {
     return const [];
   }
@@ -1131,15 +1231,39 @@ List<ExiElementDeclaration> _collectFragmentDeclarations(ExiSchema? schema) {
     final localNameOrder = left.name.localName.compareTo(right.name.localName);
     return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
   });
-  for (var index = 1; index < declarations.length; index++) {
-    if (declarations[index - 1].name == declarations[index].name) {
-      throw UnsupportedError(
-        'Schema-informed fragments with ambiguous element QName "${declarations[index].name.localName}" '
-        'are not supported yet',
-      );
+  final groups = <_FragmentElementGroup>[];
+  for (final declaration in declarations) {
+    if (groups.isEmpty || groups.last.name != declaration.name) {
+      groups.add(_FragmentElementGroup(declaration.name, [declaration]));
+    } else {
+      groups.last.declarations.add(declaration);
     }
   }
-  return declarations;
+  return groups;
+}
+
+List<_FragmentAttributeGroup> _collectFragmentAttributes(ExiSchema? schema, List<_FragmentElementGroup> elements) {
+  if (schema == null) {
+    return const [];
+  }
+  final declarations =
+      <ExiAttributeDeclaration>[
+        ...schema.globalAttributes,
+        for (final group in elements)
+          for (final element in group.declarations) ...element.attributes,
+      ]..sort((left, right) {
+        final localNameOrder = left.name.localName.compareTo(right.name.localName);
+        return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
+      });
+  final groups = <_FragmentAttributeGroup>[];
+  for (final declaration in declarations) {
+    if (groups.isEmpty || groups.last.name != declaration.name) {
+      groups.add(_FragmentAttributeGroup(declaration.name, [declaration]));
+    } else if (!groups.last.declarations.contains(declaration)) {
+      groups.last.declarations.add(declaration);
+    }
+  }
+  return groups;
 }
 
 bool _isNullable(ExiParticle particle) {
@@ -1415,6 +1539,24 @@ final class _ElementGrammar {
 
   final _GrammarState startTag;
   final _GrammarState elementContent;
+}
+
+final class _FragmentElementGroup {
+  _FragmentElementGroup(this.name, this.declarations);
+
+  final ExiQName name;
+  final List<ExiElementDeclaration> declarations;
+
+  ExiElementDeclaration? get declaration => declarations.length == 1 ? declarations.single : null;
+}
+
+final class _FragmentAttributeGroup {
+  _FragmentAttributeGroup(this.name, this.declarations);
+
+  final ExiQName name;
+  final List<ExiAttributeDeclaration> declarations;
+
+  ExiAttributeDeclaration? get declaration => declarations.length == 1 ? declarations.single : null;
 }
 
 final class _CompressedStreams {

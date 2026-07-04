@@ -1135,7 +1135,7 @@ void main() {
     expect(document.events.whereType<ExiStartElement>().single.name.localName, 'orphan');
   });
 
-  test('rejects ambiguous schema-informed fragment declarations', () {
+  test('uses a relaxed grammar for ambiguous fragment declarations', () {
     final schema = _compile('''
       <xs:element name="root">
         <xs:complexType>
@@ -1147,7 +1147,98 @@ void main() {
       </xs:element>
     ''');
 
-    expect(() => _decodeFragment(schema, '0'), throwsUnsupportedError);
+    final bits = StringBuffer()
+      // Unique fragment QNames are item=00 and root=01.
+      ..write('00')
+      // Relaxed start-tag grammar: AT(*)=0, item=1, root=2,
+      // SE(*)=3, EE=4, CH=5.
+      ..write('101')
+      ..write(_value('text'))
+      // Relaxed content grammar: item=0, root=1, SE(*)=2, EE=3.
+      ..write('011')
+      // Fragment ED=3.
+      ..write('11');
+
+    final document = _decodeFragment(schema, bits.toString());
+
+    expect(document.toXmlString(), '<item>text</item>');
+  });
+
+  test('uses declared child productions in a relaxed fragment grammar', () {
+    final schema = _compile('''
+      <xs:element name="child"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:integer"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+
+    // Fragment QNames are child=0, item=1, root=2. In the relaxed
+    // start-tag grammar AT(*)=0 and SE(child)=1. After child, EE=4.
+    final document = _decodeFragment(schema, '001001100100');
+
+    expect(document.toXmlString(), '<item><child/></item>');
+  });
+
+  test('uses typed declared attributes in a relaxed fragment grammar', () {
+    final schema = _compile('''
+      <xs:attribute name="code" type="xs:integer"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:integer"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Fragment item=00; relaxed AT(code)=000.
+      ..write('00000')
+      // Positive integer 7.
+      ..write('0')
+      ..write(_unsigned(7))
+      // Relaxed EE=5; fragment ED=3.
+      ..write('10111');
+
+    final document = _decodeFragment(schema, bits.toString());
+
+    expect(document.toXmlString(), '<item code="7"/>');
+  });
+
+  test('uses String for conflicting relaxed fragment attribute types', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item">
+              <xs:complexType>
+                <xs:attribute name="code" type="xs:string"/>
+              </xs:complexType>
+            </xs:element>
+            <xs:element name="item">
+              <xs:complexType>
+                <xs:attribute name="code" type="xs:integer"/>
+              </xs:complexType>
+            </xs:element>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Fragment item=00; relaxed AT(code)=000.
+      ..write('00000')
+      ..write(_value('not-an-integer'))
+      // Relaxed EE=5; fragment ED=3.
+      ..write('10111');
+
+    final document = _decodeFragment(schema, bits.toString());
+
+    expect(document.toXmlString(), '<item code="not-an-integer"/>');
   });
 
   test('decodes qualified local names from schema form overrides', () {
