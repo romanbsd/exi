@@ -1602,6 +1602,40 @@ void main() {
     expect(document.toXmlString(), '<item code="not-an-integer"/>');
   });
 
+  test('decodes invalid xsi:nil through a relaxed fragment untyped wildcard attribute', () {
+    final schema = _compile('''
+      <xs:attribute name="code" type="xs:integer"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:string" nillable="true"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer('10000000')
+      // Fragment item=00; relaxed non-strict escape=8 after AT(code), AT(*),
+      // AT(xsi:nil), and content events.
+      ..write('001000')
+      // Untyped wildcard attribute with QName xsi:nil.
+      ..write('1')
+      ..write(_schemaQName('http://www.w3.org/2001/XMLSchema-instance', 'nil', localNames: ['code', 'item', 'root']))
+      ..write(_value('maybe'))
+      // Relaxed EE=5 after xsi:nil is consumed; fragment ED=3.
+      ..write('10111');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: false, fragment: true, schemaId: ExiSchemaId.named('particles')),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+    final attribute = document.events.whereType<ExiAttribute>().single;
+
+    expect(attribute.name, const ExiQName(uri: 'http://www.w3.org/2001/XMLSchema-instance', localName: 'nil'));
+    expect(attribute.value, 'maybe');
+    expect(document.events.whereType<ExiStartElement>().single.name.localName, 'item');
+  });
+
   test('uses String for conflicting relaxed fragment attribute types', () {
     final schema = _compile('''
       <xs:element name="root">

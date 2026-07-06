@@ -474,8 +474,14 @@ final class _DecoderState {
             final name = selectedAttribute < _fragmentAttributes.length
                 ? _fragmentAttributes[selectedAttribute].name
                 : strings.readQName(input);
-            if (name == _xsiTypeName || name == _xsiNilName) {
-              throw const FormatException('xsi:type and xsi:nil cannot use a relaxed untyped attribute');
+            if (name == _xsiTypeName) {
+              throw const FormatException('xsi:type cannot use a relaxed untyped attribute');
+            }
+            if (name == _xsiNilName) {
+              if (!group.hasNillableDeclaration || nilSeen) {
+                throw const FormatException('xsi:nil cannot use a relaxed untyped attribute here');
+              }
+              nilSeen = true;
             }
             if (!seenAttributes.add(name)) {
               throw const FormatException('Duplicate relaxed fragment attribute');
