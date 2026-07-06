@@ -197,6 +197,27 @@ void main() {
     expect(document.toXmlString(), contains('<child/>'));
   });
 
+  test('rejects duplicate non-strict xsi:type attributes', () {
+    final schema = _compile('<xs:element name="root"/>');
+    final bits = StringBuffer('10000000')
+      // Document root=0; first-level escape=1; second-level xsi:type=000.
+      ..write('01000')
+      ..write(_schemaQName('', 'Unknown', localNames: ['root']))
+      // The unknown type leaves the original entry grammar active.
+      ..write('1000')
+      ..write(_schemaQName('', 'Other', localNames: ['Unknown', 'root']))
+      // Root EE remains a first-level production.
+      ..write('0');
+
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(schemaId: ExiSchemaId.named('particles')),
+        schemaResolver: (_) => schema,
+      ).decode(_pack(bits.toString())),
+      throwsFormatException,
+    );
+  });
+
   test('applies xsi:nil to a non-nillable element in non-strict mode', () {
     final schema = _compile('''
       <xs:element name="root">
@@ -217,6 +238,20 @@ void main() {
 
     expect(document.events.whereType<ExiAttribute>().single.value, 'true');
     expect(document.events.whereType<ExiStartElement>().map((event) => event.name.localName), ['root']);
+  });
+
+  test('rejects duplicate non-strict xsi:nil attributes', () {
+    final schema = _compile('<xs:element name="root"/>');
+
+    // Document root=0; first-level escape=1; second-level xsi:nil=001;
+    // false=0, then the same xsi:nil event again, followed by root EE=0.
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(schemaId: ExiSchemaId.named('particles')),
+        schemaResolver: (_) => schema,
+      ).decode(_pack('10000000010010100100')),
+      throwsFormatException,
+    );
   });
 
   test('decodes invalid xsi:nil through the non-strict untyped wildcard attribute', () {

@@ -971,6 +971,9 @@ final class _DecoderState {
             events.add(ExiAttribute(name, _readValue(name, () => strings.readValue(input, name))));
             continue;
           case _NonStrictDeviation.xsiType:
+            if (!seenAttributes.add(_xsiTypeName)) {
+              throw const FormatException('Duplicate non-strict xsi:type attribute');
+            }
             final (:targetName, :lexicalValue) = _readXsiType(declaration);
             events.add(ExiAttribute(_xsiTypeName, lexicalValue));
             final target = declaration.typeAlternatives[targetName];
@@ -986,6 +989,9 @@ final class _DecoderState {
             specialAttributesAllowed = false;
             continue;
           case _NonStrictDeviation.xsiNil:
+            if (!seenAttributes.add(_xsiNilName)) {
+              throw const FormatException('Duplicate non-strict xsi:nil attribute');
+            }
             final value = _readXsiNilValue();
             final normalized = value.trim();
             events.add(ExiAttribute(_xsiNilName, value));
