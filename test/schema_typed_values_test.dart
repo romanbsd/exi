@@ -748,6 +748,91 @@ void main() {
     );
   });
 
+  test('decodes list values constrained by enumeration facets', () {
+    const schemaId = 'enumerated-list-values';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Colors">
+            <xs:list itemType="xs:NMTOKEN"/>
+          </xs:simpleType>
+          <xs:simpleType name="Palette">
+            <xs:restriction base="Colors">
+              <xs:enumeration value="red green"/>
+              <xs:enumeration value="blue red"/>
+              <xs:enumeration value="green blue"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="palette" type="Palette"/>
+        </xs:schema>
+      ''',
+    );
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack('10000000010'));
+
+    expect(document.toXmlString(), '<palette>green blue</palette>');
+  });
+
+  test('rejects an unused list-value enumeration ordinal', () {
+    const schemaId = 'invalid-enumerated-list-value';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Colors">
+            <xs:list itemType="xs:NMTOKEN"/>
+          </xs:simpleType>
+          <xs:simpleType name="Palette">
+            <xs:restriction base="Colors">
+              <xs:enumeration value="red green"/>
+              <xs:enumeration value="blue red"/>
+              <xs:enumeration value="green blue"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="palette" type="Palette"/>
+        </xs:schema>
+      ''',
+    );
+
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+        schemaResolver: (_) => schema,
+      ).decode(_pack('10000000011')),
+      throwsFormatException,
+    );
+  });
+
+  test('decodes built-in list values constrained by enumeration facets', () {
+    const schemaId = 'enumerated-builtin-list-values';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="tokens">
+            <xs:simpleType>
+              <xs:restriction base="xs:NMTOKENS">
+                <xs:enumeration value="one two"/>
+                <xs:enumeration value="three four"/>
+              </xs:restriction>
+            </xs:simpleType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack('1000000001'));
+
+    expect(document.toXmlString(), '<tokens>three four</tokens>');
+  });
+
   test('uses the String representation for named and inline union types', () {
     const schemaId = 'unions';
     final schema = ExiSchemaCompiler.compile(
