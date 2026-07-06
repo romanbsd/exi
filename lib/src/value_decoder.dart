@@ -36,17 +36,14 @@ final class ExiValueDecoder {
     BigInt? listItemIntegerMinInclusive,
     BigInt? listItemIntegerMaxInclusive,
   }) {
-    final representation = _representationFor(datatype, schemaDatatypeHierarchy);
-    final itemRepresentation = listItemDatatype == null
-        ? null
-        : _representationFor(listItemDatatype, listItemSchemaDatatypeHierarchy);
     if (preserveLexicalValues) {
       return strings.readValue(
         input,
         context,
-        restrictedCharacters: _restrictedCharacters(representation, listItemDatatype: itemRepresentation),
+        restrictedCharacters: _restrictedCharacters(datatype, listItemDatatype: listItemDatatype),
       );
     }
+    final representation = _representationFor(datatype, schemaDatatypeHierarchy);
     if (enumerationValues.isNotEmpty) {
       final ordinal = input.readNBitUnsigned(_bitWidth(enumerationValues.length));
       if (ordinal >= enumerationValues.length) {

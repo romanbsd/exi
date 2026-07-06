@@ -1566,7 +1566,7 @@ void main() {
     expect(document.toXmlString(), '<values>7 -2</values>');
   });
 
-  test('uses the mapped representation charset when preserving lexical values', () {
+  test('ignores datatype representation maps when preserving lexical values', () {
     const schemaId = 'mapped-lexical-value';
     final schema = ExiSchemaCompiler.compile(
       id: schemaId,
@@ -1576,7 +1576,7 @@ void main() {
         </xs:schema>
       ''',
     );
-    final bits = '100000000${_restrictedValue('1', _booleanCharacters)}';
+    final bits = '100000000${_restrictedValue('+1.50', _decimalCharacters)}';
 
     final document = ExiDecoder(
       options: const ExiOptions(
@@ -1593,7 +1593,40 @@ void main() {
       schemaResolver: (_) => schema,
     ).decode(_pack(bits));
 
-    expect(document.toXmlString(), '<amount>1</amount>');
+    expect(document.toXmlString(), '<amount>+1.50</amount>');
+  });
+
+  test('ignores list item datatype representation maps when preserving lexical values', () {
+    const schemaId = 'mapped-lexical-list-value';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Integers">
+            <xs:list itemType="xs:integer"/>
+          </xs:simpleType>
+          <xs:element name="values" type="Integers"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = '100000000${_restrictedValue('+1 -2', _integerCharacters)}';
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: true,
+        schemaId: ExiSchemaId.named(schemaId),
+        fidelity: ExiFidelityOptions(lexicalValues: true),
+        datatypeRepresentationMap: [
+          ExiDatatypeRepresentationMap(
+            schemaDatatype: ExiQName(uri: 'http://www.w3.org/2001/XMLSchema', localName: 'integer'),
+            representation: ExiDatatype.string,
+          ),
+        ],
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits));
+
+    expect(document.toXmlString(), '<values>+1 -2</values>');
   });
 
   test('rejects unsupported user-defined datatype representations when a typed value uses them', () {
@@ -1692,6 +1725,7 @@ Uint8List _pack(String bits) {
 }
 
 const _integerCharacters = [9, 10, 13, 32, 43, 45, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57];
+const _decimalCharacters = [9, 10, 13, 32, 43, 45, 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57];
 const _booleanCharacters = [9, 10, 13, 32, 48, 49, 97, 101, 102, 108, 114, 115, 116, 117];
 
 String _restrictedValue(String value, List<int> characters) {
