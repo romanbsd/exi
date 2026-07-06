@@ -1452,6 +1452,35 @@ void main() {
     expect(document.toXmlString(), '<item xsi:nil="true"/>');
   });
 
+  test('rejects xsi:type after xsi:nil in a relaxed fragment grammar', () {
+    final schema = _compile('''
+      <xs:complexType name="Base"/>
+      <xs:complexType name="Derived">
+        <xs:complexContent>
+          <xs:extension base="Base"/>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="Base" nillable="true"/>
+            <xs:element name="item" type="xs:string"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Fragment item=00; relaxed AT(xsi:nil)=2 after AT(*) and AT(xsi:type).
+      ..write('00010')
+      // Boolean true.
+      ..write('1')
+      // AT(xsi:type) must no longer be available after xsi:nil.
+      ..write('001')
+      ..write(_schemaQName('', 'Derived', localNames: ['Base', 'Derived', 'item', 'root']));
+
+    expect(() => _decodeFragment(schema, bits.toString()), throwsFormatException);
+  });
+
   test('switches a relaxed fragment grammar through xsi:type', () {
     final schema = _compile('''
       <xs:complexType name="Base"/>

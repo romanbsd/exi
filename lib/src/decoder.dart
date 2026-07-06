@@ -391,9 +391,8 @@ final class _DecoderState {
 
     while (true) {
       final attributeCount = attributesAllowed ? _fragmentAttributes.length + 1 : 0;
-      final typeCount = attributesAllowed && group.hasTypeAlternatives && !seenAttributes.contains(_xsiTypeName)
-          ? 1
-          : 0;
+      final typeCount =
+          attributesAllowed && group.hasTypeAlternatives && !seenAttributes.contains(_xsiTypeName) && !nilSeen ? 1 : 0;
       final nilCount = attributesAllowed && group.hasNillableDeclaration && !nilSeen ? 1 : 0;
       final baseCount = attributeCount + typeCount + nilCount + _fragmentDeclarations.length + 3;
       final nonStrictCount = !options.strict && _hasRelaxedFragmentDeviation(attributesAllowed) ? 1 : 0;
@@ -873,7 +872,7 @@ final class _DecoderState {
           }
         }
       }
-      final canReadType = declaration.typeAlternatives.isNotEmpty && specialAttributesAllowed;
+      final canReadType = declaration.typeAlternatives.isNotEmpty && specialAttributesAllowed && !nilSeen;
       final canReadNil = declaration.nillable && !nilSeen && specialAttributesAllowed;
       final specialCount = (canReadType ? 1 : 0) + (canReadNil ? 1 : 0);
       final hasSecondLevel = !options.strict || specialCount > 0;
@@ -886,7 +885,7 @@ final class _DecoderState {
       if (selected == candidates.length && !options.strict) {
         final deviation = _readNonStrictDeviation(
           hasFirstLevelEnd: candidates.any((event) => event.kind == _DeclaredEventKind.end),
-          atEntry: !contentStarted && attributeIndex == 0 && seenAttributes.isEmpty,
+          atEntry: !contentStarted && attributeIndex == 0 && seenAttributes.isEmpty && !nilSeen,
           inAttributePhase: !contentStarted,
         );
         switch (deviation) {
