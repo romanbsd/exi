@@ -483,6 +483,44 @@ void main() {
       expect(document.toXmlString(), '<root><right/></root>');
     });
 
+    test('collapses duplicate leading element QNames with the same schema type', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="item" type="xs:string"/>
+              <xs:element name="item" type="xs:string"/>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+      final bits = StringBuffer()
+        // Duplicate SE(item) branches collapse to one event code.
+        ..write('0')
+        ..write(_value('text'))
+        // Root EE.
+        ..write('0');
+
+      final document = _decode(schema, bits.toString());
+
+      expect(document.toXmlString(), '<root><item>text</item></root>');
+    });
+
+    test('keeps duplicate leading element QNames unsupported when schema types conflict', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="item" type="xs:string"/>
+              <xs:element name="item" type="xs:integer"/>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      expect(() => _decode(schema, '0${_value('text')}0'), throwsUnsupportedError);
+    });
+
     test('decodes a particle that references a global element', () {
       final schema = _compile('''
         <xs:element name="root">

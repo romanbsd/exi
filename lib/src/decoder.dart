@@ -1153,7 +1153,7 @@ final class _DecoderState {
           contentStarted = true;
           attributeIndex = attributes.length;
           final child = event.element!;
-          final derivative = _derive(content, child);
+          final derivative = _deriveElementAlternatives(content, event.elementDeclarations);
           if (derivative == null) {
             throw const FormatException('Element does not match the schema particle');
           }
@@ -1369,10 +1369,11 @@ final class _DeclaredEvent {
   const _DeclaredEvent.attribute(this.attributeIndex, this.attribute)
     : kind = _DeclaredEventKind.attribute,
       element = null,
+      elementAlternatives = const [],
       wildcardParticle = null,
       wildcardUri = null;
 
-  const _DeclaredEvent.element(this.element)
+  const _DeclaredEvent.element(this.element, {this.elementAlternatives = const []})
     : kind = _DeclaredEventKind.element,
       attributeIndex = null,
       attribute = null,
@@ -1384,19 +1385,22 @@ final class _DeclaredEvent {
       attributeIndex = null,
       attribute = null,
       element = null,
+      elementAlternatives = const [],
       wildcardParticle = null;
 
   const _DeclaredEvent.wildcardElement(this.wildcardParticle, this.wildcardUri)
     : kind = _DeclaredEventKind.wildcardElement,
       attributeIndex = null,
       attribute = null,
-      element = null;
+      element = null,
+      elementAlternatives = const [];
 
   const _DeclaredEvent.end()
     : kind = _DeclaredEventKind.end,
       attributeIndex = null,
       attribute = null,
       element = null,
+      elementAlternatives = const [],
       wildcardParticle = null,
       wildcardUri = null;
 
@@ -1405,6 +1409,7 @@ final class _DeclaredEvent {
       attributeIndex = null,
       attribute = null,
       element = null,
+      elementAlternatives = const [],
       wildcardParticle = null,
       wildcardUri = null;
 
@@ -1413,6 +1418,7 @@ final class _DeclaredEvent {
       attributeIndex = null,
       attribute = null,
       element = null,
+      elementAlternatives = const [],
       wildcardParticle = null,
       wildcardUri = null;
 
@@ -1420,8 +1426,11 @@ final class _DeclaredEvent {
   final int? attributeIndex;
   final ExiAttributeDeclaration? attribute;
   final ExiElementDeclaration? element;
+  final List<ExiElementDeclaration> elementAlternatives;
   final ExiWildcardParticle? wildcardParticle;
   final String? wildcardUri;
+
+  List<ExiElementDeclaration> get elementDeclarations => elementAlternatives.isEmpty ? [element!] : elementAlternatives;
 }
 
 ExiParticle _legacyContent(List<ExiElementDeclaration> children) {
@@ -1541,8 +1550,18 @@ List<_DeclaredEvent> _leadingElementEvents(ExiParticle particle) {
         return;
       case ExiElementParticle(:final element, :final maxOccurs):
         if (maxOccurs != 0) {
-          if (result.any((candidate) => candidate.element?.name == element.name)) {
-            throw UnsupportedError('Ambiguous schema particles with the same leading QName are not supported yet');
+          final existingIndex = result.indexWhere((candidate) => candidate.element?.name == element.name);
+          if (existingIndex != -1) {
+            final existing = result[existingIndex];
+            final declarations = existing.elementDeclarations;
+            if (!declarations.every((declaration) => _hasSameElementGrammarIdentity(declaration, element))) {
+              throw UnsupportedError('Ambiguous schema particles with the same leading QName are not supported yet');
+            }
+            result[existingIndex] = _DeclaredEvent.element(
+              existing.element!,
+              elementAlternatives: [...declarations, element],
+            );
+            return;
           }
           result.add(_DeclaredEvent.element(element));
         }
@@ -1590,6 +1609,11 @@ List<_DeclaredEvent> _leadingElementEvents(ExiParticle particle) {
 
   collect(particle);
   return result;
+}
+
+bool _hasSameElementGrammarIdentity(ExiElementDeclaration left, ExiElementDeclaration right) {
+  final schemaTypeName = left.schemaTypeName;
+  return schemaTypeName != null && right.schemaTypeName == schemaTypeName && right.nillable == left.nillable;
 }
 
 ExiParticle? _derive(ExiParticle particle, Object selected) {
@@ -1659,6 +1683,17 @@ ExiParticle? _derive(ExiParticle particle, Object selected) {
           : ExiRepeatedParticle(particle, minOccurs: remainingMin, maxOccurs: remainingMax);
       return _sequence([derivative, remainder]);
   }
+}
+
+ExiParticle? _deriveElementAlternatives(ExiParticle particle, List<ExiElementDeclaration> declarations) {
+  final alternatives = <ExiParticle>[];
+  for (final declaration in declarations) {
+    final derivative = _derive(particle, declaration);
+    if (derivative != null) {
+      alternatives.add(derivative);
+    }
+  }
+  return _choice(alternatives);
 }
 
 ExiParticle _sequence(List<ExiParticle> particles) {
