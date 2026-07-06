@@ -720,6 +720,9 @@ final class _DecoderState {
           events.add(ExiCharacters(_readValue(elementName, () => strings.readValue(input, elementName))));
           current = grammar.elementContent;
         case _EventType.namespaceDeclaration:
+          if (seenAttributes.isNotEmpty) {
+            throw const FormatException('Namespace declarations must precede attributes');
+          }
           final uri = strings.readString(input);
           final prefix = strings.readString(input);
           final localElementNamespace = input.readNBitUnsigned(1) == 1;

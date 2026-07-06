@@ -96,6 +96,29 @@ void main() {
       expect(namespace, const ExiNamespaceDeclaration(uri: 'urn:example', prefix: 'p', localElementNamespace: true));
       expect(document.toXmlString(), '<p:root xmlns:p="urn:example"/>');
     });
+
+    test('rejects a namespace declaration after an attribute', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'root'))
+        // StartTagContent -> AT(*).
+        ..write('001')
+        ..write(_qName('', 'id'))
+        ..write(_value('42'))
+        // StartTagContent -> undeclared NS after learned AT(id).
+        ..write('1010')
+        ..write(_rawString('urn:example'))
+        ..write(_rawString('p'))
+        ..write('0')
+        // StartTagContent -> EE.
+        ..write('1000');
+
+      expect(
+        () => ExiDecoder(
+          options: const ExiOptions(fidelity: ExiFidelityOptions(prefixes: true)),
+        ).decode(_pack(bits.toString())),
+        throwsA(isA<FormatException>()),
+      );
+    });
   });
 
   group('fragment option', () {
