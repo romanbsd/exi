@@ -242,7 +242,7 @@ final class HeaderOptionsDecoder {
           return name;
         case _SkippedEvent.attribute:
           final attributeName = production.name ?? _strings.readQName(_input);
-          final value = _strings.readValue(_input, attributeName);
+          final value = _readSkippedAttributeValue(attributeName);
           events?.add(ExiAttribute(attributeName, value));
           state.learn(_SkippedProduction(_SkippedEvent.attribute, attributeName));
         case _SkippedEvent.startElement:
@@ -256,6 +256,13 @@ final class HeaderOptionsDecoder {
           state = grammar.elementContent;
       }
     }
+  }
+
+  String _readSkippedAttributeValue(ExiQName name) {
+    if (name == _xsiTypeName) {
+      return _strings.readQName(_input).toString();
+    }
+    return _strings.readValue(_input, name);
   }
 }
 
@@ -337,6 +344,7 @@ ExiDatatype? _builtInRepresentation(ExiQName name) {
 }
 
 const _exiUri = 'http://www.w3.org/2009/exi';
+const _xsiTypeName = ExiQName(uri: 'http://www.w3.org/2001/XMLSchema-instance', localName: 'type', prefix: 'xsi');
 
 final _optionsSchema = ExiSchema(
   id: 'http://www.w3.org/2009/exi/options',

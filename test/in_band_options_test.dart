@@ -243,6 +243,31 @@ void main() {
       expect(document.toXmlString(), '<root/>');
     });
 
+    test('decodes metadata xsi:type values as QNames', () {
+      final bits = StringBuffer('10100000')
+        // header/lesscommon/uncommon/metadata wildcard.
+        ..write('00000000')
+        ..write(_literalOptionsQName('urn:meta', 'typed'))
+        // Metadata start tag -> AT(*).
+        ..write('01')
+        ..write(_literalOptionsQName(_xsiUri, 'type'))
+        ..write(_optionsQName(_xsdUri, 'string'))
+        // Metadata start tag -> EE after learning the attribute.
+        ..write('100')
+        // Close uncommon, lesscommon, and header.
+        ..write('1101010')
+        // Empty schema-less body.
+        ..write(_qName('', 'root'))
+        ..write('00');
+
+      final document = ExiDecoder().decode(_pack(bits.toString()));
+      final metadata = document.options.metadata.single;
+
+      expect(metadata.name, const ExiQName(uri: 'urn:meta', localName: 'typed'));
+      expect(metadata.events.whereType<ExiAttribute>().single.value, '{$_xsdUri}string');
+      expect(document.toXmlString(), '<root/>');
+    });
+
     test('reads schemaId content after xsi:nil false', () {
       const schemaId = 'false-nil-schema';
       final schema = ExiSchemaCompiler.compile(

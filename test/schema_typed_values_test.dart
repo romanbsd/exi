@@ -1321,6 +1321,59 @@ void main() {
     expect(document.toXmlString(), '<code>B20</code>');
   });
 
+  test('decodes escaped characters outside a restricted character set', () {
+    const schemaId = 'escaped-patterned-string';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Code">
+            <xs:restriction base="xs:string">
+              <xs:pattern value="[A-C]+"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="code" type="Code"/>
+        </xs:schema>
+      ''',
+    );
+    const characters = [65, 66, 67];
+    final bits = '100000000${_restrictedValueWithEscapes('AZ', characters)}';
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits));
+
+    expect(document.toXmlString(), '<code>AZ</code>');
+  });
+
+  test('rejects invalid escaped restricted-character code points', () {
+    const schemaId = 'invalid-escaped-patterned-string';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Code">
+            <xs:restriction base="xs:string">
+              <xs:pattern value="[A-C]+"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="code" type="Code"/>
+        </xs:schema>
+      ''',
+    );
+    const characters = [65, 66, 67];
+    final bits = '100000000${_restrictedEscapedValue(0xd800, characters)}';
+
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+        schemaResolver: (_) => schema,
+      ).decode(_pack(bits)),
+      throwsFormatException,
+    );
+  });
+
   test('uses only the most-derived immediate string patterns', () {
     const schemaId = 'derived-patterned-string';
     final schema = ExiSchemaCompiler.compile(
@@ -1736,4 +1789,25 @@ String _restrictedValue(String value, List<int> characters) {
 String _restrictedString(String value, List<int> characters) {
   final width = characters.length.bitLength;
   return '${_unsigned(value.runes.length)}${value.runes.map((character) => characters.indexOf(character).toRadixString(2).padLeft(width, '0')).join()}';
+}
+
+String _restrictedValueWithEscapes(String value, List<int> characters) {
+  final width = characters.length.bitLength;
+  final encoded = StringBuffer(_unsigned(value.runes.length + 2));
+  for (final character in value.runes) {
+    final index = characters.indexOf(character);
+    if (index == -1) {
+      encoded
+        ..write(characters.length.toRadixString(2).padLeft(width, '0'))
+        ..write(_unsigned(character));
+    } else {
+      encoded.write(index.toRadixString(2).padLeft(width, '0'));
+    }
+  }
+  return encoded.toString();
+}
+
+String _restrictedEscapedValue(int codePoint, List<int> characters) {
+  final width = characters.length.bitLength;
+  return '${_unsigned(3)}${characters.length.toRadixString(2).padLeft(width, '0')}${_unsigned(codePoint)}';
 }
