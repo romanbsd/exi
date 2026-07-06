@@ -693,6 +693,7 @@ final class _DecoderState {
     var elementName = initialName;
     final grammar = grammars.putIfAbsent(elementName, () => _ElementGrammar(options));
     var current = grammar.startTag;
+    final seenAttributes = <ExiQName>{};
 
     while (true) {
       final production = current.readProduction(input);
@@ -703,6 +704,9 @@ final class _DecoderState {
           return;
         case _EventType.attribute:
           final name = production.name ?? strings.readQName(input);
+          if (!seenAttributes.add(name)) {
+            throw const FormatException('Duplicate built-in element attribute');
+          }
           current.learn(_Production(_EventType.attribute, name));
           events.add(ExiAttribute(name, _readValue(name, () => strings.readValue(input, name))));
         case _EventType.startElement:

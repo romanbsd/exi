@@ -71,6 +71,22 @@ void main() {
       expect(document.toXmlString(), '<item id="42"/>');
     });
 
+    test('rejects duplicate attributes in a built-in element grammar', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'item'))
+        // StartTagContent -> AT(*).
+        ..write('01')
+        ..write(_qName('', 'id'))
+        ..write(_value('42'))
+        // StartTagContent -> learned AT(id).
+        ..write('0')
+        ..write(_value('again'))
+        // StartTagContent -> EE.
+        ..write('100');
+
+      expect(() => ExiDecoder().decode(_pack(bits.toString())), throwsA(isA<FormatException>()));
+    });
+
     test('learns repeated child QNames and character productions', () {
       final bits = StringBuffer('10000000')
         ..write(_qName('', 'root'))
