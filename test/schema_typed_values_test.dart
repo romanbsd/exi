@@ -581,6 +581,106 @@ void main() {
     expect(document.toXmlString(), '<root flags="true false"><tokens>one two</tokens></root>');
   });
 
+  test('decodes binary schema values', () {
+    const schemaId = 'binary-values';
+    const schema = ExiSchema(
+      id: schemaId,
+      globalElements: [
+        ExiElementDeclaration.sequence(ExiQName(localName: 'root'), [
+          ExiElementDeclaration.value(ExiQName(localName: 'base64'), ExiDatatype.base64Binary),
+          ExiElementDeclaration.value(ExiQName(localName: 'hex'), ExiDatatype.hexBinary),
+        ]),
+      ],
+    );
+    final bits = StringBuffer('10000000')
+      ..write('0')
+      ..write(_unsigned(3))
+      ..write('00000001')
+      ..write('00000010')
+      ..write('11111111')
+      ..write(_unsigned(3))
+      ..write('00001010')
+      ..write('00001011')
+      ..write('11111111');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root><base64>AQL/</base64><hex>0a0bff</hex></root>');
+  });
+
+  test('applies datatype representation maps to built-in list item hierarchies', () {
+    const schemaId = 'mapped-builtin-list-items';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Flags">
+            <xs:list itemType="xs:boolean"/>
+          </xs:simpleType>
+          <xs:element name="flags" type="Flags"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('100000000')
+      ..write(_unsigned(2))
+      ..write(_rawString('yes'))
+      ..write(_rawString('no'));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: true,
+        schemaId: ExiSchemaId.named(schemaId),
+        datatypeRepresentationMap: [
+          ExiDatatypeRepresentationMap(
+            schemaDatatype: ExiQName(uri: 'http://www.w3.org/2001/XMLSchema', localName: 'boolean'),
+            representation: ExiDatatype.string,
+          ),
+        ],
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<flags>yes no</flags>');
+  });
+
+  test('decodes list items constrained by a named enumeration type', () {
+    const schemaId = 'enumerated-list-items';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Color">
+            <xs:restriction base="xs:string">
+              <xs:enumeration value="red"/>
+              <xs:enumeration value="green"/>
+              <xs:enumeration value="blue"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="Colors">
+            <xs:list itemType="Color"/>
+          </xs:simpleType>
+          <xs:element name="colors" type="Colors"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('100000000')
+      ..write(_unsigned(3))
+      // blue, red, green by item enumeration ordinal.
+      ..write('10')
+      ..write('00')
+      ..write('01');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<colors>blue red green</colors>');
+  });
+
   test('uses the String representation for named and inline union types', () {
     const schemaId = 'unions';
     final schema = ExiSchemaCompiler.compile(
@@ -1342,6 +1442,35 @@ void main() {
     ).decode(_pack(bits));
 
     expect(document.toXmlString(), '<amount>1</amount>');
+  });
+
+  test('rejects unsupported user-defined datatype representations when a typed value uses them', () {
+    const schemaId = 'custom-representation';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="amount" type="xs:decimal"/>
+        </xs:schema>
+      ''',
+    );
+
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(
+          strict: true,
+          schemaId: ExiSchemaId.named(schemaId),
+          datatypeRepresentationMap: [
+            ExiDatatypeRepresentationMap.userDefined(
+              schemaDatatype: ExiQName(uri: 'http://www.w3.org/2001/XMLSchema', localName: 'decimal'),
+              representationName: ExiQName(uri: 'urn:example', localName: 'decimalCodec'),
+            ),
+          ],
+        ),
+        schemaResolver: (_) => schema,
+      ).decode(_pack('100000000')),
+      throwsUnsupportedError,
+    );
   });
 
   test('rejects invalid out-of-band datatype representation maps', () {

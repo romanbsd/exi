@@ -658,6 +658,7 @@ final class _DecoderState {
         restrictedCharacters: attribute.restrictedCharacters,
         listItemRestrictedCharacters: attribute.listItemRestrictedCharacters,
         enumerationValues: attribute.enumerationValues,
+        listItemEnumerationValues: attribute.listItemEnumerationValues,
         booleanPattern: attribute.booleanPattern,
         listItemBooleanPattern: attribute.listItemBooleanPattern,
         integerMinInclusive: attribute.integerMinInclusive,
@@ -954,6 +955,7 @@ final class _DecoderState {
                           restrictedCharacters: globalAttribute.restrictedCharacters,
                           listItemRestrictedCharacters: globalAttribute.listItemRestrictedCharacters,
                           enumerationValues: globalAttribute.enumerationValues,
+                          listItemEnumerationValues: globalAttribute.listItemEnumerationValues,
                           booleanPattern: globalAttribute.booleanPattern,
                           listItemBooleanPattern: globalAttribute.listItemBooleanPattern,
                           integerMinInclusive: globalAttribute.integerMinInclusive,
@@ -1119,6 +1121,7 @@ final class _DecoderState {
                   restrictedCharacters: attribute.restrictedCharacters,
                   listItemRestrictedCharacters: attribute.listItemRestrictedCharacters,
                   enumerationValues: attribute.enumerationValues,
+                  listItemEnumerationValues: attribute.listItemEnumerationValues,
                   booleanPattern: attribute.booleanPattern,
                   listItemBooleanPattern: attribute.listItemBooleanPattern,
                   integerMinInclusive: attribute.integerMinInclusive,
@@ -1162,6 +1165,7 @@ final class _DecoderState {
                         restrictedCharacters: globalAttribute.restrictedCharacters,
                         listItemRestrictedCharacters: globalAttribute.listItemRestrictedCharacters,
                         enumerationValues: globalAttribute.enumerationValues,
+                        listItemEnumerationValues: globalAttribute.listItemEnumerationValues,
                         booleanPattern: globalAttribute.booleanPattern,
                         listItemBooleanPattern: globalAttribute.listItemBooleanPattern,
                         integerMinInclusive: globalAttribute.integerMinInclusive,
@@ -1225,6 +1229,7 @@ final class _DecoderState {
                       restrictedCharacters: declaration.restrictedCharacters,
                       listItemRestrictedCharacters: declaration.listItemRestrictedCharacters,
                       enumerationValues: declaration.enumerationValues,
+                      listItemEnumerationValues: declaration.listItemEnumerationValues,
                       booleanPattern: declaration.booleanPattern,
                       listItemBooleanPattern: declaration.listItemBooleanPattern,
                       integerMinInclusive: declaration.integerMinInclusive,
@@ -1715,6 +1720,7 @@ bool _hasSameAnonymousDatatypeShape(ExiElementDeclaration left, ExiElementDeclar
       _sameList(left.restrictedCharacters, right.restrictedCharacters) &&
       _sameList(left.listItemRestrictedCharacters, right.listItemRestrictedCharacters) &&
       _sameList(left.enumerationValues, right.enumerationValues) &&
+      _sameList(left.listItemEnumerationValues, right.listItemEnumerationValues) &&
       left.booleanPattern == right.booleanPattern &&
       left.listItemBooleanPattern == right.listItemBooleanPattern &&
       left.integerMinInclusive == right.integerMinInclusive &&
@@ -1882,6 +1888,7 @@ bool _sameAttribute(ExiAttributeDeclaration left, ExiAttributeDeclaration right)
     _sameList(left.restrictedCharacters, right.restrictedCharacters) &&
     _sameList(left.listItemRestrictedCharacters, right.listItemRestrictedCharacters) &&
     _sameList(left.enumerationValues, right.enumerationValues) &&
+    _sameList(left.listItemEnumerationValues, right.listItemEnumerationValues) &&
     left.booleanPattern == right.booleanPattern &&
     left.listItemBooleanPattern == right.listItemBooleanPattern &&
     left.integerMinInclusive == right.integerMinInclusive &&

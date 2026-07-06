@@ -62,6 +62,7 @@ final class ExiElementDeclaration {
        restrictedCharacters = null,
        listItemRestrictedCharacters = null,
        enumerationValues = const [],
+       listItemEnumerationValues = const [],
        booleanPattern = false,
        listItemBooleanPattern = false,
        integerMinInclusive = null,
@@ -87,6 +88,7 @@ final class ExiElementDeclaration {
        restrictedCharacters = null,
        listItemRestrictedCharacters = null,
        enumerationValues = const [],
+       listItemEnumerationValues = const [],
        booleanPattern = false,
        listItemBooleanPattern = false,
        integerMinInclusive = null,
@@ -105,6 +107,7 @@ final class ExiElementDeclaration {
     this.restrictedCharacters,
     this.listItemRestrictedCharacters,
     this.enumerationValues = const [],
+    this.listItemEnumerationValues = const [],
     this.booleanPattern = false,
     this.listItemBooleanPattern = false,
     this.integerMinInclusive,
@@ -131,6 +134,7 @@ final class ExiElementDeclaration {
     this.restrictedCharacters,
     this.listItemRestrictedCharacters,
     this.enumerationValues = const [],
+    this.listItemEnumerationValues = const [],
     this.booleanPattern = false,
     this.listItemBooleanPattern = false,
     this.integerMinInclusive,
@@ -167,6 +171,7 @@ final class ExiElementDeclaration {
        restrictedCharacters = null,
        listItemRestrictedCharacters = null,
        enumerationValues = const [],
+       listItemEnumerationValues = const [],
        booleanPattern = false,
        listItemBooleanPattern = false,
        integerMinInclusive = null,
@@ -182,6 +187,7 @@ final class ExiElementDeclaration {
   final List<int>? restrictedCharacters;
   final List<int>? listItemRestrictedCharacters;
   final List<String> enumerationValues;
+  final List<String> listItemEnumerationValues;
   final bool booleanPattern;
   final bool listItemBooleanPattern;
   final BigInt? integerMinInclusive;
@@ -207,6 +213,7 @@ final class ExiAttributeDeclaration {
     this.restrictedCharacters,
     this.listItemRestrictedCharacters,
     this.enumerationValues = const [],
+    this.listItemEnumerationValues = const [],
     this.booleanPattern = false,
     this.listItemBooleanPattern = false,
     this.integerMinInclusive,
@@ -222,6 +229,7 @@ final class ExiAttributeDeclaration {
   final List<int>? restrictedCharacters;
   final List<int>? listItemRestrictedCharacters;
   final List<String> enumerationValues;
+  final List<String> listItemEnumerationValues;
   final bool booleanPattern;
   final bool listItemBooleanPattern;
   final BigInt? integerMinInclusive;

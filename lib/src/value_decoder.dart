@@ -28,6 +28,7 @@ final class ExiValueDecoder {
     List<int>? restrictedCharacters,
     List<int>? listItemRestrictedCharacters,
     List<String> enumerationValues = const [],
+    List<String> listItemEnumerationValues = const [],
     bool booleanPattern = false,
     bool listItemBooleanPattern = false,
     BigInt? integerMinInclusive,
@@ -84,6 +85,7 @@ final class ExiValueDecoder {
         itemSchemaDatatypeHierarchy: listItemSchemaDatatypeHierarchy,
         itemBooleanPattern: listItemBooleanPattern,
         itemRestrictedCharacters: listItemRestrictedCharacters,
+        itemEnumerationValues: listItemEnumerationValues,
       ),
     };
   }
@@ -112,6 +114,7 @@ final class ExiValueDecoder {
     required List<ExiQName> itemSchemaDatatypeHierarchy,
     required bool itemBooleanPattern,
     List<int>? itemRestrictedCharacters,
+    List<String> itemEnumerationValues = const [],
   }) {
     final encodedLength = input.readUnsignedInteger();
     if (encodedLength > BigInt.from(0x7fffffff)) {
@@ -120,12 +123,13 @@ final class ExiValueDecoder {
     final itemRepresentation = _representationFor(itemDatatype, itemSchemaDatatypeHierarchy);
     return [
       for (var index = 0; index < encodedLength.toInt(); index++)
-        itemRepresentation == ExiDatatype.string
+        itemRepresentation == ExiDatatype.string && itemEnumerationValues.isEmpty
             ? strings.readString(input, restrictedCharacters: itemRestrictedCharacters)
             : read(
                 itemDatatype,
                 context,
                 schemaDatatypeHierarchy: itemSchemaDatatypeHierarchy,
+                enumerationValues: itemEnumerationValues,
                 booleanPattern: itemBooleanPattern,
               ),
     ].join(' ');
