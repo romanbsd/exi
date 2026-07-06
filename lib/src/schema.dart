@@ -47,6 +47,7 @@ final class ExiSchema {
 final class ExiElementDeclaration {
   const ExiElementDeclaration.empty(
     this.name, {
+    this.schemaTypeName,
     this.nillable = false,
     this.typeAlternatives = const {},
     this.anyAttribute = false,
@@ -72,6 +73,7 @@ final class ExiElementDeclaration {
   const ExiElementDeclaration.sequence(
     this.name,
     this.children, {
+    this.schemaTypeName,
     this.nillable = false,
     this.typeAlternatives = const {},
     this.anyAttribute = false,
@@ -96,6 +98,7 @@ final class ExiElementDeclaration {
   const ExiElementDeclaration.value(
     this.name,
     this.datatype, {
+    this.schemaTypeName,
     this.listItemDatatype,
     this.schemaDatatypeHierarchy = const [],
     this.listItemSchemaDatatypeHierarchy = const [],
@@ -121,6 +124,7 @@ final class ExiElementDeclaration {
   const ExiElementDeclaration.simpleContent(
     this.name,
     this.datatype, {
+    this.schemaTypeName,
     this.listItemDatatype,
     this.schemaDatatypeHierarchy = const [],
     this.listItemSchemaDatatypeHierarchy = const [],
@@ -145,6 +149,7 @@ final class ExiElementDeclaration {
 
   const ExiElementDeclaration.complex(
     this.name, {
+    this.schemaTypeName,
     this.attributes = const [],
     this.content,
     this.mixed = false,
@@ -168,6 +173,7 @@ final class ExiElementDeclaration {
        integerMaxInclusive = null;
 
   final ExiQName name;
+  final ExiQName? schemaTypeName;
   final List<ExiElementDeclaration> children;
   final ExiDatatype? datatype;
   final ExiDatatype? listItemDatatype;

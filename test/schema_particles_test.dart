@@ -1164,6 +1164,58 @@ void main() {
     expect(document.toXmlString(), '<item>text</item>');
   });
 
+  test('uses a specific fragment grammar for duplicate declarations with the same schema type', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:string"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Unique fragment QNames are item=00 and root=01. Because both item
+      // declarations have the same schema type and nillability, the fragment
+      // element uses the specific string-value grammar, not relaxed CH=5.
+      ..write('00')
+      ..write(_value('text'))
+      // Fragment ED=3.
+      ..write('11');
+
+    final document = _decodeFragment(schema, bits.toString());
+
+    expect(document.toXmlString(), '<item>text</item>');
+  });
+
+  test('keeps duplicate fragment declarations relaxed when nillability differs', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:string" nillable="true"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Unique fragment QNames are item=00 and root=01.
+      ..write('00')
+      // Relaxed start-tag grammar: CH=5.
+      ..write('101')
+      ..write(_value('text'))
+      // Relaxed content grammar: EE=3.
+      ..write('011')
+      // Fragment ED=3.
+      ..write('11');
+
+    final document = _decodeFragment(schema, bits.toString());
+
+    expect(document.toXmlString(), '<item>text</item>');
+  });
+
   test('uses declared child productions in a relaxed fragment grammar', () {
     final schema = _compile('''
       <xs:element name="child"/>

@@ -11,7 +11,9 @@ The current decoder stage supports:
   isolated/restored string-table and learned-grammar state;
 - schema-less fragments with dynamic top-level QName learning and strict
   schema-informed fragments with declared element QNames, including relaxed
-  element-fragment grammars for conflicting declarations;
+  element-fragment grammars for conflicting declarations and specific fragment
+  grammars for duplicate declarations with identical schema type identity and
+  nillability;
 - configurable out-of-band fidelity options for comments, processing
   instructions, DTD/entity events, and namespace prefixes;
 - in-band EXI options for strict mode, fragments, fidelity preservation, and
@@ -63,8 +65,7 @@ imports/includes, complex-content restriction, defaults and fixed values,
 substitution groups, abstract
 declarations and derivation controls, inherited wildcard unions involving
 `##other`, schema-informed grammars requiring unsupported XSD features, relaxed
-element-fragment type-identity collapsing, and non-strict relaxed-fragment
-grammar augmentations are also not yet available.
+element-fragment non-strict grammar augmentations are also not yet available.
 
 ```dart
 import 'dart:typed_data';

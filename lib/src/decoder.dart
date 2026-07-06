@@ -1547,7 +1547,21 @@ final class _FragmentElementGroup {
   final ExiQName name;
   final List<ExiElementDeclaration> declarations;
 
-  ExiElementDeclaration? get declaration => declarations.length == 1 ? declarations.single : null;
+  ExiElementDeclaration? get declaration {
+    if (declarations.length == 1) {
+      return declarations.single;
+    }
+    final first = declarations.first;
+    final schemaTypeName = first.schemaTypeName;
+    if (schemaTypeName == null) {
+      return null;
+    }
+    return declarations.every(
+          (declaration) => declaration.schemaTypeName == schemaTypeName && declaration.nillable == first.nillable,
+        )
+        ? first
+        : null;
+  }
 }
 
 final class _FragmentAttributeGroup {

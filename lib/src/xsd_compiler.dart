@@ -275,6 +275,7 @@ final class _Compiler {
         return ExiElementDeclaration.value(
           name,
           simpleDatatype.datatype,
+          schemaTypeName: simpleDatatype.schemaDatatypeHierarchy.firstOrNull,
           listItemDatatype: simpleDatatype.listItemDatatype,
           schemaDatatypeHierarchy: simpleDatatype.schemaDatatypeHierarchy,
           listItemSchemaDatatypeHierarchy: simpleDatatype.listItemSchemaDatatypeHierarchy,
@@ -342,7 +343,12 @@ final class _Compiler {
       throw UnsupportedError('Recursive XSD complex type "$typeName" is not supported');
     }
     try {
-      return _compileComplexType(name, complexType, nillable: nillable);
+      return _compileComplexType(
+        name,
+        complexType,
+        nillable: nillable,
+        schemaTypeName: ExiQName(uri: targetNamespace, localName: typeName),
+      );
     } finally {
       _compilingComplexTypes.remove(typeName);
     }
@@ -371,6 +377,7 @@ final class _Compiler {
       return ExiElementDeclaration.simpleContent(
         declaration.name,
         declaration.datatype,
+        schemaTypeName: declaration.schemaTypeName,
         listItemDatatype: declaration.listItemDatatype,
         schemaDatatypeHierarchy: declaration.schemaDatatypeHierarchy,
         listItemSchemaDatatypeHierarchy: declaration.listItemSchemaDatatypeHierarchy,
@@ -399,6 +406,7 @@ final class _Compiler {
         attributes: declaration.attributes,
         content: declaration.content,
         mixed: declaration.mixed,
+        schemaTypeName: declaration.schemaTypeName,
         nillable: declaration.nillable,
         typeAlternatives: alternatives,
         anyAttribute: declaration.anyAttribute,
@@ -411,18 +419,25 @@ final class _Compiler {
       return ExiElementDeclaration.sequence(
         declaration.name,
         declaration.children,
+        schemaTypeName: declaration.schemaTypeName,
         nillable: declaration.nillable,
         typeAlternatives: alternatives,
       );
     }
     return ExiElementDeclaration.empty(
       declaration.name,
+      schemaTypeName: declaration.schemaTypeName,
       nillable: declaration.nillable,
       typeAlternatives: alternatives,
     );
   }
 
-  ExiElementDeclaration _compileComplexType(ExiQName name, XmlElement complexType, {required bool nillable}) {
+  ExiElementDeclaration _compileComplexType(
+    ExiQName name,
+    XmlElement complexType, {
+    required bool nillable,
+    ExiQName? schemaTypeName,
+  }) {
     if (complexType.getAttribute('abstract') == 'true' ||
         complexType.getAttribute('abstract') == '1' ||
         complexType.getAttribute('block') != null ||
@@ -443,10 +458,16 @@ final class _Compiler {
       if (mixed) {
         throw const FormatException('XSD simple content cannot be mixed');
       }
-      return _compileSimpleContent(name, simpleContent, nillable: nillable);
+      return _compileSimpleContent(name, simpleContent, nillable: nillable, schemaTypeName: schemaTypeName);
     }
     if (complexContent != null) {
-      return _compileComplexContent(name, complexContent, mixed: mixed, nillable: nillable);
+      return _compileComplexContent(
+        name,
+        complexContent,
+        mixed: mixed,
+        nillable: nillable,
+        schemaTypeName: schemaTypeName,
+      );
     }
     final attributes = _compileAttributes(complexType);
     final anyAttribute = _hasAnyAttribute(complexType);
@@ -465,6 +486,7 @@ final class _Compiler {
       if (attributes.isNotEmpty || mixed || anyAttribute) {
         return ExiElementDeclaration.complex(
           name,
+          schemaTypeName: schemaTypeName,
           attributes: attributes,
           mixed: mixed,
           nillable: nillable,
@@ -474,7 +496,7 @@ final class _Compiler {
           attributeProcessContents: _attributeProcessContents(complexType),
         );
       }
-      return ExiElementDeclaration.empty(name, nillable: nillable);
+      return ExiElementDeclaration.empty(name, schemaTypeName: schemaTypeName, nillable: nillable);
     }
     final compositor = compositors.single;
     final content = _compileParticle(compositor);
@@ -488,12 +510,16 @@ final class _Compiler {
           (particle) => particle is ExiElementParticle && particle.minOccurs == 1 && particle.maxOccurs == 1,
         );
     if (isFixedSequence) {
-      return ExiElementDeclaration.sequence(name, [
-        for (final particle in particles.cast<ExiElementParticle>()) particle.element,
-      ], nillable: nillable);
+      return ExiElementDeclaration.sequence(
+        name,
+        [for (final particle in particles.cast<ExiElementParticle>()) particle.element],
+        schemaTypeName: schemaTypeName,
+        nillable: nillable,
+      );
     }
     return ExiElementDeclaration.complex(
       name,
+      schemaTypeName: schemaTypeName,
       attributes: attributes,
       content: content,
       mixed: mixed,
@@ -510,6 +536,7 @@ final class _Compiler {
     XmlElement complexContent, {
     required bool mixed,
     required bool nillable,
+    ExiQName? schemaTypeName,
   }) {
     final extension = _children(complexContent, 'extension').firstOrNull;
     if (extension == null || _children(complexContent, 'restriction').isNotEmpty) {
@@ -575,6 +602,7 @@ final class _Compiler {
     );
     return ExiElementDeclaration.complex(
       name,
+      schemaTypeName: schemaTypeName,
       attributes: attributes,
       content: content,
       mixed: mixed || contentMixed || base.mixed,
@@ -614,7 +642,12 @@ final class _Compiler {
     return particles.length == 1 ? particles.single : ExiSequenceParticle(particles);
   }
 
-  ExiElementDeclaration _compileSimpleContent(ExiQName name, XmlElement simpleContent, {required bool nillable}) {
+  ExiElementDeclaration _compileSimpleContent(
+    ExiQName name,
+    XmlElement simpleContent, {
+    required bool nillable,
+    ExiQName? schemaTypeName,
+  }) {
     final derivations = [..._children(simpleContent, 'extension'), ..._children(simpleContent, 'restriction')];
     if (derivations.length != 1) {
       throw const FormatException('XSD simple content must contain one extension or restriction');
@@ -639,6 +672,7 @@ final class _Compiler {
     return ExiElementDeclaration.simpleContent(
       name,
       simpleType.datatype,
+      schemaTypeName: schemaTypeName,
       listItemDatatype: simpleType.listItemDatatype,
       schemaDatatypeHierarchy: simpleType.schemaDatatypeHierarchy,
       listItemSchemaDatatypeHierarchy: simpleType.listItemSchemaDatatypeHierarchy,
