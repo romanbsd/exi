@@ -1203,8 +1203,8 @@ void main() {
     final bits = StringBuffer()
       // Unique fragment QNames are item=00 and root=01.
       ..write('00')
-      // Relaxed start-tag grammar: CH=5.
-      ..write('101')
+      // Relaxed start-tag grammar with xsi:nil available: CH=6.
+      ..write('110')
       ..write(_value('text'))
       // Relaxed content grammar: EE=3.
       ..write('011')
@@ -1214,6 +1214,30 @@ void main() {
     final document = _decodeFragment(schema, bits.toString());
 
     expect(document.toXmlString(), '<item>text</item>');
+  });
+
+  test('decodes xsi:nil in a relaxed fragment grammar', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:integer" nillable="true"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Fragment item=00; relaxed AT(xsi:nil)=1 after AT(*).
+      ..write('00001')
+      // Boolean true.
+      ..write('1')
+      // Relaxed content grammar: EE=3; fragment ED=3.
+      ..write('10011');
+
+    final document = _decodeFragment(schema, bits.toString());
+
+    expect(document.toXmlString(), '<item xsi:nil="true"/>');
   });
 
   test('uses declared child productions in a relaxed fragment grammar', () {

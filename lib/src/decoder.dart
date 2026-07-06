@@ -371,17 +371,21 @@ final class _DecoderState {
       _decodeElement(group.name, declaration: declaration);
       return;
     }
-    _decodeRelaxedFragmentElement(group.name);
+    _decodeRelaxedFragmentElement(group);
   }
 
-  void _decodeRelaxedFragmentElement(ExiQName elementName) {
+  void _decodeRelaxedFragmentElement(_FragmentElementGroup group) {
+    final elementName = group.name;
     events.add(ExiStartElement(elementName));
     final seenAttributes = <ExiQName>{};
     var attributesAllowed = true;
+    var nilSeen = false;
+    var nilled = false;
 
     while (true) {
       final attributeCount = attributesAllowed ? _fragmentAttributes.length + 1 : 0;
-      final selected = input.readNBitUnsigned(_bitWidth(attributeCount + _fragmentDeclarations.length + 3));
+      final nilCount = attributesAllowed && group.hasNillableDeclaration && !nilSeen ? 1 : 0;
+      final selected = input.readNBitUnsigned(_bitWidth(attributeCount + nilCount + _fragmentDeclarations.length + 3));
       if (attributesAllowed && selected < _fragmentAttributes.length) {
         final attribute = _fragmentAttributes[selected];
         if (!seenAttributes.add(attribute.name)) {
@@ -410,13 +414,33 @@ final class _DecoderState {
         continue;
       }
 
+      if (nilCount > 0 && selected == attributeCount) {
+        if (!seenAttributes.add(_xsiNilName)) {
+          throw const FormatException('Duplicate relaxed fragment xsi:nil attribute');
+        }
+        final value = _readXsiNilValue();
+        events.add(ExiAttribute(_xsiNilName, value));
+        nilSeen = true;
+        final normalized = value.trim();
+        if (normalized == 'true' || normalized == '1') {
+          nilled = true;
+        }
+        continue;
+      }
+
       attributesAllowed = false;
-      final contentIndex = selected - attributeCount;
+      final contentIndex = selected - attributeCount - nilCount;
       if (contentIndex < _fragmentDeclarations.length) {
+        if (nilled) {
+          throw const FormatException('A nilled relaxed fragment element cannot contain child elements');
+        }
         _decodeFragmentElement(_fragmentDeclarations[contentIndex]);
         continue;
       }
       if (contentIndex == _fragmentDeclarations.length) {
+        if (nilled) {
+          throw const FormatException('A nilled relaxed fragment element cannot contain child elements');
+        }
         final name = strings.readQName(input);
         final declaration = schema?.globalElements.where((element) => element.name == name).firstOrNull;
         _decodeElement(name, declaration: declaration);
@@ -427,6 +451,9 @@ final class _DecoderState {
         return;
       }
       if (contentIndex == _fragmentDeclarations.length + 2) {
+        if (nilled) {
+          throw const FormatException('A nilled relaxed fragment element cannot contain characters');
+        }
         events.add(ExiCharacters(_readValue(elementName, () => strings.readValue(input, elementName))));
         continue;
       }
@@ -454,6 +481,20 @@ final class _DecoderState {
         integerMinInclusive: attribute.integerMinInclusive,
         integerMaxInclusive: attribute.integerMaxInclusive,
       );
+
+  String _readXsiNilValue() {
+    final value = ExiValueDecoder(
+      input,
+      strings,
+      preserveLexicalValues: options.fidelity.lexicalValues,
+      datatypeRepresentationMap: options.datatypeRepresentationMap,
+    ).read(ExiDatatype.boolean, _xsiNilName);
+    final normalized = value.trim();
+    if (normalized != 'true' && normalized != '1' && normalized != 'false' && normalized != '0') {
+      throw FormatException('Invalid xsi:nil value "$value"');
+    }
+    return value;
+  }
 
   void _decodeElement(ExiQName initialName, {ExiElementDeclaration? declaration}) {
     final startEventIndex = events.length;
@@ -721,16 +762,8 @@ final class _DecoderState {
             specialAttributesAllowed = false;
             continue;
           case _NonStrictDeviation.xsiNil:
-            final value = ExiValueDecoder(
-              input,
-              strings,
-              preserveLexicalValues: options.fidelity.lexicalValues,
-              datatypeRepresentationMap: options.datatypeRepresentationMap,
-            ).read(ExiDatatype.boolean, _xsiNilName);
+            final value = _readXsiNilValue();
             final normalized = value.trim();
-            if (normalized != 'true' && normalized != '1' && normalized != 'false' && normalized != '0') {
-              throw FormatException('Invalid xsi:nil value "$value"');
-            }
             events.add(ExiAttribute(_xsiNilName, value));
             nilSeen = true;
             if (normalized == 'true' || normalized == '1') {
@@ -799,18 +832,10 @@ final class _DecoderState {
         if (!canReadNil || special != nilIndex) {
           throw const FormatException('Invalid strict schema special-attribute event code');
         }
-        final value = ExiValueDecoder(
-          input,
-          strings,
-          preserveLexicalValues: options.fidelity.lexicalValues,
-          datatypeRepresentationMap: options.datatypeRepresentationMap,
-        ).read(ExiDatatype.boolean, _xsiNilName);
+        final value = _readXsiNilValue();
         events.add(ExiAttribute(_xsiNilName, value));
         nilSeen = true;
         final normalized = value.trim();
-        if (normalized != 'true' && normalized != '1' && normalized != 'false' && normalized != '0') {
-          throw FormatException('Invalid xsi:nil value "$value"');
-        }
         if (normalized == 'true' || normalized == '1') {
           content = const ExiEmptyParticle();
           nilled = true;
@@ -1562,6 +1587,8 @@ final class _FragmentElementGroup {
         ? first
         : null;
   }
+
+  bool get hasNillableDeclaration => declarations.any((declaration) => declaration.nillable);
 }
 
 final class _FragmentAttributeGroup {
