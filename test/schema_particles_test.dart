@@ -1377,6 +1377,43 @@ void main() {
     expect(document.toXmlString(), '<p:item xmlns:p="urn:example"/>');
   });
 
+  test('decodes self-contained content in a non-strict relaxed fragment grammar', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:integer"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer('10000000')
+      // Fragment item=00; relaxed non-strict SC escape=6.
+      ..write('00110');
+    _alignBits(bits);
+    bits
+      // Isolated relaxed start-tag CH=5, value, then content EE=3.
+      ..write('101')
+      ..write(_value('text'))
+      ..write('011');
+    _alignBits(bits);
+    // Fragment ED=3.
+    bits.write('11');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: false,
+        fragment: true,
+        selfContained: true,
+        schemaId: ExiSchemaId.named('particles'),
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<item>text</item>');
+  });
+
   test('uses declared child productions in a relaxed fragment grammar', () {
     final schema = _compile('''
       <xs:element name="child"/>

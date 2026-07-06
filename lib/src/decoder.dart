@@ -375,9 +375,13 @@ final class _DecoderState {
   }
 
   void _decodeRelaxedFragmentElement(_FragmentElementGroup group) {
-    var currentElementName = group.name;
     final startEventIndex = events.length;
-    events.add(ExiStartElement(currentElementName));
+    events.add(ExiStartElement(group.name));
+    _decodeRelaxedFragmentContent(group, group.name, startEventIndex);
+  }
+
+  void _decodeRelaxedFragmentContent(_FragmentElementGroup group, ExiQName elementName, int startEventIndex) {
+    var currentElementName = elementName;
     final seenAttributes = <ExiQName>{};
     var attributesAllowed = true;
     var nilSeen = false;
@@ -456,6 +460,9 @@ final class _DecoderState {
             }
             events.add(ExiNamespaceDeclaration(uri: uri, prefix: prefix, localElementNamespace: localElementNamespace));
             attributesAllowed = true;
+          case _EventType.selfContained:
+            _decodeRelaxedFragmentSelfContained(group, currentElementName, startEventIndex);
+            return;
           case _EventType.entityReference:
             events.add(ExiEntityReference(strings.readString(input)));
           case _EventType.comment:
@@ -501,26 +508,50 @@ final class _DecoderState {
     }
   }
 
+  void _decodeRelaxedFragmentSelfContained(_FragmentElementGroup group, ExiQName elementName, int startEventIndex) {
+    final outerStrings = strings;
+    final outerGrammars = grammars;
+    final outerFragmentElements = _fragmentElements;
+    try {
+      strings = _newStringTable(options, schema)..addQName(elementName);
+      grammars = {};
+      _fragmentElements = [];
+      input.alignToByte();
+      _decodeRelaxedFragmentContent(group, elementName, startEventIndex);
+      input.alignToByte();
+    } finally {
+      strings = outerStrings;
+      grammars = outerGrammars;
+      _fragmentElements = outerFragmentElements;
+    }
+  }
+
   bool get _hasRelaxedFragmentDeviation =>
       options.fidelity.prefixes ||
+      options.selfContained ||
       options.fidelity.dtd ||
       options.fidelity.comments ||
       options.fidelity.processingInstructions;
 
   _Production _readRelaxedFragmentDeviation() {
     final hasNamespace = options.fidelity.prefixes;
+    final hasSelfContained = options.selfContained;
     final hasEntity = options.fidelity.dtd;
     final hasCommentOrPi = options.fidelity.comments || options.fidelity.processingInstructions;
-    final count = (hasNamespace ? 1 : 0) + (hasEntity ? 1 : 0) + (hasCommentOrPi ? 1 : 0);
+    final count = (hasNamespace ? 1 : 0) + (hasSelfContained ? 1 : 0) + (hasEntity ? 1 : 0) + (hasCommentOrPi ? 1 : 0);
     final selected = input.readNBitUnsigned(_bitWidth(count));
     if (hasNamespace && selected == 0) {
       return const _Production(_EventType.namespaceDeclaration);
     }
-    final entityIndex = hasNamespace ? 1 : 0;
+    final selfContainedIndex = hasNamespace ? 1 : 0;
+    if (hasSelfContained && selected == selfContainedIndex) {
+      return const _Production(_EventType.selfContained);
+    }
+    final entityIndex = (hasNamespace ? 1 : 0) + (hasSelfContained ? 1 : 0);
     if (hasEntity && selected == entityIndex) {
       return const _Production(_EventType.entityReference);
     }
-    final commentOrPiIndex = (hasNamespace ? 1 : 0) + (hasEntity ? 1 : 0);
+    final commentOrPiIndex = (hasNamespace ? 1 : 0) + (hasSelfContained ? 1 : 0) + (hasEntity ? 1 : 0);
     if (hasCommentOrPi && selected == commentOrPiIndex) {
       return _readCommentOrPi();
     }
