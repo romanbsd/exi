@@ -747,7 +747,7 @@ final class _DecoderState {
             throw const FormatException('Duplicate built-in element attribute');
           }
           current.learn(_Production(_EventType.attribute, name));
-          events.add(ExiAttribute(name, _readValue(name, () => strings.readValue(input, name))));
+          events.add(ExiAttribute(name, _readValue(name, () => _readUntypedAttributeValue(name))));
         case _EventType.startElement:
           final name = production.name ?? strings.readQName(input);
           current.learn(_Production(_EventType.startElement, name));
@@ -794,6 +794,13 @@ final class _DecoderState {
           throw StateError('Invalid element production');
       }
     }
+  }
+
+  String _readUntypedAttributeValue(ExiQName name) {
+    if (name == _xsiTypeName && !options.fidelity.lexicalValues) {
+      return strings.readQName(input).toString();
+    }
+    return strings.readValue(input, name);
   }
 
   void _decodeSelfContained(ExiQName elementName, int startEventIndex) {

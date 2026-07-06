@@ -105,6 +105,65 @@ void main() {
       expect(() => ExiDecoder().decode(_pack(bits.toString())), throwsA(isA<FormatException>()));
     });
 
+    test('decodes built-in xsi:type values as QNames by default', () {
+      const xsdUri = 'http://www.w3.org/2001/XMLSchema';
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'item'))
+        // StartTagContent -> AT(*) with xsi:type.
+        ..write('01')
+        ..write(_qNameHit(uriId: 2, localNameId: 1, localNameCount: 2))
+        // xsi:type value uses QName representation when lexical values are not preserved.
+        ..write(_literalQName(xsdUri, 'string'))
+        // StartTagContent -> EE.
+        ..write('100');
+
+      final document = ExiDecoder().decode(_pack(bits.toString()));
+
+      expect(document.events.whereType<ExiAttribute>().single.value, '{$xsdUri}string');
+    });
+
+    test('decodes built-in xsi:type values as Strings when preserving lexical values', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'item'))
+        // StartTagContent -> AT(*) with xsi:type.
+        ..write('01')
+        ..write(_qNameHit(uriId: 2, localNameId: 1, localNameCount: 2))
+        // Preserve.lexicalValues keeps xsi:type on the String value representation.
+        ..write(_value('xsd:string'))
+        // StartTagContent -> EE.
+        ..write('100');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fidelity: ExiFidelityOptions(lexicalValues: true)),
+      ).decode(_pack(bits.toString()));
+
+      expect(document.events.whereType<ExiAttribute>().single.value, 'xsd:string');
+    });
+
+    test('uses namespace prefixes for built-in QName-encoded xsi:type values', () {
+      const xsdUri = 'http://www.w3.org/2001/XMLSchema';
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'item'))
+        // StartTagContent -> NS, declaring the prefix used by the xsi:type value.
+        ..write('010')
+        ..write(_literal(xsdUri, lengthOffset: 0))
+        ..write(_literal('xsd', lengthOffset: 0))
+        ..write('0')
+        // StartTagContent -> AT(*) with xsi:type.
+        ..write('001')
+        ..write(_qNameHit(uriId: 2, localNameId: 1, localNameCount: 2))
+        // QName value uses the declared xsd prefix partition.
+        ..write(_literalQName(xsdUri, 'integer'))
+        // StartTagContent -> EE.
+        ..write('100');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fidelity: ExiFidelityOptions(prefixes: true)),
+      ).decode(_pack(bits.toString()));
+
+      expect(document.events.whereType<ExiAttribute>().single.value, '{$xsdUri}xsd:integer');
+    });
+
     test('learns repeated child QNames and character productions', () {
       final bits = StringBuffer('10000000')
         ..write(_qName('', 'root'))
@@ -195,6 +254,9 @@ String _qNameHit({required int uriId, required int localNameId, required int loc
   final encodedLocalName = localNameId.toRadixString(2).padLeft(localNameWidth, '0');
   return '$encodedUri${_unsigned(0)}$encodedLocalName';
 }
+
+String _literalQName(String uri, String localName) =>
+    '00${_literal(uri, lengthOffset: 0)}${_literal(localName, lengthOffset: 1)}';
 
 String _value(String value) => _literal(value, lengthOffset: 2);
 
