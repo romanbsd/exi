@@ -1171,7 +1171,7 @@ final class _DecoderState {
           if (wildcard.excludedNamespaces?.contains(name.uri) ?? false) {
             throw const FormatException('Element QName does not match the schema wildcard namespace constraint');
           }
-          final derivative = _derive(content, wildcard);
+          final derivative = _deriveWildcardAlternatives(content, event.wildcardParticles);
           if (derivative == null) {
             throw const FormatException('Element does not match the schema wildcard particle');
           }
@@ -1370,6 +1370,7 @@ final class _DeclaredEvent {
     : kind = _DeclaredEventKind.attribute,
       element = null,
       elementAlternatives = const [],
+      wildcardAlternatives = const [],
       wildcardParticle = null,
       wildcardUri = null;
 
@@ -1377,6 +1378,7 @@ final class _DeclaredEvent {
     : kind = _DeclaredEventKind.element,
       attributeIndex = null,
       attribute = null,
+      wildcardAlternatives = const [],
       wildcardParticle = null,
       wildcardUri = null;
 
@@ -1386,9 +1388,10 @@ final class _DeclaredEvent {
       attribute = null,
       element = null,
       elementAlternatives = const [],
+      wildcardAlternatives = const [],
       wildcardParticle = null;
 
-  const _DeclaredEvent.wildcardElement(this.wildcardParticle, this.wildcardUri)
+  const _DeclaredEvent.wildcardElement(this.wildcardParticle, this.wildcardUri, {this.wildcardAlternatives = const []})
     : kind = _DeclaredEventKind.wildcardElement,
       attributeIndex = null,
       attribute = null,
@@ -1401,6 +1404,7 @@ final class _DeclaredEvent {
       attribute = null,
       element = null,
       elementAlternatives = const [],
+      wildcardAlternatives = const [],
       wildcardParticle = null,
       wildcardUri = null;
 
@@ -1410,6 +1414,7 @@ final class _DeclaredEvent {
       attribute = null,
       element = null,
       elementAlternatives = const [],
+      wildcardAlternatives = const [],
       wildcardParticle = null,
       wildcardUri = null;
 
@@ -1419,6 +1424,7 @@ final class _DeclaredEvent {
       attribute = null,
       element = null,
       elementAlternatives = const [],
+      wildcardAlternatives = const [],
       wildcardParticle = null,
       wildcardUri = null;
 
@@ -1428,9 +1434,13 @@ final class _DeclaredEvent {
   final ExiElementDeclaration? element;
   final List<ExiElementDeclaration> elementAlternatives;
   final ExiWildcardParticle? wildcardParticle;
+  final List<ExiWildcardParticle> wildcardAlternatives;
   final String? wildcardUri;
 
   List<ExiElementDeclaration> get elementDeclarations => elementAlternatives.isEmpty ? [element!] : elementAlternatives;
+
+  List<ExiWildcardParticle> get wildcardParticles =>
+      wildcardAlternatives.isEmpty ? [wildcardParticle!] : wildcardAlternatives;
 }
 
 ExiParticle _legacyContent(List<ExiElementDeclaration> children) {
@@ -1569,18 +1579,40 @@ List<_DeclaredEvent> _leadingElementEvents(ExiParticle particle) {
         final uris = namespaces?.toList();
         uris?.sort();
         if (uris == null) {
-          if (result.any(
+          final existingIndex = result.indexWhere(
             (candidate) => candidate.kind == _DeclaredEventKind.wildcardElement && candidate.wildcardUri == null,
-          )) {
-            throw UnsupportedError('Ambiguous unconstrained schema element wildcards are not supported yet');
+          );
+          if (existingIndex != -1) {
+            final existing = result[existingIndex];
+            final wildcards = existing.wildcardParticles;
+            if (!wildcards.every((wildcard) => _hasSameWildcardIdentity(wildcard, current))) {
+              throw UnsupportedError('Ambiguous unconstrained schema element wildcards are not supported yet');
+            }
+            result[existingIndex] = _DeclaredEvent.wildcardElement(
+              existing.wildcardParticle!,
+              null,
+              wildcardAlternatives: [...wildcards, current],
+            );
+            return;
           }
           result.add(_DeclaredEvent.wildcardElement(current, null));
         } else {
           for (final uri in uris) {
-            if (result.any(
+            final existingIndex = result.indexWhere(
               (candidate) => candidate.kind == _DeclaredEventKind.wildcardElement && candidate.wildcardUri == uri,
-            )) {
-              throw UnsupportedError('Ambiguous schema element wildcards for namespace "$uri" are not supported yet');
+            );
+            if (existingIndex != -1) {
+              final existing = result[existingIndex];
+              final wildcards = existing.wildcardParticles;
+              if (!wildcards.every((wildcard) => _hasSameWildcardIdentity(wildcard, current))) {
+                throw UnsupportedError('Ambiguous schema element wildcards for namespace "$uri" are not supported yet');
+              }
+              result[existingIndex] = _DeclaredEvent.wildcardElement(
+                existing.wildcardParticle!,
+                uri,
+                wildcardAlternatives: [...wildcards, current],
+              );
+              continue;
             }
             result.add(_DeclaredEvent.wildcardElement(current, uri));
           }
@@ -1614,6 +1646,18 @@ List<_DeclaredEvent> _leadingElementEvents(ExiParticle particle) {
 bool _hasSameElementGrammarIdentity(ExiElementDeclaration left, ExiElementDeclaration right) {
   final schemaTypeName = left.schemaTypeName;
   return schemaTypeName != null && right.schemaTypeName == schemaTypeName && right.nillable == left.nillable;
+}
+
+bool _hasSameWildcardIdentity(ExiWildcardParticle left, ExiWildcardParticle right) =>
+    _sameStringSet(left.namespaces, right.namespaces) &&
+    _sameStringSet(left.excludedNamespaces, right.excludedNamespaces) &&
+    left.processContents == right.processContents;
+
+bool _sameStringSet(Set<String>? left, Set<String>? right) {
+  if (left == null || right == null) {
+    return left == right;
+  }
+  return left.length == right.length && left.containsAll(right);
 }
 
 ExiParticle? _derive(ExiParticle particle, Object selected) {
@@ -1689,6 +1733,17 @@ ExiParticle? _deriveElementAlternatives(ExiParticle particle, List<ExiElementDec
   final alternatives = <ExiParticle>[];
   for (final declaration in declarations) {
     final derivative = _derive(particle, declaration);
+    if (derivative != null) {
+      alternatives.add(derivative);
+    }
+  }
+  return _choice(alternatives);
+}
+
+ExiParticle? _deriveWildcardAlternatives(ExiParticle particle, List<ExiWildcardParticle> wildcards) {
+  final alternatives = <ExiParticle>[];
+  for (final wildcard in wildcards) {
+    final derivative = _derive(particle, wildcard);
     if (derivative != null) {
       alternatives.add(derivative);
     }

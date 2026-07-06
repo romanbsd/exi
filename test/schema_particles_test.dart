@@ -1083,6 +1083,59 @@ void main() {
     expect(document.events.whereType<ExiEndElement>(), hasLength(2));
   });
 
+  test('collapses duplicate leading element wildcards with the same namespace constraints', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'particles',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:example">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:choice>
+                <xs:any namespace="urn:other" processContents="lax"/>
+                <xs:any namespace="urn:other" processContents="lax"/>
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer()
+      // Root=0; duplicate SE(urn:other:*) branches collapse and encode only the local name.
+      ..write('0')
+      ..write(_rawString('child'))
+      // The unknown child uses its schema-less start-tag EE production.
+      ..write('00');
+
+    final document = _decode(schema, bits.toString());
+    final elements = document.events.whereType<ExiStartElement>().toList();
+
+    expect(elements[1].name, const ExiQName(uri: 'urn:other', localName: 'child'));
+  });
+
+  test('keeps duplicate leading element wildcards unsupported when constraints conflict', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'particles',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:example">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:choice>
+                <xs:any namespace="urn:other" processContents="lax"/>
+                <xs:any namespace="urn:other" processContents="skip"/>
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+
+    expect(() => _decode(schema, '0${_rawString('child')}00'), throwsUnsupportedError);
+  });
+
   test('uses a global element declaration for a strict wildcard match', () {
     final schema = _compile('''
       <xs:element name="child" type="xs:integer"/>
