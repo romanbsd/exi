@@ -231,6 +231,125 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+
+  test('does not add values longer than valueMaxLength to value partitions', () {
+    final bits = StringBuffer('10000000')
+      ..write(_qName('', 'root'))
+      // StartTagContent -> CH(*) with a value too long to add.
+      ..write('11')
+      ..write(_value('long'))
+      // ElementContent -> CH(*) with a local value hit against the empty partition.
+      ..write('11')
+      ..write(_unsigned(0));
+
+    expect(
+      () => ExiDecoder(options: const ExiOptions(valueMaxLength: 2)).decode(_pack(bits.toString())),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('applies valueMaxLength to attribute value partitions', () {
+    final bits = StringBuffer('10000000')
+      // FragmentContent -> SE(*).
+      ..write('0')
+      ..write(_qName('', 'item'))
+      // StartTagContent -> AT(*) with a value too long to add.
+      ..write('01')
+      ..write(_qName('', 'id'))
+      ..write(_value('long'))
+      // StartTagContent -> EE.
+      ..write('100')
+      // FragmentContent -> learned SE(item).
+      ..write('00')
+      // StartTagContent -> learned AT(id), after the learned EE production.
+      ..write('01')
+      ..write(_unsigned(0));
+
+    expect(
+      () => ExiDecoder(options: const ExiOptions(fragment: true, valueMaxLength: 2)).decode(_pack(bits.toString())),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('does not add empty values to value partitions', () {
+    final bits = StringBuffer('10000000')
+      ..write(_qName('', 'root'))
+      // StartTagContent -> CH(*) with an empty value.
+      ..write('11')
+      ..write(_value(''))
+      // ElementContent -> CH(*) with a local value hit against the empty partition.
+      ..write('11')
+      ..write(_unsigned(0));
+
+    expect(() => ExiDecoder().decode(_pack(bits.toString())), throwsA(isA<FormatException>()));
+  });
+
+  test('reuses the newest global value after capacity replacement', () {
+    final bits = StringBuffer('10000000')
+      ..write(_qName('', 'root'))
+      // StartTagContent -> CH(*) with the first value.
+      ..write('11')
+      ..write(_value('first'))
+      // ElementContent -> CH(*) with a second value that replaces global id 0.
+      ..write('11')
+      ..write(_value('second'))
+      // ElementContent -> learned CH with a global value hit.
+      ..write('00')
+      ..write(_unsigned(1))
+      // ElementContent -> EE.
+      ..write('01');
+
+    final document = ExiDecoder(options: const ExiOptions(valuePartitionCapacity: 1)).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root>firstsecondsecond</root>');
+  });
+
+  test('resolves attribute local value partition hits across repeated elements', () {
+    final bits = StringBuffer('10000000')
+      // FragmentContent -> SE(*).
+      ..write('0')
+      ..write(_qName('', 'item'))
+      // StartTagContent -> AT(*) with a new value.
+      ..write('01')
+      ..write(_qName('', 'id'))
+      ..write(_value('same'))
+      // StartTagContent -> EE.
+      ..write('100')
+      // FragmentContent -> learned SE(item).
+      ..write('00')
+      // StartTagContent -> learned AT(id), after the learned EE production.
+      ..write('01')
+      ..write(_unsigned(0))
+      // StartTagContent -> learned EE.
+      ..write('00')
+      // FragmentContent -> ED.
+      ..write('10');
+
+    final document = ExiDecoder(options: const ExiOptions(fragment: true)).decode(_pack(bits.toString()));
+
+    expect(document.events.whereType<ExiAttribute>().map((event) => event.value), ['same', 'same']);
+    expect(document.toXmlString(), '<item id="same"/><item id="same"/>');
+  });
+
+  test('invalidates local value ids replaced by valuePartitionCapacity', () {
+    final bits = StringBuffer('10000000')
+      ..write(_qName('', 'root'))
+      // StartTagContent -> CH(*) with the first value.
+      ..write('11')
+      ..write(_value('first'))
+      // ElementContent -> CH(*) with a second value that replaces the first.
+      ..write('11')
+      ..write(_value('second'))
+      // ElementContent -> learned CH with a local value hit for replaced local id 0.
+      ..write('00')
+      ..write(_unsigned(0))
+      ..write('0');
+
+    expect(
+      () => ExiDecoder(options: const ExiOptions(valuePartitionCapacity: 1)).decode(_pack(bits.toString())),
+      throwsA(isA<FormatException>()),
+    );
+  });
 }
 
 String _qName(String uri, String localName) {
