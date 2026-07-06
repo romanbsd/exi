@@ -405,7 +405,7 @@ final class _DecoderState {
         specialAttributesAllowed = false;
         final declaration = attribute.declaration;
         final value = declaration == null
-            ? _readValue(attribute.name, () => strings.readValue(input, attribute.name))
+            ? _readValue(attribute.name, () => _readUntypedAttributeValue(attribute.name))
             : _readValue(attribute.name, () => _readTypedAttribute(declaration));
         events.add(ExiAttribute(attribute.name, value));
         continue;
@@ -421,7 +421,7 @@ final class _DecoderState {
         specialAttributesAllowed = false;
         final declaration = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
         final value = declaration == null
-            ? _readValue(name, () => strings.readValue(input, name))
+            ? _readValue(name, () => _readUntypedAttributeValue(name))
             : _readValue(name, () => _readTypedAttribute(declaration));
         events.add(ExiAttribute(name, value));
         continue;
@@ -501,7 +501,7 @@ final class _DecoderState {
             if (!seenAttributes.add(name)) {
               throw const FormatException('Duplicate relaxed fragment attribute');
             }
-            events.add(ExiAttribute(name, _readValue(name, () => strings.readValue(input, name))));
+            events.add(ExiAttribute(name, _readValue(name, () => _readUntypedAttributeValue(name))));
           case _EventType.namespaceDeclaration:
             if (seenAttributes.isNotEmpty) {
               throw const FormatException('Namespace declarations must precede relaxed fragment attributes');
@@ -946,7 +946,7 @@ final class _DecoderState {
             }
             final globalAttribute = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
             final value = globalAttribute == null
-                ? _readValue(name, () => strings.readValue(input, name))
+                ? _readValue(name, () => _readUntypedAttributeValue(name))
                 : _readValue(
                     name,
                     () =>
@@ -1000,7 +1000,7 @@ final class _DecoderState {
             if (!seenAttributes.add(name)) {
               throw const FormatException('Duplicate non-strict schema attribute');
             }
-            events.add(ExiAttribute(name, _readValue(name, () => strings.readValue(input, name))));
+            events.add(ExiAttribute(name, _readValue(name, () => _readUntypedAttributeValue(name))));
             continue;
           case _NonStrictDeviation.xsiType:
             if (!seenAttributes.add(_xsiTypeName)) {
@@ -1160,7 +1160,7 @@ final class _DecoderState {
           }
           final globalAttribute = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
           final value = globalAttribute == null
-              ? _readValue(name, () => strings.readValue(input, name))
+              ? _readValue(name, () => _readUntypedAttributeValue(name))
               : _readValue(
                   name,
                   () =>

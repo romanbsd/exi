@@ -1410,6 +1410,60 @@ void main() {
     expect(attribute.name, const ExiQName(uri: 'urn:other', localName: 'code'));
   });
 
+  test('decodes wildcard xsi:type values as QNames by default', () {
+    const xsiUri = 'http://www.w3.org/2001/XMLSchema-instance';
+    const xsdUri = 'http://www.w3.org/2001/XMLSchema';
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:anyAttribute/>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Root=0; AT(*)=0; xsi:type attribute name, then QName-encoded value.
+      ..write('00')
+      ..write(_schemaQName(xsiUri, 'type'))
+      ..write(_schemaQName(xsdUri, 'integer'))
+      ..write('1');
+
+    final document = _decode(schema, bits.toString());
+    final attribute = document.events.whereType<ExiAttribute>().single;
+
+    expect(attribute.name, const ExiQName(uri: xsiUri, localName: 'type'));
+    expect(attribute.value, '{$xsdUri}integer');
+  });
+
+  test('decodes wildcard xsi:type values as Strings when preserving lexical values', () {
+    const xsiUri = 'http://www.w3.org/2001/XMLSchema-instance';
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:anyAttribute/>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Root=0; AT(*)=0; xsi:type attribute name, then String-encoded value.
+      ..write('00')
+      ..write(_schemaQName(xsiUri, 'type'))
+      ..write(_value('xs:integer'))
+      ..write('1');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: true,
+        schemaId: ExiSchemaId.named('particles'),
+        fidelity: ExiFidelityOptions(lexicalValues: true),
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack('10000000${bits.toString()}'));
+    final attribute = document.events.whereType<ExiAttribute>().single;
+
+    expect(attribute.name, const ExiQName(uri: xsiUri, localName: 'type'));
+    expect(attribute.value, 'xs:integer');
+  });
+
   test('decodes an unknown child through a lax element wildcard', () {
     final schema = ExiSchemaCompiler.compile(
       id: 'particles',
