@@ -444,7 +444,8 @@ final class _DecoderState {
           currentElementName,
           target,
           startEventIndex: startEventIndex,
-          allowSpecialAttributes: false,
+          allowXsiTypeAttribute: false,
+          nillableOverride: group.hasNillableDeclaration,
         );
         return;
       }
