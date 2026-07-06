@@ -555,6 +555,37 @@ void main() {
       expect(document.toXmlString(), '<root><item>text</item></root>');
     });
 
+    test('collapses duplicate leading element QNames with the same anonymous attribute grammar', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:attribute name="code" type="xs:integer" use="required"/>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:attribute name="code" type="xs:integer" use="required"/>
+                </xs:complexType>
+              </xs:element>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+      final bits = StringBuffer()
+        // Duplicate anonymous attribute SE(item) branches collapse to one event code.
+        ..write('0')
+        // Required integer attribute is implicit in the child grammar.
+        ..write('0')
+        ..write(_unsigned(7));
+
+      final document = _decode(schema, bits.toString());
+
+      expect(document.toXmlString(), '<root><item code="7"/></root>');
+    });
+
     test('keeps duplicate leading element QNames unsupported when schema types conflict', () {
       final schema = _compile('''
         <xs:element name="root">

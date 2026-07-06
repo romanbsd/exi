@@ -1674,7 +1674,9 @@ bool _hasSameElementGrammarIdentity(ExiElementDeclaration left, ExiElementDeclar
   return right.schemaTypeName == null &&
       right.name == left.name &&
       right.nillable == left.nillable &&
-      (_hasSameAnonymousEmptyGrammar(left, right) || _hasSameAnonymousValueGrammar(left, right));
+      (_hasSameAnonymousEmptyGrammar(left, right) ||
+          _hasSameAnonymousValueGrammar(left, right) ||
+          _hasSameAnonymousAttributeGrammar(left, right));
 }
 
 bool _hasSameWildcardIdentity(ExiWildcardParticle left, ExiWildcardParticle right) =>
@@ -1713,6 +1715,52 @@ bool _hasSameAnonymousValueGrammar(ExiElementDeclaration left, ExiElementDeclara
 
 bool _isAnonymousValueGrammar(ExiElementDeclaration declaration) =>
     declaration.datatype != null && _isAnonymousGrammarBase(declaration);
+
+bool _hasSameAnonymousAttributeGrammar(ExiElementDeclaration left, ExiElementDeclaration right) {
+  if (!_isAnonymousAttributeGrammar(left) || !_isAnonymousAttributeGrammar(right)) {
+    return false;
+  }
+  return left.anyAttribute == right.anyAttribute &&
+      _sameStringSet(left.attributeWildcardNamespaces, right.attributeWildcardNamespaces) &&
+      _sameStringSet(left.attributeWildcardExcludedNamespaces, right.attributeWildcardExcludedNamespaces) &&
+      left.attributeProcessContents == right.attributeProcessContents &&
+      _sameAttributes(left.attributes, right.attributes);
+}
+
+bool _isAnonymousAttributeGrammar(ExiElementDeclaration declaration) =>
+    declaration.datatype == null &&
+    declaration.children.isEmpty &&
+    declaration.attributes.isNotEmpty &&
+    declaration.content == null &&
+    !declaration.mixed &&
+    declaration.typeAlternatives.isEmpty;
+
+bool _sameAttributes(List<ExiAttributeDeclaration> left, List<ExiAttributeDeclaration> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index++) {
+    if (!_sameAttribute(left[index], right[index])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool _sameAttribute(ExiAttributeDeclaration left, ExiAttributeDeclaration right) =>
+    left.name == right.name &&
+    left.datatype == right.datatype &&
+    left.listItemDatatype == right.listItemDatatype &&
+    _sameList(left.schemaDatatypeHierarchy, right.schemaDatatypeHierarchy) &&
+    _sameList(left.listItemSchemaDatatypeHierarchy, right.listItemSchemaDatatypeHierarchy) &&
+    _sameList(left.restrictedCharacters, right.restrictedCharacters) &&
+    _sameList(left.listItemRestrictedCharacters, right.listItemRestrictedCharacters) &&
+    _sameList(left.enumerationValues, right.enumerationValues) &&
+    left.booleanPattern == right.booleanPattern &&
+    left.listItemBooleanPattern == right.listItemBooleanPattern &&
+    left.integerMinInclusive == right.integerMinInclusive &&
+    left.integerMaxInclusive == right.integerMaxInclusive &&
+    left.required == right.required;
 
 bool _isAnonymousGrammarBase(ExiElementDeclaration declaration) =>
     declaration.children.isEmpty &&
