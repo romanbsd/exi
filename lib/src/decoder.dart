@@ -389,8 +389,11 @@ final class _DecoderState {
 
     while (true) {
       final attributeCount = attributesAllowed ? _fragmentAttributes.length + 1 : 0;
+      final typeCount = attributesAllowed && group.hasTypeAlternatives && !seenAttributes.contains(_xsiTypeName)
+          ? 1
+          : 0;
       final nilCount = attributesAllowed && group.hasNillableDeclaration && !nilSeen ? 1 : 0;
-      final baseCount = attributeCount + nilCount + _fragmentDeclarations.length + 3;
+      final baseCount = attributeCount + typeCount + nilCount + _fragmentDeclarations.length + 3;
       final nonStrictCount = !options.strict && _hasRelaxedFragmentDeviation ? 1 : 0;
       final selected = input.readNBitUnsigned(_bitWidth(baseCount + nonStrictCount));
       if (attributesAllowed && selected < _fragmentAttributes.length) {
@@ -421,7 +424,26 @@ final class _DecoderState {
         continue;
       }
 
-      if (nilCount > 0 && selected == attributeCount) {
+      if (typeCount > 0 && selected == attributeCount) {
+        if (!seenAttributes.add(_xsiTypeName)) {
+          throw const FormatException('Duplicate relaxed fragment xsi:type attribute');
+        }
+        final (:targetName, :lexicalValue) = _readRelaxedFragmentXsiType(group);
+        final target = group.typeAlternatives[targetName];
+        if (target == null) {
+          throw FormatException('Unknown relaxed fragment xsi:type "${targetName.localName}"');
+        }
+        events.add(ExiAttribute(_xsiTypeName, lexicalValue));
+        _decodeDeclaredContent(
+          currentElementName,
+          target,
+          startEventIndex: startEventIndex,
+          allowSpecialAttributes: false,
+        );
+        return;
+      }
+
+      if (nilCount > 0 && selected == attributeCount + typeCount) {
         if (!seenAttributes.add(_xsiNilName)) {
           throw const FormatException('Duplicate relaxed fragment xsi:nil attribute');
         }
@@ -476,7 +498,7 @@ final class _DecoderState {
       }
 
       attributesAllowed = false;
-      final contentIndex = selected - attributeCount - nilCount;
+      final contentIndex = selected - attributeCount - typeCount - nilCount;
       if (contentIndex < _fragmentDeclarations.length) {
         if (nilled) {
           throw const FormatException('A nilled relaxed fragment element cannot contain child elements');
@@ -597,6 +619,29 @@ final class _DecoderState {
       throw FormatException('Invalid xsi:nil value "$value"');
     }
     return value;
+  }
+
+  ({ExiQName targetName, String lexicalValue}) _readRelaxedFragmentXsiType(_FragmentElementGroup group) {
+    if (!options.fidelity.lexicalValues) {
+      final name = strings.readQName(input);
+      return (targetName: name, lexicalValue: name.toString());
+    }
+
+    final lexical = strings.readValue(input, _xsiTypeName);
+    final normalized = lexical.trim();
+    final separator = normalized.indexOf(':');
+    if (normalized.isEmpty ||
+        separator != normalized.lastIndexOf(':') ||
+        separator == 0 ||
+        separator == normalized.length - 1) {
+      throw FormatException('Invalid lexical xsi:type QName "$lexical"');
+    }
+    final localName = separator == -1 ? normalized : normalized.substring(separator + 1);
+    final matches = group.typeAlternatives.keys.where((name) => name.localName == localName).toList();
+    if (matches.length != 1) {
+      throw FormatException('Cannot resolve lexical relaxed fragment xsi:type QName "$lexical"');
+    }
+    return (targetName: matches.single, lexicalValue: lexical);
   }
 
   void _decodeElement(ExiQName initialName, {ExiElementDeclaration? declaration}) {
@@ -1692,6 +1737,16 @@ final class _FragmentElementGroup {
   }
 
   bool get hasNillableDeclaration => declarations.any((declaration) => declaration.nillable);
+
+  Map<ExiQName, ExiElementDeclaration> get typeAlternatives {
+    final alternatives = <ExiQName, ExiElementDeclaration>{};
+    for (final declaration in declarations) {
+      alternatives.addAll(declaration.typeAlternatives);
+    }
+    return alternatives;
+  }
+
+  bool get hasTypeAlternatives => declarations.any((declaration) => declaration.typeAlternatives.isNotEmpty);
 }
 
 final class _FragmentAttributeGroup {

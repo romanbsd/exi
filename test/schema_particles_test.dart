@@ -1241,6 +1241,41 @@ void main() {
     expect(document.toXmlString(), '<item xsi:nil="true"/>');
   });
 
+  test('switches a relaxed fragment grammar through xsi:type', () {
+    final schema = _compile('''
+      <xs:complexType name="Base"/>
+      <xs:complexType name="Derived">
+        <xs:complexContent>
+          <xs:extension base="Base">
+            <xs:sequence>
+              <xs:element name="child"/>
+            </xs:sequence>
+          </xs:extension>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="Base"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Fragment QNames are child=000, item=001, root=010, SE(*)=011, ED=100.
+      ..write('001')
+      // Relaxed AT(xsi:type)=1 after AT(*).
+      ..write('001')
+      ..write(_schemaQName('', 'Derived', localNames: ['Base', 'Derived', 'child', 'item', 'root']))
+      // The Derived grammar decodes child and both EE events implicitly.
+      ..write('100');
+
+    final document = _decodeFragment(schema, bits.toString());
+
+    expect(document.toXmlString(), '<item xsi:type="Derived"><child/></item>');
+  });
+
   test('decodes comments in a non-strict relaxed fragment grammar', () {
     final schema = _compile('''
       <xs:element name="root">

@@ -13,8 +13,8 @@ The current decoder stage supports:
   schema-informed fragments with declared element QNames, including relaxed
   element-fragment grammars for conflicting declarations and specific fragment
   grammars for duplicate declarations with identical schema type identity and
-  nillability, plus `xsi:nil` special attributes for relaxed fragment
-  declarations with nillable candidates and non-strict entity, comment,
+  nillability, plus relaxed-fragment `xsi:type`, `xsi:nil` special attributes
+  for declarations with nillable candidates, and non-strict entity, comment,
   processing-instruction, namespace-declaration, and self-contained deviations;
 - configurable out-of-band fidelity options for comments, processing
   instructions, DTD/entity events, and namespace prefixes;
@@ -67,8 +67,8 @@ imports/includes, complex-content restriction, defaults and fixed values,
 substitution groups, abstract
 declarations and derivation controls, inherited wildcard unions involving
 `##other`, schema-informed grammars requiring unsupported XSD features, relaxed
-element-fragment `xsi:type`, and remaining non-strict grammar augmentations are
-also not yet available.
+element-fragment untyped attribute deviations, and remaining non-strict grammar
+augmentations are also not yet available.
 
 ```dart
 import 'dart:typed_data';
