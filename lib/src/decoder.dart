@@ -394,7 +394,7 @@ final class _DecoderState {
           : 0;
       final nilCount = attributesAllowed && group.hasNillableDeclaration && !nilSeen ? 1 : 0;
       final baseCount = attributeCount + typeCount + nilCount + _fragmentDeclarations.length + 3;
-      final nonStrictCount = !options.strict && _hasRelaxedFragmentDeviation ? 1 : 0;
+      final nonStrictCount = !options.strict && _hasRelaxedFragmentDeviation(attributesAllowed) ? 1 : 0;
       final selected = input.readNBitUnsigned(_bitWidth(baseCount + nonStrictCount));
       if (attributesAllowed && selected < _fragmentAttributes.length) {
         final attribute = _fragmentAttributes[selected];
@@ -458,12 +458,29 @@ final class _DecoderState {
       }
 
       if (nonStrictCount > 0 && selected == baseCount) {
+        final inAttributePhase = attributesAllowed;
         attributesAllowed = false;
         if (nilled) {
           throw const FormatException('A nilled relaxed fragment element cannot contain non-strict events');
         }
-        final production = _readRelaxedFragmentDeviation();
+        final production = _readRelaxedFragmentDeviation(inAttributePhase);
         switch (production.type) {
+          case _EventType.attribute:
+            attributesAllowed = true;
+            final selectedAttribute = input.readNBitUnsigned(_bitWidth(_fragmentAttributes.length + 1));
+            if (selectedAttribute > _fragmentAttributes.length) {
+              throw const FormatException('Invalid relaxed fragment untyped-attribute event code');
+            }
+            final name = selectedAttribute < _fragmentAttributes.length
+                ? _fragmentAttributes[selectedAttribute].name
+                : strings.readQName(input);
+            if (name == _xsiTypeName || name == _xsiNilName) {
+              throw const FormatException('xsi:type and xsi:nil cannot use a relaxed untyped attribute');
+            }
+            if (!seenAttributes.add(name)) {
+              throw const FormatException('Duplicate relaxed fragment attribute');
+            }
+            events.add(ExiAttribute(name, _readValue(name, () => strings.readValue(input, name))));
           case _EventType.namespaceDeclaration:
             final uri = strings.readString(input);
             final prefix = strings.readString(input);
@@ -548,32 +565,44 @@ final class _DecoderState {
     }
   }
 
-  bool get _hasRelaxedFragmentDeviation =>
+  bool _hasRelaxedFragmentDeviation(bool attributesAllowed) =>
+      (attributesAllowed && _fragmentAttributes.isNotEmpty) ||
       options.fidelity.prefixes ||
       options.selfContained ||
       options.fidelity.dtd ||
       options.fidelity.comments ||
       options.fidelity.processingInstructions;
 
-  _Production _readRelaxedFragmentDeviation() {
+  _Production _readRelaxedFragmentDeviation(bool attributesAllowed) {
+    final hasUntypedAttribute = attributesAllowed && _fragmentAttributes.isNotEmpty;
     final hasNamespace = options.fidelity.prefixes;
     final hasSelfContained = options.selfContained;
     final hasEntity = options.fidelity.dtd;
     final hasCommentOrPi = options.fidelity.comments || options.fidelity.processingInstructions;
-    final count = (hasNamespace ? 1 : 0) + (hasSelfContained ? 1 : 0) + (hasEntity ? 1 : 0) + (hasCommentOrPi ? 1 : 0);
+    final count =
+        (hasUntypedAttribute ? 1 : 0) +
+        (hasNamespace ? 1 : 0) +
+        (hasSelfContained ? 1 : 0) +
+        (hasEntity ? 1 : 0) +
+        (hasCommentOrPi ? 1 : 0);
     final selected = input.readNBitUnsigned(_bitWidth(count));
-    if (hasNamespace && selected == 0) {
+    if (hasUntypedAttribute && selected == 0) {
+      return const _Production(_EventType.attribute);
+    }
+    final namespaceIndex = hasUntypedAttribute ? 1 : 0;
+    if (hasNamespace && selected == namespaceIndex) {
       return const _Production(_EventType.namespaceDeclaration);
     }
-    final selfContainedIndex = hasNamespace ? 1 : 0;
+    final selfContainedIndex = (hasUntypedAttribute ? 1 : 0) + (hasNamespace ? 1 : 0);
     if (hasSelfContained && selected == selfContainedIndex) {
       return const _Production(_EventType.selfContained);
     }
-    final entityIndex = (hasNamespace ? 1 : 0) + (hasSelfContained ? 1 : 0);
+    final entityIndex = (hasUntypedAttribute ? 1 : 0) + (hasNamespace ? 1 : 0) + (hasSelfContained ? 1 : 0);
     if (hasEntity && selected == entityIndex) {
       return const _Production(_EventType.entityReference);
     }
-    final commentOrPiIndex = (hasNamespace ? 1 : 0) + (hasSelfContained ? 1 : 0) + (hasEntity ? 1 : 0);
+    final commentOrPiIndex =
+        (hasUntypedAttribute ? 1 : 0) + (hasNamespace ? 1 : 0) + (hasSelfContained ? 1 : 0) + (hasEntity ? 1 : 0);
     if (hasCommentOrPi && selected == commentOrPiIndex) {
       return _readCommentOrPi();
     }

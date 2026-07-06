@@ -15,7 +15,8 @@ The current decoder stage supports:
   grammars for duplicate declarations with identical schema type identity and
   nillability, plus relaxed-fragment `xsi:type`, `xsi:nil` special attributes
   for declarations with nillable candidates, and non-strict entity, comment,
-  processing-instruction, namespace-declaration, and self-contained deviations;
+  processing-instruction, namespace-declaration, self-contained, and declared
+  untyped-attribute deviations;
 - configurable out-of-band fidelity options for comments, processing
   instructions, DTD/entity events, and namespace prefixes;
 - in-band EXI options for strict mode, fragments, fidelity preservation, and
@@ -66,9 +67,9 @@ User-defined datatype representation implementations remain unsupported. XSD
 imports/includes, complex-content restriction, defaults and fixed values,
 substitution groups, abstract
 declarations and derivation controls, inherited wildcard unions involving
-`##other`, schema-informed grammars requiring unsupported XSD features, relaxed
-element-fragment untyped attribute deviations, and remaining non-strict grammar
-augmentations are also not yet available.
+`##other`, schema-informed grammars requiring unsupported XSD features,
+relaxed element-fragment wildcard untyped-attribute fallback edge cases, and
+remaining non-strict grammar augmentations are also not yet available.
 
 ```dart
 import 'dart:typed_data';
