@@ -385,7 +385,9 @@ final class _DecoderState {
     while (true) {
       final attributeCount = attributesAllowed ? _fragmentAttributes.length + 1 : 0;
       final nilCount = attributesAllowed && group.hasNillableDeclaration && !nilSeen ? 1 : 0;
-      final selected = input.readNBitUnsigned(_bitWidth(attributeCount + nilCount + _fragmentDeclarations.length + 3));
+      final baseCount = attributeCount + nilCount + _fragmentDeclarations.length + 3;
+      final nonStrictCount = !options.strict && _hasRelaxedFragmentDeviation ? 1 : 0;
+      final selected = input.readNBitUnsigned(_bitWidth(baseCount + nonStrictCount));
       if (attributesAllowed && selected < _fragmentAttributes.length) {
         final attribute = _fragmentAttributes[selected];
         if (!seenAttributes.add(attribute.name)) {
@@ -428,6 +430,25 @@ final class _DecoderState {
         continue;
       }
 
+      if (nonStrictCount > 0 && selected == baseCount) {
+        attributesAllowed = false;
+        if (nilled) {
+          throw const FormatException('A nilled relaxed fragment element cannot contain non-strict events');
+        }
+        final production = _readRelaxedFragmentDeviation();
+        switch (production.type) {
+          case _EventType.entityReference:
+            events.add(ExiEntityReference(strings.readString(input)));
+          case _EventType.comment:
+            events.add(ExiComment(strings.readString(input)));
+          case _EventType.processingInstruction:
+            _decodeProcessingInstruction();
+          default:
+            throw StateError('Invalid relaxed fragment deviation');
+        }
+        continue;
+      }
+
       attributesAllowed = false;
       final contentIndex = selected - attributeCount - nilCount;
       if (contentIndex < _fragmentDeclarations.length) {
@@ -459,6 +480,28 @@ final class _DecoderState {
       }
       throw const FormatException('Invalid relaxed element-fragment event code');
     }
+  }
+
+  bool get _hasRelaxedFragmentDeviation =>
+      options.fidelity.dtd || options.fidelity.comments || options.fidelity.processingInstructions;
+
+  _Production _readRelaxedFragmentDeviation() {
+    final hasEntity = options.fidelity.dtd;
+    final hasCommentOrPi = options.fidelity.comments || options.fidelity.processingInstructions;
+    final selected = input.readNBitUnsigned(_bitWidth((hasEntity ? 1 : 0) + (hasCommentOrPi ? 1 : 0)));
+    if (hasEntity && selected == 0) {
+      return const _Production(_EventType.entityReference);
+    }
+    if (hasCommentOrPi && selected == (hasEntity ? 1 : 0)) {
+      return _readCommentOrPi();
+    }
+    if (!hasEntity && !hasCommentOrPi) {
+      throw const FormatException('Relaxed fragment deviation event is disabled');
+    }
+    if (selected >= (hasEntity ? 1 : 0) + (hasCommentOrPi ? 1 : 0)) {
+      throw const FormatException('Invalid relaxed fragment deviation event code');
+    }
+    throw const FormatException('Invalid relaxed fragment deviation event code');
   }
 
   String _readTypedAttribute(ExiAttributeDeclaration attribute) =>

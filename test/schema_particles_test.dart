@@ -1240,6 +1240,103 @@ void main() {
     expect(document.toXmlString(), '<item xsi:nil="true"/>');
   });
 
+  test('decodes comments in a non-strict relaxed fragment grammar', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:integer"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer('10000000')
+      // Fragment item=000 when the top-level fragment grammar includes CM.
+      ..write('000')
+      // Non-strict relaxed start-tag/content escape after the six base events.
+      ..write('110')
+      ..write(_rawString('note'))
+      // Relaxed content EE=3; top-level fragment ED=3 when comments are enabled.
+      ..write('011')
+      ..write('011');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: false,
+        fragment: true,
+        schemaId: ExiSchemaId.named('particles'),
+        fidelity: ExiFidelityOptions(comments: true),
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<item><!--note--></item>');
+  });
+
+  test('decodes processing instructions in a non-strict relaxed fragment grammar', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:integer"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer('10000000')
+      ..write('000')
+      ..write('110')
+      ..write(_rawString('target'))
+      ..write(_rawString('data'))
+      ..write('011')
+      ..write('011');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: false,
+        fragment: true,
+        schemaId: ExiSchemaId.named('particles'),
+        fidelity: ExiFidelityOptions(processingInstructions: true),
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<item><?target data?></item>');
+  });
+
+  test('decodes entity references in a non-strict relaxed fragment grammar', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:integer"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer('10000000')
+      ..write('00')
+      ..write('110')
+      ..write(_rawString('example'))
+      ..write('011')
+      ..write('11');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: false,
+        fragment: true,
+        schemaId: ExiSchemaId.named('particles'),
+        fidelity: ExiFidelityOptions(dtd: true),
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<item>&example;</item>');
+  });
+
   test('uses declared child productions in a relaxed fragment grammar', () {
     final schema = _compile('''
       <xs:element name="child"/>
