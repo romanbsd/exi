@@ -506,6 +506,24 @@ void main() {
       expect(document.toXmlString(), '<root><item>text</item></root>');
     });
 
+    test('collapses duplicate leading element QNames with the same anonymous empty grammar', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="item"/>
+              <xs:element name="item"/>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      // Duplicate empty SE(item) branches collapse to one event code.
+      final document = _decode(schema, '0');
+
+      expect(document.toXmlString(), '<root><item/></root>');
+    });
+
     test('keeps duplicate leading element QNames unsupported when schema types conflict', () {
       final schema = _compile('''
         <xs:element name="root">

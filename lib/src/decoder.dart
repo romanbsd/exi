@@ -1668,7 +1668,14 @@ List<_DeclaredEvent> _leadingElementEvents(ExiParticle particle) {
 
 bool _hasSameElementGrammarIdentity(ExiElementDeclaration left, ExiElementDeclaration right) {
   final schemaTypeName = left.schemaTypeName;
-  return schemaTypeName != null && right.schemaTypeName == schemaTypeName && right.nillable == left.nillable;
+  if (schemaTypeName != null) {
+    return right.schemaTypeName == schemaTypeName && right.nillable == left.nillable;
+  }
+  return right.schemaTypeName == null &&
+      right.name == left.name &&
+      right.nillable == left.nillable &&
+      _isAnonymousEmptyGrammar(left) &&
+      _isAnonymousEmptyGrammar(right);
 }
 
 bool _hasSameWildcardIdentity(ExiWildcardParticle left, ExiWildcardParticle right) =>
@@ -1682,6 +1689,17 @@ bool _sameStringSet(Set<String>? left, Set<String>? right) {
   }
   return left.length == right.length && left.containsAll(right);
 }
+
+bool _isAnonymousEmptyGrammar(ExiElementDeclaration declaration) =>
+    declaration.datatype == null &&
+    declaration.children.isEmpty &&
+    declaration.attributes.isEmpty &&
+    declaration.content == null &&
+    !declaration.mixed &&
+    declaration.typeAlternatives.isEmpty &&
+    !declaration.anyAttribute &&
+    declaration.attributeWildcardNamespaces == null &&
+    declaration.attributeWildcardExcludedNamespaces == null;
 
 ExiParticle? _derive(ExiParticle particle, Object selected) {
   switch (particle) {
