@@ -256,7 +256,8 @@ void main() {
       source: '''
         <xs:schema
             xmlns:xs="http://www.w3.org/2001/XMLSchema"
-            targetNamespace="urn:example">
+            targetNamespace="urn:example"
+            elementFormDefault="qualified">
           <xs:element name="root"/>
         </xs:schema>
       ''',
@@ -1335,6 +1336,45 @@ void main() {
     ).decode(_pack(bits.toString()));
 
     expect(document.toXmlString(), '<item>&example;</item>');
+  });
+
+  test('decodes namespace declarations in a non-strict relaxed fragment grammar', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'particles',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:example">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:choice>
+                <xs:element name="item" type="xs:string" form="qualified"/>
+                <xs:element name="item" type="xs:integer" form="qualified"/>
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Fragment item=00; relaxed non-strict NS escape=6.
+      ..write('00110')
+      ..write(_rawString('urn:example'))
+      ..write(_rawString('p'))
+      // Local-element namespace=true; relaxed start-tag EE=4; fragment ED=3.
+      ..write('110011');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: false,
+        fragment: true,
+        schemaId: ExiSchemaId.named('particles'),
+        fidelity: ExiFidelityOptions(prefixes: true),
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<p:item xmlns:p="urn:example"/>');
   });
 
   test('uses declared child productions in a relaxed fragment grammar', () {

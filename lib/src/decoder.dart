@@ -375,8 +375,9 @@ final class _DecoderState {
   }
 
   void _decodeRelaxedFragmentElement(_FragmentElementGroup group) {
-    final elementName = group.name;
-    events.add(ExiStartElement(elementName));
+    var currentElementName = group.name;
+    final startEventIndex = events.length;
+    events.add(ExiStartElement(currentElementName));
     final seenAttributes = <ExiQName>{};
     var attributesAllowed = true;
     var nilSeen = false;
@@ -437,6 +438,24 @@ final class _DecoderState {
         }
         final production = _readRelaxedFragmentDeviation();
         switch (production.type) {
+          case _EventType.namespaceDeclaration:
+            final uri = strings.readString(input);
+            final prefix = strings.readString(input);
+            final localElementNamespace = input.readNBitUnsigned(1) == 1;
+            strings.addPrefix(uri, prefix);
+            if (localElementNamespace) {
+              if (uri != currentElementName.uri) {
+                throw const FormatException('Local namespace URI does not match the start-element URI');
+              }
+              currentElementName = ExiQName(
+                uri: currentElementName.uri,
+                localName: currentElementName.localName,
+                prefix: prefix,
+              );
+              events[startEventIndex] = ExiStartElement(currentElementName);
+            }
+            events.add(ExiNamespaceDeclaration(uri: uri, prefix: prefix, localElementNamespace: localElementNamespace));
+            attributesAllowed = true;
           case _EventType.entityReference:
             events.add(ExiEntityReference(strings.readString(input)));
           case _EventType.comment:
@@ -468,14 +487,14 @@ final class _DecoderState {
         continue;
       }
       if (contentIndex == _fragmentDeclarations.length + 1) {
-        events.add(ExiEndElement(elementName));
+        events.add(ExiEndElement(currentElementName));
         return;
       }
       if (contentIndex == _fragmentDeclarations.length + 2) {
         if (nilled) {
           throw const FormatException('A nilled relaxed fragment element cannot contain characters');
         }
-        events.add(ExiCharacters(_readValue(elementName, () => strings.readValue(input, elementName))));
+        events.add(ExiCharacters(_readValue(currentElementName, () => strings.readValue(input, currentElementName))));
         continue;
       }
       throw const FormatException('Invalid relaxed element-fragment event code');
@@ -483,22 +502,32 @@ final class _DecoderState {
   }
 
   bool get _hasRelaxedFragmentDeviation =>
-      options.fidelity.dtd || options.fidelity.comments || options.fidelity.processingInstructions;
+      options.fidelity.prefixes ||
+      options.fidelity.dtd ||
+      options.fidelity.comments ||
+      options.fidelity.processingInstructions;
 
   _Production _readRelaxedFragmentDeviation() {
+    final hasNamespace = options.fidelity.prefixes;
     final hasEntity = options.fidelity.dtd;
     final hasCommentOrPi = options.fidelity.comments || options.fidelity.processingInstructions;
-    final selected = input.readNBitUnsigned(_bitWidth((hasEntity ? 1 : 0) + (hasCommentOrPi ? 1 : 0)));
-    if (hasEntity && selected == 0) {
+    final count = (hasNamespace ? 1 : 0) + (hasEntity ? 1 : 0) + (hasCommentOrPi ? 1 : 0);
+    final selected = input.readNBitUnsigned(_bitWidth(count));
+    if (hasNamespace && selected == 0) {
+      return const _Production(_EventType.namespaceDeclaration);
+    }
+    final entityIndex = hasNamespace ? 1 : 0;
+    if (hasEntity && selected == entityIndex) {
       return const _Production(_EventType.entityReference);
     }
-    if (hasCommentOrPi && selected == (hasEntity ? 1 : 0)) {
+    final commentOrPiIndex = (hasNamespace ? 1 : 0) + (hasEntity ? 1 : 0);
+    if (hasCommentOrPi && selected == commentOrPiIndex) {
       return _readCommentOrPi();
     }
-    if (!hasEntity && !hasCommentOrPi) {
+    if (count == 0) {
       throw const FormatException('Relaxed fragment deviation event is disabled');
     }
-    if (selected >= (hasEntity ? 1 : 0) + (hasCommentOrPi ? 1 : 0)) {
+    if (selected >= count) {
       throw const FormatException('Invalid relaxed fragment deviation event code');
     }
     throw const FormatException('Invalid relaxed fragment deviation event code');
