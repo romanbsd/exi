@@ -1667,12 +1667,14 @@ List<_DeclaredEvent> _leadingElementEvents(ExiParticle particle) {
 }
 
 bool _hasSameElementGrammarIdentity(ExiElementDeclaration left, ExiElementDeclaration right) {
+  if (right.name != left.name) {
+    return false;
+  }
   final schemaTypeName = left.schemaTypeName;
   if (schemaTypeName != null) {
     return right.schemaTypeName == schemaTypeName && right.nillable == left.nillable;
   }
   return right.schemaTypeName == null &&
-      right.name == left.name &&
       right.nillable == left.nillable &&
       (_hasSameAnonymousEmptyGrammar(left, right) ||
           _hasSameAnonymousValueGrammar(left, right) ||

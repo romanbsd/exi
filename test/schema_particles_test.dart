@@ -657,6 +657,35 @@ void main() {
       expect(document.toXmlString(), '<root><item><child/></item></root>');
     });
 
+    test('collapses duplicate leading element QNames with the same typed anonymous child grammar', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="child" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="child" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      final document = _decode(schema, '0${_value('text')}');
+
+      expect(document.toXmlString(), '<root><item><child>text</child></item></root>');
+    });
+
     test('collapses duplicate leading element QNames with the same anonymous attribute content grammar', () {
       final schema = _compile('''
         <xs:element name="root">
@@ -710,6 +739,60 @@ void main() {
                 <xs:complexType>
                   <xs:sequence>
                     <xs:element name="right"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      expect(() => _decode(schema, '0'), throwsUnsupportedError);
+    });
+
+    test('keeps duplicate leading element QNames unsupported when typed anonymous child names differ', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="left" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="right" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      expect(() => _decode(schema, '0${_value('text')}'), throwsUnsupportedError);
+    });
+
+    test('keeps duplicate leading element QNames unsupported when anonymous occurrence ranges differ', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="child" maxOccurs="2"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="child" maxOccurs="3"/>
                   </xs:sequence>
                 </xs:complexType>
               </xs:element>
