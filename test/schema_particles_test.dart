@@ -219,6 +219,54 @@ void main() {
     expect(document.events.whereType<ExiStartElement>().map((event) => event.name.localName), ['root']);
   });
 
+  test('decodes invalid xsi:nil through the non-strict untyped wildcard attribute', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="required"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer('10000000')
+      // Document root=0; first-level escape=1; second-level untyped AT group=100.
+      ..write('01100')
+      ..write(_schemaQName('http://www.w3.org/2001/XMLSchema-instance', 'nil', localNames: ['required', 'root']))
+      ..write(_value('maybe'))
+      // Required child, child EE, and root EE first-level productions.
+      ..write('000');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(schemaId: ExiSchemaId.named('particles')),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    final attribute = document.events.whereType<ExiAttribute>().single;
+    expect(attribute.name, const ExiQName(uri: 'http://www.w3.org/2001/XMLSchema-instance', localName: 'nil'));
+    expect(attribute.value, 'maybe');
+    expect(document.events.whereType<ExiStartElement>().map((event) => event.name.localName), ['root', 'required']);
+  });
+
+  test('rejects xsi:type through the non-strict untyped wildcard attribute', () {
+    final schema = _compile('<xs:element name="root"/>');
+    final bits = StringBuffer('10000000')
+      // Document root=0; first-level escape=1; second-level untyped AT group=011.
+      ..write('01011')
+      ..write(_schemaQName('http://www.w3.org/2001/XMLSchema-instance', 'type', localNames: ['root']))
+      ..write(_value('Anything'))
+      // Root EE remains a first-level production.
+      ..write('0');
+
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(schemaId: ExiSchemaId.named('particles')),
+        schemaResolver: (_) => schema,
+      ).decode(_pack(bits.toString())),
+      throwsFormatException,
+    );
+  });
+
   test('decodes non-strict entity and comment deviations', () {
     final schema = _compile('''
       <xs:element name="root">

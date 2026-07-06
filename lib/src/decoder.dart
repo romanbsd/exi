@@ -904,6 +904,7 @@ final class _DecoderState {
             events.add(ExiAttribute(name, value));
             continue;
           case _NonStrictDeviation.untypedAttribute:
+            final wasSpecialAttributesAllowed = specialAttributesAllowed;
             specialAttributesAllowed = false;
             final declaredAttributes = candidates.where((event) => event.kind == _DeclaredEventKind.attribute).toList();
             final selectedAttribute = input.readNBitUnsigned(_bitWidth(declaredAttributes.length + 1));
@@ -917,6 +918,12 @@ final class _DecoderState {
               name = event.attribute!.name;
             } else {
               name = strings.readQName(input);
+            }
+            if (name == _xsiTypeName) {
+              throw const FormatException('xsi:type cannot use the non-strict untyped wildcard attribute');
+            }
+            if (name == _xsiNilName && (!wasSpecialAttributesAllowed || nilSeen)) {
+              throw const FormatException('xsi:nil cannot use the non-strict untyped wildcard attribute here');
             }
             if (!seenAttributes.add(name)) {
               throw const FormatException('Duplicate non-strict schema attribute');
