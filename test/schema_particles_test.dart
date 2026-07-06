@@ -657,6 +657,39 @@ void main() {
       expect(document.toXmlString(), '<root><item><child/></item></root>');
     });
 
+    test('collapses duplicate leading element QNames with the same anonymous all grammar in different order', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:all>
+                    <xs:element name="first"/>
+                    <xs:element name="second"/>
+                  </xs:all>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:all>
+                    <xs:element name="second"/>
+                    <xs:element name="first"/>
+                  </xs:all>
+                </xs:complexType>
+              </xs:element>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      // Duplicate anonymous all-content SE(item) branches collapse to one event code.
+      // Inside the all grammar, second is selected before first.
+      final document = _decode(schema, '01');
+
+      expect(document.toXmlString(), '<root><item><second/><first/></item></root>');
+    });
+
     test('collapses duplicate leading element QNames with the same typed anonymous child grammar', () {
       final schema = _compile('''
         <xs:element name="root">

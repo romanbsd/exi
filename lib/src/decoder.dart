@@ -1817,10 +1817,8 @@ bool _sameParticle(ExiParticle? left, ExiParticle? right) {
       _sameParticles(leftParticles, rightParticles),
     (ExiChoiceParticle(particles: final leftParticles), ExiChoiceParticle(particles: final rightParticles)) =>
       _sameParticles(leftParticles, rightParticles),
-    (ExiAllParticle(particles: final leftParticles), ExiAllParticle(particles: final rightParticles)) => _sameParticles(
-      leftParticles,
-      rightParticles,
-    ),
+    (ExiAllParticle(particles: final leftParticles), ExiAllParticle(particles: final rightParticles)) =>
+      _sameAllParticles(leftParticles, rightParticles),
     (
       ExiRepeatedParticle(particle: final leftParticle, minOccurs: final leftMin, maxOccurs: final leftMax),
       ExiRepeatedParticle(particle: final rightParticle, minOccurs: final rightMin, maxOccurs: final rightMax),
@@ -1836,6 +1834,27 @@ bool _sameParticles(List<ExiParticle> left, List<ExiParticle> right) {
   }
   for (var index = 0; index < left.length; index++) {
     if (!_sameParticle(left[index], right[index])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool _sameAllParticles(List<ExiParticle> left, List<ExiParticle> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  final matched = List<bool>.filled(right.length, false);
+  for (final leftParticle in left) {
+    var found = false;
+    for (var index = 0; index < right.length; index++) {
+      if (!matched[index] && _sameParticle(leftParticle, right[index])) {
+        matched[index] = true;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
       return false;
     }
   }
