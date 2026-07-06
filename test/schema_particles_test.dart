@@ -586,6 +586,47 @@ void main() {
       expect(document.toXmlString(), '<root><item code="7"/></root>');
     });
 
+    test('collapses duplicate leading element QNames with the same anonymous simple-content grammar', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:simpleContent>
+                    <xs:extension base="xs:string">
+                      <xs:attribute name="code" type="xs:integer" use="required"/>
+                    </xs:extension>
+                  </xs:simpleContent>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:simpleContent>
+                    <xs:extension base="xs:string">
+                      <xs:attribute name="code" type="xs:integer" use="required"/>
+                    </xs:extension>
+                  </xs:simpleContent>
+                </xs:complexType>
+              </xs:element>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+      final bits = StringBuffer()
+        // Duplicate anonymous simple-content SE(item) branches collapse to one event code.
+        ..write('0')
+        // Required integer attribute is implicit in the child grammar.
+        ..write('0')
+        ..write(_unsigned(7))
+        // Then the simple content value is implicit.
+        ..write(_value('text'));
+
+      final document = _decode(schema, bits.toString());
+
+      expect(document.toXmlString(), '<root><item code="7">text</item></root>');
+    });
+
     test('keeps duplicate leading element QNames unsupported when schema types conflict', () {
       final schema = _compile('''
         <xs:element name="root">

@@ -1676,7 +1676,8 @@ bool _hasSameElementGrammarIdentity(ExiElementDeclaration left, ExiElementDeclar
       right.nillable == left.nillable &&
       (_hasSameAnonymousEmptyGrammar(left, right) ||
           _hasSameAnonymousValueGrammar(left, right) ||
-          _hasSameAnonymousAttributeGrammar(left, right));
+          _hasSameAnonymousAttributeGrammar(left, right) ||
+          _hasSameAnonymousSimpleContentGrammar(left, right));
 }
 
 bool _hasSameWildcardIdentity(ExiWildcardParticle left, ExiWildcardParticle right) =>
@@ -1700,6 +1701,10 @@ bool _hasSameAnonymousValueGrammar(ExiElementDeclaration left, ExiElementDeclara
   if (!_isAnonymousValueGrammar(left) || !_isAnonymousValueGrammar(right)) {
     return false;
   }
+  return _hasSameAnonymousDatatypeShape(left, right);
+}
+
+bool _hasSameAnonymousDatatypeShape(ExiElementDeclaration left, ExiElementDeclaration right) {
   return left.datatype == right.datatype &&
       left.listItemDatatype == right.listItemDatatype &&
       _sameList(left.schemaDatatypeHierarchy, right.schemaDatatypeHierarchy) &&
@@ -1729,6 +1734,26 @@ bool _hasSameAnonymousAttributeGrammar(ExiElementDeclaration left, ExiElementDec
 
 bool _isAnonymousAttributeGrammar(ExiElementDeclaration declaration) =>
     declaration.datatype == null &&
+    declaration.children.isEmpty &&
+    declaration.attributes.isNotEmpty &&
+    declaration.content == null &&
+    !declaration.mixed &&
+    declaration.typeAlternatives.isEmpty;
+
+bool _hasSameAnonymousSimpleContentGrammar(ExiElementDeclaration left, ExiElementDeclaration right) {
+  if (!_isAnonymousSimpleContentGrammar(left) || !_isAnonymousSimpleContentGrammar(right)) {
+    return false;
+  }
+  return _hasSameAnonymousDatatypeShape(left, right) &&
+      left.anyAttribute == right.anyAttribute &&
+      _sameStringSet(left.attributeWildcardNamespaces, right.attributeWildcardNamespaces) &&
+      _sameStringSet(left.attributeWildcardExcludedNamespaces, right.attributeWildcardExcludedNamespaces) &&
+      left.attributeProcessContents == right.attributeProcessContents &&
+      _sameAttributes(left.attributes, right.attributes);
+}
+
+bool _isAnonymousSimpleContentGrammar(ExiElementDeclaration declaration) =>
+    declaration.datatype != null &&
     declaration.children.isEmpty &&
     declaration.attributes.isNotEmpty &&
     declaration.content == null &&
