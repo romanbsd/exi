@@ -716,6 +716,8 @@ final class _DecoderState {
     var current = grammar.startTag;
     final seenAttributes = <ExiQName>{};
     var seenNamespaceDeclaration = false;
+    var seenXsiNil = false;
+    var seenOrdinaryAttribute = false;
 
     while (true) {
       final production = current.readProduction(input);
@@ -726,6 +728,17 @@ final class _DecoderState {
           return;
         case _EventType.attribute:
           final name = production.name ?? strings.readQName(input);
+          if (name == _xsiTypeName && (seenXsiNil || seenOrdinaryAttribute)) {
+            throw const FormatException('xsi:type must precede xsi:nil and ordinary attributes');
+          }
+          if (name == _xsiNilName) {
+            if (seenOrdinaryAttribute) {
+              throw const FormatException('xsi:nil must precede ordinary attributes');
+            }
+            seenXsiNil = true;
+          } else if (name != _xsiTypeName) {
+            seenOrdinaryAttribute = true;
+          }
           if (!seenAttributes.add(name)) {
             throw const FormatException('Duplicate built-in element attribute');
           }

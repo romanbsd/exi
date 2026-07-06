@@ -87,6 +87,24 @@ void main() {
       expect(() => ExiDecoder().decode(_pack(bits.toString())), throwsA(isA<FormatException>()));
     });
 
+    test('rejects built-in xsi:type after xsi:nil', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'item'))
+        // StartTagContent -> AT(*) with xsi:nil.
+        ..write('01')
+        ..write(_qNameHit(uriId: 2, localNameId: 0, localNameCount: 2))
+        ..write(_value('false'))
+        // StartTagContent -> AT(*) with xsi:type. This violates the
+        // special-attribute order: xsi:type must precede xsi:nil.
+        ..write('101')
+        ..write(_qNameHit(uriId: 2, localNameId: 1, localNameCount: 2))
+        ..write(_value('Example'))
+        // StartTagContent -> EE.
+        ..write('100');
+
+      expect(() => ExiDecoder().decode(_pack(bits.toString())), throwsA(isA<FormatException>()));
+    });
+
     test('learns repeated child QNames and character productions', () {
       final bits = StringBuffer('10000000')
         ..write(_qName('', 'root'))
