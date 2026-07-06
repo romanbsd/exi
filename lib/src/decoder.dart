@@ -1677,7 +1677,8 @@ bool _hasSameElementGrammarIdentity(ExiElementDeclaration left, ExiElementDeclar
       (_hasSameAnonymousEmptyGrammar(left, right) ||
           _hasSameAnonymousValueGrammar(left, right) ||
           _hasSameAnonymousAttributeGrammar(left, right) ||
-          _hasSameAnonymousSimpleContentGrammar(left, right));
+          _hasSameAnonymousSimpleContentGrammar(left, right) ||
+          _hasSameAnonymousComplexContentGrammar(left, right));
 }
 
 bool _hasSameWildcardIdentity(ExiWildcardParticle left, ExiWildcardParticle right) =>
@@ -1759,6 +1760,85 @@ bool _isAnonymousSimpleContentGrammar(ExiElementDeclaration declaration) =>
     declaration.content == null &&
     !declaration.mixed &&
     declaration.typeAlternatives.isEmpty;
+
+bool _hasSameAnonymousComplexContentGrammar(ExiElementDeclaration left, ExiElementDeclaration right) {
+  if (!_isAnonymousComplexContentGrammar(left) || !_isAnonymousComplexContentGrammar(right)) {
+    return false;
+  }
+  return left.mixed == right.mixed &&
+      left.anyAttribute == right.anyAttribute &&
+      _sameStringSet(left.attributeWildcardNamespaces, right.attributeWildcardNamespaces) &&
+      _sameStringSet(left.attributeWildcardExcludedNamespaces, right.attributeWildcardExcludedNamespaces) &&
+      left.attributeProcessContents == right.attributeProcessContents &&
+      _sameAttributes(left.attributes, right.attributes) &&
+      _sameParticle(_anonymousContentParticle(left), _anonymousContentParticle(right));
+}
+
+bool _isAnonymousComplexContentGrammar(ExiElementDeclaration declaration) =>
+    declaration.datatype == null &&
+    (declaration.content != null || declaration.children.isNotEmpty) &&
+    declaration.typeAlternatives.isEmpty;
+
+ExiParticle _anonymousContentParticle(ExiElementDeclaration declaration) =>
+    declaration.content ??
+    (declaration.children.isEmpty
+        ? const ExiEmptyParticle()
+        : ExiSequenceParticle([for (final child in declaration.children) ExiElementParticle(child)]));
+
+bool _sameParticle(ExiParticle? left, ExiParticle? right) {
+  if (left == null || right == null) {
+    return left == right;
+  }
+  return switch ((left, right)) {
+    (ExiEmptyParticle(), ExiEmptyParticle()) => true,
+    (
+      ExiElementParticle(element: final leftElement, minOccurs: final leftMin, maxOccurs: final leftMax),
+      ExiElementParticle(element: final rightElement, minOccurs: final rightMin, maxOccurs: final rightMax),
+    ) =>
+      leftMin == rightMin && leftMax == rightMax && _hasSameElementGrammarIdentity(leftElement, rightElement),
+    (
+      ExiWildcardParticle(
+        namespaces: final leftNamespaces,
+        excludedNamespaces: final leftExcludedNamespaces,
+        processContents: final leftProcessContents,
+      ),
+      ExiWildcardParticle(
+        namespaces: final rightNamespaces,
+        excludedNamespaces: final rightExcludedNamespaces,
+        processContents: final rightProcessContents,
+      ),
+    ) =>
+      _sameStringSet(leftNamespaces, rightNamespaces) &&
+          _sameStringSet(leftExcludedNamespaces, rightExcludedNamespaces) &&
+          leftProcessContents == rightProcessContents,
+    (ExiSequenceParticle(particles: final leftParticles), ExiSequenceParticle(particles: final rightParticles)) =>
+      _sameParticles(leftParticles, rightParticles),
+    (ExiChoiceParticle(particles: final leftParticles), ExiChoiceParticle(particles: final rightParticles)) =>
+      _sameParticles(leftParticles, rightParticles),
+    (ExiAllParticle(particles: final leftParticles), ExiAllParticle(particles: final rightParticles)) => _sameParticles(
+      leftParticles,
+      rightParticles,
+    ),
+    (
+      ExiRepeatedParticle(particle: final leftParticle, minOccurs: final leftMin, maxOccurs: final leftMax),
+      ExiRepeatedParticle(particle: final rightParticle, minOccurs: final rightMin, maxOccurs: final rightMax),
+    ) =>
+      leftMin == rightMin && leftMax == rightMax && _sameParticle(leftParticle, rightParticle),
+    _ => false,
+  };
+}
+
+bool _sameParticles(List<ExiParticle> left, List<ExiParticle> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index++) {
+    if (!_sameParticle(left[index], right[index])) {
+      return false;
+    }
+  }
+  return true;
+}
 
 bool _sameAttributes(List<ExiAttributeDeclaration> left, List<ExiAttributeDeclaration> right) {
   if (left.length != right.length) {

@@ -627,6 +627,100 @@ void main() {
       expect(document.toXmlString(), '<root><item code="7">text</item></root>');
     });
 
+    test('collapses duplicate leading element QNames with the same anonymous content grammar', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="child"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="child"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      // Duplicate anonymous content SE(item) branches collapse to one event code.
+      final document = _decode(schema, '0');
+
+      expect(document.toXmlString(), '<root><item><child/></item></root>');
+    });
+
+    test('collapses duplicate leading element QNames with the same anonymous attribute content grammar', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="child"/>
+                  </xs:sequence>
+                  <xs:attribute name="code" type="xs:integer" use="required"/>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="child"/>
+                  </xs:sequence>
+                  <xs:attribute name="code" type="xs:integer" use="required"/>
+                </xs:complexType>
+              </xs:element>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+      final bits = StringBuffer()
+        // Duplicate anonymous attribute-content SE(item) branches collapse to one event code.
+        ..write('0')
+        // Required integer attribute is implicit in the child grammar.
+        ..write('0')
+        ..write(_unsigned(7));
+
+      final document = _decode(schema, bits.toString());
+
+      expect(document.toXmlString(), '<root><item code="7"><child/></item></root>');
+    });
+
+    test('keeps duplicate leading element QNames unsupported when anonymous content differs', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="left"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="right"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      expect(() => _decode(schema, '0'), throwsUnsupportedError);
+    });
+
     test('keeps duplicate leading element QNames unsupported when schema types conflict', () {
       final schema = _compile('''
         <xs:element name="root">
