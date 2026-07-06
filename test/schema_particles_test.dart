@@ -352,6 +352,43 @@ void main() {
     expect(document.toXmlString(), '<root><required/></root>');
   });
 
+  test('rejects self-contained after a namespace declaration in a non-strict schema grammar', () {
+    final schema = _compile('''
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="required"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer('10000000')
+      // Document root=0; escape=1; second-level NS=100.
+      ..write('01100')
+      ..write(_rawString('urn:example'))
+      ..write(_rawString('p'))
+      // Local-element namespace=false.
+      ..write('0')
+      // Escape=1; second-level SC=101.
+      ..write('1101');
+    _alignBits(bits);
+    // Fresh declared grammar: required child, child EE, root EE.
+    bits.write('000');
+    _alignBits(bits);
+
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(
+          schemaId: ExiSchemaId.named('particles'),
+          selfContained: true,
+          fidelity: ExiFidelityOptions(prefixes: true),
+        ),
+        schemaResolver: (_) => schema,
+      ).decode(_pack(bits.toString())),
+      throwsFormatException,
+    );
+  });
+
   group('strict schema particles', () {
     test('decodes an optional child that is absent', () {
       final schema = _compile('''
@@ -1497,6 +1534,55 @@ void main() {
     expect(document.toXmlString(), '<item>text</item>');
   });
 
+  test('rejects self-contained after a namespace declaration in a relaxed fragment grammar', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'particles',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:example">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:choice>
+                <xs:element name="item" type="xs:string" form="qualified"/>
+                <xs:element name="item" type="xs:integer" form="qualified"/>
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Fragment item=00; relaxed non-strict escape=6; deviation NS=0.
+      ..write('001100')
+      ..write(_rawString('urn:example'))
+      ..write(_rawString('p'))
+      // Local-element namespace=true.
+      ..write('1')
+      // Content-phase non-strict escape=5; deviation SC=1 after NS.
+      ..write('1011');
+    _alignBits(bits);
+    // Isolated relaxed start-tag EE=4.
+    bits.write('100');
+    _alignBits(bits);
+    // Fragment ED=3.
+    bits.write('11');
+
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(
+          strict: false,
+          fragment: true,
+          selfContained: true,
+          schemaId: ExiSchemaId.named('particles'),
+          fidelity: ExiFidelityOptions(prefixes: true),
+        ),
+        schemaResolver: (_) => schema,
+      ).decode(_pack(bits.toString())),
+      throwsFormatException,
+    );
+  });
+
   test('uses declared child productions in a relaxed fragment grammar', () {
     final schema = _compile('''
       <xs:element name="child"/>
@@ -1541,6 +1627,45 @@ void main() {
     final document = _decodeFragment(schema, bits.toString());
 
     expect(document.toXmlString(), '<item code="7"/>');
+  });
+
+  test('rejects a namespace declaration after an attribute in a relaxed fragment grammar', () {
+    final schema = _compile('''
+      <xs:attribute name="code" type="xs:integer"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:integer"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer('10000000')
+      // Fragment item=00; relaxed AT(code)=000.
+      ..write('00000')
+      // Positive integer 7.
+      ..write('0')
+      ..write(_unsigned(7))
+      // Relaxed non-strict escape=7; deviation NS=1 after untyped-attribute.
+      ..write('1111')
+      ..write(_rawString('urn:example'))
+      ..write(_rawString('p'))
+      // Local-element namespace=false; relaxed EE=3; fragment ED=3.
+      ..write('001111');
+
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(
+          strict: false,
+          fragment: true,
+          schemaId: ExiSchemaId.named('particles'),
+          fidelity: ExiFidelityOptions(prefixes: true),
+        ),
+        schemaResolver: (_) => schema,
+      ).decode(_pack(bits.toString())),
+      throwsFormatException,
+    );
   });
 
   test('decodes untyped declared attributes in a non-strict relaxed fragment grammar', () {

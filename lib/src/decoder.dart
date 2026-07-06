@@ -384,6 +384,7 @@ final class _DecoderState {
     var currentElementName = elementName;
     final seenAttributes = <ExiQName>{};
     var attributesAllowed = true;
+    var seenNamespaceDeclaration = false;
     var nilSeen = false;
     var nilled = false;
 
@@ -488,9 +489,13 @@ final class _DecoderState {
             }
             events.add(ExiAttribute(name, _readValue(name, () => strings.readValue(input, name))));
           case _EventType.namespaceDeclaration:
+            if (seenAttributes.isNotEmpty) {
+              throw const FormatException('Namespace declarations must precede relaxed fragment attributes');
+            }
             final uri = strings.readString(input);
             final prefix = strings.readString(input);
             final localElementNamespace = input.readNBitUnsigned(1) == 1;
+            seenNamespaceDeclaration = true;
             strings.addPrefix(uri, prefix);
             if (localElementNamespace) {
               if (uri != currentElementName.uri) {
@@ -506,6 +511,9 @@ final class _DecoderState {
             events.add(ExiNamespaceDeclaration(uri: uri, prefix: prefix, localElementNamespace: localElementNamespace));
             attributesAllowed = true;
           case _EventType.selfContained:
+            if (seenNamespaceDeclaration || seenAttributes.isNotEmpty) {
+              throw const FormatException('Self-contained relaxed fragments must precede namespaces and attributes');
+            }
             _decodeRelaxedFragmentSelfContained(group, currentElementName, startEventIndex);
             return;
           case _EventType.entityReference:
