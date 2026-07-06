@@ -833,9 +833,12 @@ final class _DecoderState {
     ExiElementDeclaration declaration, {
     required int startEventIndex,
     bool allowSpecialAttributes = true,
+    bool allowXsiTypeAttribute = true,
+    bool? nillableOverride,
   }) {
     var currentElementName = elementName;
     final datatype = declaration.datatype;
+    final isNillable = nillableOverride ?? declaration.nillable;
     final attributes = [...declaration.attributes]
       ..sort((left, right) {
         final localNameOrder = left.name.localName.compareTo(right.name.localName);
@@ -885,8 +888,9 @@ final class _DecoderState {
           }
         }
       }
-      final canReadType = declaration.typeAlternatives.isNotEmpty && specialAttributesAllowed && !nilSeen;
-      final canReadNil = declaration.nillable && !nilSeen && specialAttributesAllowed;
+      final canReadType =
+          declaration.typeAlternatives.isNotEmpty && specialAttributesAllowed && allowXsiTypeAttribute && !nilSeen;
+      final canReadNil = isNillable && !nilSeen && specialAttributesAllowed;
       final specialCount = (canReadType ? 1 : 0) + (canReadNil ? 1 : 0);
       final hasSecondLevel = !options.strict || specialCount > 0;
       final candidateCount = candidates.length + (hasSecondLevel ? 1 : 0);
@@ -900,6 +904,8 @@ final class _DecoderState {
           hasFirstLevelEnd: candidates.any((event) => event.kind == _DeclaredEventKind.end),
           atEntry: !contentStarted && attributeIndex == 0 && seenAttributes.isEmpty && !nilSeen,
           inAttributePhase: !contentStarted,
+          allowXsiType: specialAttributesAllowed && allowXsiTypeAttribute && !nilSeen,
+          allowXsiNil: specialAttributesAllowed && !nilSeen,
         );
         switch (deviation) {
           case _NonStrictDeviation.endElement:
@@ -994,7 +1000,8 @@ final class _DecoderState {
                 currentElementName,
                 target,
                 startEventIndex: startEventIndex,
-                allowSpecialAttributes: false,
+                allowXsiTypeAttribute: false,
+                nillableOverride: isNillable,
               );
               return;
             }
@@ -1066,7 +1073,8 @@ final class _DecoderState {
             currentElementName,
             target,
             startEventIndex: startEventIndex,
-            allowSpecialAttributes: false,
+            allowXsiTypeAttribute: false,
+            nillableOverride: isNillable,
           );
           return;
         }
@@ -1238,10 +1246,12 @@ final class _DecoderState {
     required bool hasFirstLevelEnd,
     required bool atEntry,
     required bool inAttributePhase,
+    required bool allowXsiType,
+    required bool allowXsiNil,
   }) {
     final productions = <_NonStrictDeviation>[
       if (!hasFirstLevelEnd) _NonStrictDeviation.endElement,
-      if (atEntry) ...[_NonStrictDeviation.xsiType, _NonStrictDeviation.xsiNil],
+      if (atEntry) ...[if (allowXsiType) _NonStrictDeviation.xsiType, if (allowXsiNil) _NonStrictDeviation.xsiNil],
       if (inAttributePhase) ...[_NonStrictDeviation.attribute, _NonStrictDeviation.untypedAttribute],
       if (atEntry && options.fidelity.prefixes) _NonStrictDeviation.namespaceDeclaration,
       if (atEntry && options.selfContained) _NonStrictDeviation.selfContained,

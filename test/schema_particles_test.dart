@@ -751,6 +751,33 @@ void main() {
     expect(document.events.whereType<ExiStartElement>().map((event) => event.name.localName), ['root', 'child']);
   });
 
+  test('decodes xsi:nil after xsi:type in a declared grammar', () {
+    final schema = _compile('''
+      <xs:complexType name="Base"/>
+      <xs:complexType name="Derived">
+        <xs:complexContent>
+          <xs:extension base="Base"/>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:element name="root" type="Base" nillable="true"/>
+    ''');
+    final bits = StringBuffer()
+      // Root=0; special-attribute escape=1; xsi:type=0.
+      ..write('010')
+      ..write(_schemaQName('', 'Derived', localNames: ['Base', 'Derived', 'root']))
+      // After the type switch, xsi:nil remains available and is selected.
+      ..write('1')
+      // Boolean true.
+      ..write('1');
+
+    final document = _decode(schema, bits.toString());
+    final attributes = document.events.whereType<ExiAttribute>().toList();
+
+    expect(attributes.map((attribute) => attribute.name.localName), ['type', 'nil']);
+    expect(attributes.map((attribute) => attribute.value), ['Derived', 'true']);
+    expect(document.toXmlString(), '<root xsi:type="Derived" xsi:nil="true"/>');
+  });
+
   test('resolves a namespace-qualified xsi:type QName', () {
     final schema = ExiSchemaCompiler.compile(
       id: 'particles',
