@@ -385,6 +385,7 @@ final class _DecoderState {
     final seenAttributes = <ExiQName>{};
     var attributesAllowed = true;
     var seenNamespaceDeclaration = false;
+    var specialAttributesAllowed = true;
     var nilSeen = false;
     var nilled = false;
 
@@ -402,6 +403,7 @@ final class _DecoderState {
         if (!seenAttributes.add(attribute.name)) {
           throw const FormatException('Duplicate relaxed fragment attribute');
         }
+        specialAttributesAllowed = false;
         final declaration = attribute.declaration;
         final value = declaration == null
             ? _readValue(attribute.name, () => strings.readValue(input, attribute.name))
@@ -417,6 +419,7 @@ final class _DecoderState {
         if (!seenAttributes.add(name)) {
           throw const FormatException('Duplicate relaxed fragment attribute');
         }
+        specialAttributesAllowed = false;
         final declaration = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
         final value = declaration == null
             ? _readValue(name, () => strings.readValue(input, name))
@@ -426,6 +429,9 @@ final class _DecoderState {
       }
 
       if (typeCount > 0 && selected == attributeCount) {
+        if (!specialAttributesAllowed) {
+          throw const FormatException('relaxed fragment xsi:type must precede ordinary attributes');
+        }
         if (!seenAttributes.add(_xsiTypeName)) {
           throw const FormatException('Duplicate relaxed fragment xsi:type attribute');
         }
@@ -445,6 +451,9 @@ final class _DecoderState {
       }
 
       if (nilCount > 0 && selected == attributeCount + typeCount) {
+        if (!specialAttributesAllowed) {
+          throw const FormatException('relaxed fragment xsi:nil must precede ordinary attributes');
+        }
         if (!seenAttributes.add(_xsiNilName)) {
           throw const FormatException('Duplicate relaxed fragment xsi:nil attribute');
         }
@@ -479,10 +488,15 @@ final class _DecoderState {
               throw const FormatException('xsi:type cannot use a relaxed untyped attribute');
             }
             if (name == _xsiNilName) {
+              if (!specialAttributesAllowed) {
+                throw const FormatException('relaxed fragment xsi:nil must precede ordinary attributes');
+              }
               if (!group.hasNillableDeclaration || nilSeen) {
                 throw const FormatException('xsi:nil cannot use a relaxed untyped attribute here');
               }
               nilSeen = true;
+            } else {
+              specialAttributesAllowed = false;
             }
             if (!seenAttributes.add(name)) {
               throw const FormatException('Duplicate relaxed fragment attribute');

@@ -1361,6 +1361,45 @@ void main() {
     expect(document.toXmlString(), '<item xsi:type="Derived"><child/></item>');
   });
 
+  test('rejects xsi:type after an ordinary attribute in a relaxed fragment grammar', () {
+    final schema = _compile('''
+      <xs:attribute name="code" type="xs:integer"/>
+      <xs:complexType name="Base"/>
+      <xs:complexType name="Derived">
+        <xs:complexContent>
+          <xs:extension base="Base">
+            <xs:sequence>
+              <xs:element name="child"/>
+            </xs:sequence>
+          </xs:extension>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="Base"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Fragment QNames are child=000, item=001, root=010, SE(*)=011, ED=100.
+      ..write('001')
+      // Relaxed AT(code)=0.
+      ..write('0000')
+      // Positive integer 7.
+      ..write('0')
+      ..write(_unsigned(7))
+      // Relaxed AT(xsi:type)=2 after AT(code) and AT(*).
+      ..write('0010')
+      ..write(_schemaQName('', 'Derived', localNames: ['Base', 'Derived', 'child', 'item', 'root']))
+      // The Derived grammar decodes child and both EE events implicitly.
+      ..write('100');
+
+    expect(() => _decodeFragment(schema, bits.toString()), throwsFormatException);
+  });
+
   test('decodes comments in a non-strict relaxed fragment grammar', () {
     final schema = _compile('''
       <xs:element name="root">
@@ -1666,6 +1705,34 @@ void main() {
       ).decode(_pack(bits.toString())),
       throwsFormatException,
     );
+  });
+
+  test('rejects xsi:nil after an ordinary attribute in a relaxed fragment grammar', () {
+    final schema = _compile('''
+      <xs:attribute name="code" type="xs:integer"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:integer" nillable="true"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Fragment item=00; relaxed AT(code)=000.
+      ..write('00000')
+      // Positive integer 7.
+      ..write('0')
+      ..write(_unsigned(7))
+      // Relaxed AT(xsi:nil)=2 after AT(code) and AT(*).
+      ..write('010')
+      // Boolean true.
+      ..write('1')
+      // Relaxed content EE=3; fragment ED=3.
+      ..write('01111');
+
+    expect(() => _decodeFragment(schema, bits.toString()), throwsFormatException);
   });
 
   test('decodes untyped declared attributes in a non-strict relaxed fragment grammar', () {
