@@ -67,8 +67,7 @@ User-defined datatype representation implementations remain unsupported. XSD
 imports/includes, complex-content restriction, defaults and fixed values,
 substitution groups, abstract
 declarations and derivation controls, inherited wildcard unions involving
-`##other`, schema-informed grammars requiring unsupported XSD features,
-relaxed element-fragment wildcard untyped-attribute fallback edge cases, and
+`##other`, schema-informed grammars requiring unsupported XSD features, and
 remaining non-strict grammar augmentations are also not yet available.
 
 ```dart

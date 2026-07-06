@@ -1524,6 +1524,36 @@ void main() {
     expect(document.toXmlString(), '<item code="not-an-integer"/>');
   });
 
+  test('decodes untyped wildcard attributes in a non-strict relaxed fragment grammar', () {
+    final schema = _compile('''
+      <xs:attribute name="code" type="xs:integer"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:integer"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer('10000000')
+      // Fragment item=00; relaxed non-strict escape=7 after AT(code), AT(*), and content events.
+      ..write('00111')
+      // Untyped wildcard attribute with QName code.
+      ..write('1')
+      ..write(_schemaQName('', 'code', localNames: ['code', 'item', 'root']))
+      ..write(_value('not-an-integer'))
+      // Relaxed EE=5; fragment ED=3.
+      ..write('10111');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: false, fragment: true, schemaId: ExiSchemaId.named('particles')),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<item code="not-an-integer"/>');
+  });
+
   test('uses String for conflicting relaxed fragment attribute types', () {
     final schema = _compile('''
       <xs:element name="root">
