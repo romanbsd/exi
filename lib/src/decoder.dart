@@ -694,6 +694,7 @@ final class _DecoderState {
     final grammar = grammars.putIfAbsent(elementName, () => _ElementGrammar(options));
     var current = grammar.startTag;
     final seenAttributes = <ExiQName>{};
+    var seenNamespaceDeclaration = false;
 
     while (true) {
       final production = current.readProduction(input);
@@ -726,6 +727,7 @@ final class _DecoderState {
           final uri = strings.readString(input);
           final prefix = strings.readString(input);
           final localElementNamespace = input.readNBitUnsigned(1) == 1;
+          seenNamespaceDeclaration = true;
           strings.addPrefix(uri, prefix);
           if (localElementNamespace) {
             if (uri != elementName.uri) {
@@ -736,6 +738,9 @@ final class _DecoderState {
           }
           events.add(ExiNamespaceDeclaration(uri: uri, prefix: prefix, localElementNamespace: localElementNamespace));
         case _EventType.selfContained:
+          if (seenNamespaceDeclaration || seenAttributes.isNotEmpty) {
+            throw const FormatException('Self-contained elements must precede namespaces and attributes');
+          }
           _decodeSelfContained(elementName, startEventIndex);
           return;
         case _EventType.entityReference:

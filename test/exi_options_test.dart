@@ -119,6 +119,47 @@ void main() {
         throwsA(isA<FormatException>()),
       );
     });
+
+    test('rejects a self-contained marker after an attribute', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'root'))
+        // StartTagContent -> AT(*).
+        ..write('001')
+        ..write(_qName('', 'id'))
+        ..write(_value('42'))
+        // StartTagContent -> undeclared SC after learned AT(id).
+        ..write('1010');
+      _alignBits(bits);
+      // Self-contained root content: StartTagContent -> EE.
+      bits.write('00');
+
+      expect(
+        () => ExiDecoder(options: const ExiOptions(selfContained: true)).decode(_pack(bits.toString())),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('rejects a self-contained marker after a namespace declaration', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'root'))
+        // StartTagContent -> NS.
+        ..write('010')
+        ..write(_rawString('urn:example'))
+        ..write(_rawString('p'))
+        ..write('0')
+        // StartTagContent -> SC after NS.
+        ..write('011');
+      _alignBits(bits);
+      // Self-contained root content: StartTagContent -> EE.
+      bits.write('00');
+
+      expect(
+        () => ExiDecoder(
+          options: const ExiOptions(selfContained: true, fidelity: ExiFidelityOptions(prefixes: true)),
+        ).decode(_pack(bits.toString())),
+        throwsA(isA<FormatException>()),
+      );
+    });
   });
 
   group('fragment option', () {
