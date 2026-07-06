@@ -524,6 +524,37 @@ void main() {
       expect(document.toXmlString(), '<root><item/></root>');
     });
 
+    test('collapses duplicate leading element QNames with the same anonymous simple grammar', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="item">
+                <xs:simpleType>
+                  <xs:restriction base="xs:string"/>
+                </xs:simpleType>
+              </xs:element>
+              <xs:element name="item">
+                <xs:simpleType>
+                  <xs:restriction base="xs:string"/>
+                </xs:simpleType>
+              </xs:element>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+      final bits = StringBuffer()
+        // Duplicate anonymous string SE(item) branches collapse to one event code.
+        ..write('0')
+        ..write(_value('text'))
+        // Root EE.
+        ..write('0');
+
+      final document = _decode(schema, bits.toString());
+
+      expect(document.toXmlString(), '<root><item>text</item></root>');
+    });
+
     test('keeps duplicate leading element QNames unsupported when schema types conflict', () {
       final schema = _compile('''
         <xs:element name="root">

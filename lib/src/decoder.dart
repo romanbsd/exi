@@ -1674,8 +1674,7 @@ bool _hasSameElementGrammarIdentity(ExiElementDeclaration left, ExiElementDeclar
   return right.schemaTypeName == null &&
       right.name == left.name &&
       right.nillable == left.nillable &&
-      _isAnonymousEmptyGrammar(left) &&
-      _isAnonymousEmptyGrammar(right);
+      (_hasSameAnonymousEmptyGrammar(left, right) || _hasSameAnonymousValueGrammar(left, right));
 }
 
 bool _hasSameWildcardIdentity(ExiWildcardParticle left, ExiWildcardParticle right) =>
@@ -1690,8 +1689,32 @@ bool _sameStringSet(Set<String>? left, Set<String>? right) {
   return left.length == right.length && left.containsAll(right);
 }
 
-bool _isAnonymousEmptyGrammar(ExiElementDeclaration declaration) =>
-    declaration.datatype == null &&
+bool _hasSameAnonymousEmptyGrammar(ExiElementDeclaration left, ExiElementDeclaration right) =>
+    _isAnonymousEmptyGrammar(left) && _isAnonymousEmptyGrammar(right);
+
+bool _isAnonymousEmptyGrammar(ExiElementDeclaration declaration) => _isAnonymousGrammarBase(declaration);
+
+bool _hasSameAnonymousValueGrammar(ExiElementDeclaration left, ExiElementDeclaration right) {
+  if (!_isAnonymousValueGrammar(left) || !_isAnonymousValueGrammar(right)) {
+    return false;
+  }
+  return left.datatype == right.datatype &&
+      left.listItemDatatype == right.listItemDatatype &&
+      _sameList(left.schemaDatatypeHierarchy, right.schemaDatatypeHierarchy) &&
+      _sameList(left.listItemSchemaDatatypeHierarchy, right.listItemSchemaDatatypeHierarchy) &&
+      _sameList(left.restrictedCharacters, right.restrictedCharacters) &&
+      _sameList(left.listItemRestrictedCharacters, right.listItemRestrictedCharacters) &&
+      _sameList(left.enumerationValues, right.enumerationValues) &&
+      left.booleanPattern == right.booleanPattern &&
+      left.listItemBooleanPattern == right.listItemBooleanPattern &&
+      left.integerMinInclusive == right.integerMinInclusive &&
+      left.integerMaxInclusive == right.integerMaxInclusive;
+}
+
+bool _isAnonymousValueGrammar(ExiElementDeclaration declaration) =>
+    declaration.datatype != null && _isAnonymousGrammarBase(declaration);
+
+bool _isAnonymousGrammarBase(ExiElementDeclaration declaration) =>
     declaration.children.isEmpty &&
     declaration.attributes.isEmpty &&
     declaration.content == null &&
@@ -1700,6 +1723,21 @@ bool _isAnonymousEmptyGrammar(ExiElementDeclaration declaration) =>
     !declaration.anyAttribute &&
     declaration.attributeWildcardNamespaces == null &&
     declaration.attributeWildcardExcludedNamespaces == null;
+
+bool _sameList<T>(List<T>? left, List<T>? right) {
+  if (left == null || right == null) {
+    return left == right;
+  }
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
 
 ExiParticle? _derive(ExiParticle particle, Object selected) {
   switch (particle) {
