@@ -663,6 +663,8 @@ final class _DecoderState {
         listItemBooleanPattern: attribute.listItemBooleanPattern,
         integerMinInclusive: attribute.integerMinInclusive,
         integerMaxInclusive: attribute.integerMaxInclusive,
+        listItemIntegerMinInclusive: attribute.listItemIntegerMinInclusive,
+        listItemIntegerMaxInclusive: attribute.listItemIntegerMaxInclusive,
       );
 
   String _readXsiNilValue() {
@@ -960,6 +962,8 @@ final class _DecoderState {
                           listItemBooleanPattern: globalAttribute.listItemBooleanPattern,
                           integerMinInclusive: globalAttribute.integerMinInclusive,
                           integerMaxInclusive: globalAttribute.integerMaxInclusive,
+                          listItemIntegerMinInclusive: globalAttribute.listItemIntegerMinInclusive,
+                          listItemIntegerMaxInclusive: globalAttribute.listItemIntegerMaxInclusive,
                         ),
                   );
             events.add(ExiAttribute(name, value));
@@ -1126,6 +1130,8 @@ final class _DecoderState {
                   listItemBooleanPattern: attribute.listItemBooleanPattern,
                   integerMinInclusive: attribute.integerMinInclusive,
                   integerMaxInclusive: attribute.integerMaxInclusive,
+                  listItemIntegerMinInclusive: attribute.listItemIntegerMinInclusive,
+                  listItemIntegerMaxInclusive: attribute.listItemIntegerMaxInclusive,
                 ),
           );
           if (!seenAttributes.add(attribute.name)) {
@@ -1170,6 +1176,8 @@ final class _DecoderState {
                         listItemBooleanPattern: globalAttribute.listItemBooleanPattern,
                         integerMinInclusive: globalAttribute.integerMinInclusive,
                         integerMaxInclusive: globalAttribute.integerMaxInclusive,
+                        listItemIntegerMinInclusive: globalAttribute.listItemIntegerMinInclusive,
+                        listItemIntegerMaxInclusive: globalAttribute.listItemIntegerMaxInclusive,
                       ),
                 );
           events.add(ExiAttribute(name, value));
@@ -1234,6 +1242,8 @@ final class _DecoderState {
                       listItemBooleanPattern: declaration.listItemBooleanPattern,
                       integerMinInclusive: declaration.integerMinInclusive,
                       integerMaxInclusive: declaration.integerMaxInclusive,
+                      listItemIntegerMinInclusive: declaration.listItemIntegerMinInclusive,
+                      listItemIntegerMaxInclusive: declaration.listItemIntegerMaxInclusive,
                     ),
               ),
             ),
@@ -1724,7 +1734,9 @@ bool _hasSameAnonymousDatatypeShape(ExiElementDeclaration left, ExiElementDeclar
       left.booleanPattern == right.booleanPattern &&
       left.listItemBooleanPattern == right.listItemBooleanPattern &&
       left.integerMinInclusive == right.integerMinInclusive &&
-      left.integerMaxInclusive == right.integerMaxInclusive;
+      left.integerMaxInclusive == right.integerMaxInclusive &&
+      left.listItemIntegerMinInclusive == right.listItemIntegerMinInclusive &&
+      left.listItemIntegerMaxInclusive == right.listItemIntegerMaxInclusive;
 }
 
 bool _isAnonymousValueGrammar(ExiElementDeclaration declaration) =>
@@ -1893,6 +1905,8 @@ bool _sameAttribute(ExiAttributeDeclaration left, ExiAttributeDeclaration right)
     left.listItemBooleanPattern == right.listItemBooleanPattern &&
     left.integerMinInclusive == right.integerMinInclusive &&
     left.integerMaxInclusive == right.integerMaxInclusive &&
+    left.listItemIntegerMinInclusive == right.listItemIntegerMinInclusive &&
+    left.listItemIntegerMaxInclusive == right.listItemIntegerMaxInclusive &&
     left.required == right.required;
 
 bool _isAnonymousGrammarBase(ExiElementDeclaration declaration) =>

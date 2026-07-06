@@ -33,6 +33,8 @@ final class ExiValueDecoder {
     bool listItemBooleanPattern = false,
     BigInt? integerMinInclusive,
     BigInt? integerMaxInclusive,
+    BigInt? listItemIntegerMinInclusive,
+    BigInt? listItemIntegerMaxInclusive,
   }) {
     final representation = _representationFor(datatype, schemaDatatypeHierarchy);
     final itemRepresentation = listItemDatatype == null
@@ -86,6 +88,8 @@ final class ExiValueDecoder {
         itemBooleanPattern: listItemBooleanPattern,
         itemRestrictedCharacters: listItemRestrictedCharacters,
         itemEnumerationValues: listItemEnumerationValues,
+        itemIntegerMinInclusive: listItemIntegerMinInclusive,
+        itemIntegerMaxInclusive: listItemIntegerMaxInclusive,
       ),
     };
   }
@@ -115,6 +119,8 @@ final class ExiValueDecoder {
     required bool itemBooleanPattern,
     List<int>? itemRestrictedCharacters,
     List<String> itemEnumerationValues = const [],
+    BigInt? itemIntegerMinInclusive,
+    BigInt? itemIntegerMaxInclusive,
   }) {
     final encodedLength = input.readUnsignedInteger();
     if (encodedLength > BigInt.from(0x7fffffff)) {
@@ -131,6 +137,8 @@ final class ExiValueDecoder {
                 schemaDatatypeHierarchy: itemSchemaDatatypeHierarchy,
                 enumerationValues: itemEnumerationValues,
                 booleanPattern: itemBooleanPattern,
+                integerMinInclusive: itemIntegerMinInclusive,
+                integerMaxInclusive: itemIntegerMaxInclusive,
               ),
     ].join(' ');
   }

@@ -681,6 +681,73 @@ void main() {
     expect(document.toXmlString(), '<colors>blue red green</colors>');
   });
 
+  test('decodes list items constrained by bounded integer facets', () {
+    const schemaId = 'bounded-list-items';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="SmallInteger">
+            <xs:restriction base="xs:integer">
+              <xs:minInclusive value="5"/>
+              <xs:maxInclusive value="8"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="SmallIntegers">
+            <xs:list itemType="SmallInteger"/>
+          </xs:simpleType>
+          <xs:element name="values" type="SmallIntegers"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('100000000')
+      ..write(_unsigned(3))
+      // Values 5, 8, and 6 encoded as 2-bit offsets from minInclusive=5.
+      ..write('00')
+      ..write('11')
+      ..write('01');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<values>5 8 6</values>');
+  });
+
+  test('rejects an unused bounded-integer offset in a list item', () {
+    const schemaId = 'invalid-bounded-list-item';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="SmallInteger">
+            <xs:restriction base="xs:integer">
+              <xs:minInclusive value="5"/>
+              <xs:maxInclusive value="7"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="SmallIntegers">
+            <xs:list itemType="SmallInteger"/>
+          </xs:simpleType>
+          <xs:element name="values" type="SmallIntegers"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('100000000')
+      ..write(_unsigned(1))
+      // Offset 3 is unused for the three-value range 5..7.
+      ..write('11');
+
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+        schemaResolver: (_) => schema,
+      ).decode(_pack(bits.toString())),
+      throwsFormatException,
+    );
+  });
+
   test('uses the String representation for named and inline union types', () {
     const schemaId = 'unions';
     final schema = ExiSchemaCompiler.compile(

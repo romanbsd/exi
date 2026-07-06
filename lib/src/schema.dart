@@ -67,6 +67,8 @@ final class ExiElementDeclaration {
        listItemBooleanPattern = false,
        integerMinInclusive = null,
        integerMaxInclusive = null,
+       listItemIntegerMinInclusive = null,
+       listItemIntegerMaxInclusive = null,
        attributes = const [],
        content = null,
        mixed = false;
@@ -93,6 +95,8 @@ final class ExiElementDeclaration {
        listItemBooleanPattern = false,
        integerMinInclusive = null,
        integerMaxInclusive = null,
+       listItemIntegerMinInclusive = null,
+       listItemIntegerMaxInclusive = null,
        attributes = const [],
        content = null,
        mixed = false;
@@ -112,6 +116,8 @@ final class ExiElementDeclaration {
     this.listItemBooleanPattern = false,
     this.integerMinInclusive,
     this.integerMaxInclusive,
+    this.listItemIntegerMinInclusive,
+    this.listItemIntegerMaxInclusive,
     this.nillable = false,
     this.typeAlternatives = const {},
     this.anyAttribute = false,
@@ -139,6 +145,8 @@ final class ExiElementDeclaration {
     this.listItemBooleanPattern = false,
     this.integerMinInclusive,
     this.integerMaxInclusive,
+    this.listItemIntegerMinInclusive,
+    this.listItemIntegerMaxInclusive,
     this.attributes = const [],
     this.nillable = false,
     this.typeAlternatives = const {},
@@ -175,7 +183,9 @@ final class ExiElementDeclaration {
        booleanPattern = false,
        listItemBooleanPattern = false,
        integerMinInclusive = null,
-       integerMaxInclusive = null;
+       integerMaxInclusive = null,
+       listItemIntegerMinInclusive = null,
+       listItemIntegerMaxInclusive = null;
 
   final ExiQName name;
   final ExiQName? schemaTypeName;
@@ -192,6 +202,8 @@ final class ExiElementDeclaration {
   final bool listItemBooleanPattern;
   final BigInt? integerMinInclusive;
   final BigInt? integerMaxInclusive;
+  final BigInt? listItemIntegerMinInclusive;
+  final BigInt? listItemIntegerMaxInclusive;
   final List<ExiAttributeDeclaration> attributes;
   final ExiParticle? content;
   final bool mixed;
@@ -218,6 +230,8 @@ final class ExiAttributeDeclaration {
     this.listItemBooleanPattern = false,
     this.integerMinInclusive,
     this.integerMaxInclusive,
+    this.listItemIntegerMinInclusive,
+    this.listItemIntegerMaxInclusive,
     this.required = false,
   }) : assert((datatype == ExiDatatype.list) == (listItemDatatype != null));
 
@@ -234,6 +248,8 @@ final class ExiAttributeDeclaration {
   final bool listItemBooleanPattern;
   final BigInt? integerMinInclusive;
   final BigInt? integerMaxInclusive;
+  final BigInt? listItemIntegerMinInclusive;
+  final BigInt? listItemIntegerMaxInclusive;
   final bool required;
 }
 

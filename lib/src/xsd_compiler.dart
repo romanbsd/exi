@@ -20,6 +20,8 @@ typedef _SimpleType = ({
   bool listItemBooleanPattern,
   BigInt? integerMinInclusive,
   BigInt? integerMaxInclusive,
+  BigInt? listItemIntegerMinInclusive,
+  BigInt? listItemIntegerMaxInclusive,
 });
 
 final class ExiSchemaCompiler {
@@ -288,6 +290,8 @@ final class _Compiler {
           listItemBooleanPattern: simpleDatatype.listItemBooleanPattern,
           integerMinInclusive: simpleDatatype.integerMinInclusive,
           integerMaxInclusive: simpleDatatype.integerMaxInclusive,
+          listItemIntegerMinInclusive: simpleDatatype.listItemIntegerMinInclusive,
+          listItemIntegerMaxInclusive: simpleDatatype.listItemIntegerMaxInclusive,
           nillable: nillable,
         );
       }
@@ -331,6 +335,8 @@ final class _Compiler {
         listItemBooleanPattern: simpleType.listItemBooleanPattern,
         integerMinInclusive: simpleType.integerMinInclusive,
         integerMaxInclusive: simpleType.integerMaxInclusive,
+        listItemIntegerMinInclusive: simpleType.listItemIntegerMinInclusive,
+        listItemIntegerMaxInclusive: simpleType.listItemIntegerMaxInclusive,
         nillable: nillable,
       );
     }
@@ -688,6 +694,8 @@ final class _Compiler {
       listItemBooleanPattern: simpleType.listItemBooleanPattern,
       integerMinInclusive: simpleType.integerMinInclusive,
       integerMaxInclusive: simpleType.integerMaxInclusive,
+      listItemIntegerMinInclusive: simpleType.listItemIntegerMinInclusive,
+      listItemIntegerMaxInclusive: simpleType.listItemIntegerMaxInclusive,
       attributes: attributes,
       nillable: nillable,
       anyAttribute: _hasAnyAttribute(derivation),
@@ -1020,6 +1028,8 @@ final class _Compiler {
         listItemBooleanPattern: declaration.listItemBooleanPattern,
         integerMinInclusive: declaration.integerMinInclusive,
         integerMaxInclusive: declaration.integerMaxInclusive,
+        listItemIntegerMinInclusive: declaration.listItemIntegerMinInclusive,
+        listItemIntegerMaxInclusive: declaration.listItemIntegerMaxInclusive,
         required: _isRequiredAttribute(attribute),
       );
     }
@@ -1056,6 +1066,8 @@ final class _Compiler {
       listItemBooleanPattern: simpleType.listItemBooleanPattern,
       integerMinInclusive: simpleType.integerMinInclusive,
       integerMaxInclusive: simpleType.integerMaxInclusive,
+      listItemIntegerMinInclusive: simpleType.listItemIntegerMinInclusive,
+      listItemIntegerMaxInclusive: simpleType.listItemIntegerMaxInclusive,
       required: _isRequiredAttribute(attribute),
     );
   }
@@ -1108,6 +1120,8 @@ final class _Compiler {
       listItemBooleanPattern: simpleType.listItemBooleanPattern,
       integerMinInclusive: simpleType.integerMinInclusive,
       integerMaxInclusive: simpleType.integerMaxInclusive,
+      listItemIntegerMinInclusive: simpleType.listItemIntegerMinInclusive,
+      listItemIntegerMaxInclusive: simpleType.listItemIntegerMaxInclusive,
     );
   }
 
@@ -1218,6 +1232,8 @@ final class _Compiler {
         listItemBooleanPattern: itemType.booleanPattern,
         integerMinInclusive: null,
         integerMaxInclusive: null,
+        listItemIntegerMinInclusive: itemType.integerMinInclusive,
+        listItemIntegerMaxInclusive: itemType.integerMaxInclusive,
       );
     }
 
@@ -1358,6 +1374,8 @@ final class _Compiler {
       listItemBooleanPattern: baseType.listItemBooleanPattern,
       integerMinInclusive: minimum,
       integerMaxInclusive: maximum,
+      listItemIntegerMinInclusive: baseType.listItemIntegerMinInclusive,
+      listItemIntegerMaxInclusive: baseType.listItemIntegerMaxInclusive,
     );
   }
 
@@ -1480,6 +1498,8 @@ final class _Compiler {
         listItemBooleanPattern: false,
         integerMinInclusive: null,
         integerMaxInclusive: null,
+        listItemIntegerMinInclusive: null,
+        listItemIntegerMaxInclusive: null,
       ),
       'boolean' => _scalarType(ExiDatatype.boolean),
       'decimal' => _scalarType(ExiDatatype.decimal),
@@ -1568,6 +1588,8 @@ _SimpleType _scalarType(
   listItemBooleanPattern: false,
   integerMinInclusive: integerMinInclusive,
   integerMaxInclusive: integerMaxInclusive,
+  listItemIntegerMinInclusive: null,
+  listItemIntegerMaxInclusive: null,
 );
 
 _SimpleType _withSchemaDatatype(_SimpleType type, ExiQName datatype) =>
@@ -1588,6 +1610,8 @@ _SimpleType _withSchemaDatatypeHierarchy(_SimpleType type, List<ExiQName> hierar
   listItemBooleanPattern: type.listItemBooleanPattern,
   integerMinInclusive: type.integerMinInclusive,
   integerMaxInclusive: type.integerMaxInclusive,
+  listItemIntegerMinInclusive: type.listItemIntegerMinInclusive,
+  listItemIntegerMaxInclusive: type.listItemIntegerMaxInclusive,
 );
 
 List<ExiQName> _builtinDatatypeHierarchy(String localName) {
