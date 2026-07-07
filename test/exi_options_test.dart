@@ -46,6 +46,46 @@ void main() {
       expect(document.toXmlString(), '<root><?target data?></root>');
     });
 
+    test('rejects malformed comments during XML reconstruction', () {
+      final bits = StringBuffer('10000000')
+        ..write('0')
+        ..write(_qName('', 'root'))
+        // StartTagContent -> CM.
+        ..write('100')
+        ..write(_rawString('bad--comment'))
+        // ElementContent -> EE; DocEnd -> ED.
+        ..write('0')
+        ..write('0');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fidelity: ExiFidelityOptions(comments: true)),
+      ).decode(_pack(bits.toString()));
+
+      expect(document.events.whereType<ExiComment>().single.text, 'bad--comment');
+      expect(document.toXmlString, throwsFormatException);
+    });
+
+    test('rejects malformed processing instructions during XML reconstruction', () {
+      final bits = StringBuffer('10000000')
+        ..write('0')
+        ..write(_qName('', 'root'))
+        // StartTagContent -> PI: second-level branch 4, third-level PI 1.
+        ..write('1001')
+        ..write(_rawString('xml'))
+        ..write(_rawString('bad?>data'))
+        ..write('0')
+        ..write('0');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fidelity: ExiFidelityOptions(comments: true, processingInstructions: true)),
+      ).decode(_pack(bits.toString()));
+
+      final instruction = document.events.whereType<ExiProcessingInstruction>().single;
+      expect(instruction.target, 'xml');
+      expect(instruction.text, 'bad?>data');
+      expect(document.toXmlString, throwsFormatException);
+    });
+
     test('preserves document-level comments and processing instructions', () {
       final bits = StringBuffer('10000000')
         // DocContent -> CM.
@@ -101,6 +141,25 @@ void main() {
       expect(documentType.systemId, 'root.dtd');
       expect(document.events.whereType<ExiEntityReference>().single.name, 'example');
       expect(document.toXmlString(), '<!DOCTYPE root SYSTEM "root.dtd"><root>&example;</root>');
+    });
+
+    test('rejects malformed entity references during XML reconstruction', () {
+      final bits = StringBuffer('10000000')
+        ..write('0')
+        ..write(_qName('', 'root'))
+        // StartTagContent -> ER.
+        ..write('100')
+        ..write(_rawString('bad name'))
+        // ElementContent -> EE; DocEnd -> ED.
+        ..write('0')
+        ..write('0');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fidelity: ExiFidelityOptions(dtd: true)),
+      ).decode(_pack(bits.toString()));
+
+      expect(document.events.whereType<ExiEntityReference>().single.name, 'bad name');
+      expect(document.toXmlString, throwsFormatException);
     });
 
     test('resolves an element prefix from its local namespace event', () {
@@ -202,6 +261,55 @@ void main() {
       final child = document.events.whereType<ExiStartElement>().last;
       expect(child.name, const ExiQName(uri: 'urn:example', localName: 'child', prefix: 'p'));
       expect(document.toXmlString(), '<root xmlns:p="urn:example"><p:child/></root>');
+    });
+
+    test('does not add namespace undeclaration prefixes to the empty-URI prefix partition', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'root'))
+        // StartTagContent -> NS undeclaration for prefix p.
+        ..write('010')
+        ..write(_rawString(''))
+        ..write(_rawString('p'))
+        ..write('0')
+        // StartTagContent -> SE(*) with an empty-URI QName.
+        ..write('011')
+        ..write(_qName('', 'child'))
+        // child StartTagContent -> EE.
+        ..write('000')
+        // root ElementContent -> EE.
+        ..write('0');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fidelity: ExiFidelityOptions(prefixes: true)),
+      ).decode(_pack(bits.toString()));
+
+      final child = document.events.whereType<ExiStartElement>().last;
+      expect(child.name, const ExiQName(localName: 'child'));
+      expect(document.toXmlString(), '<root xmlns:p=""><child/></root>');
+    });
+
+    test('does not resolve no-namespace attributes through namespace undeclarations', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'root'))
+        // StartTagContent -> NS undeclaration for prefix p.
+        ..write('010')
+        ..write(_rawString(''))
+        ..write(_rawString('p'))
+        ..write('0')
+        // StartTagContent -> AT(*) with an empty-URI QName.
+        ..write('001')
+        ..write(_qName('', 'attr'))
+        ..write(_value('value'))
+        // StartTagContent -> EE after the learned attribute.
+        ..write('1000');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fidelity: ExiFidelityOptions(prefixes: true)),
+      ).decode(_pack(bits.toString()));
+
+      final attribute = document.events.whereType<ExiAttribute>().single;
+      expect(attribute.name.prefix, isNot('p'));
+      expect(document.toXmlString(), '<root xmlns:p="" attr="value"/>');
     });
 
     test('uses namespace declarations as multiple prefix partition entries for QNames', () {

@@ -179,6 +179,9 @@ final class ExiStringTable {
     if (!_uris.contains(uri)) {
       _uris.add(uri);
     }
+    if (uri.isEmpty) {
+      return;
+    }
     final partition = _prefixes.putIfAbsent(uri, () => []);
     if (!partition.contains(prefix)) {
       partition.add(prefix);

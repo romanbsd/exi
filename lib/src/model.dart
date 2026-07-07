@@ -188,6 +188,7 @@ final class ExiDocument {
             output.write('>');
             startTagIsOpen = false;
           }
+          _ensureRenderableComment(text);
           output
             ..write('<!--')
             ..write(text)
@@ -197,6 +198,7 @@ final class ExiDocument {
             output.write('>');
             startTagIsOpen = false;
           }
+          _ensureRenderableProcessingInstruction(target, text);
           output
             ..write('<?')
             ..write(target);
@@ -235,6 +237,7 @@ final class ExiDocument {
             output.write('>');
             startTagIsOpen = false;
           }
+          _ensureXmlName(name, 'entity reference');
           output
             ..write('&')
             ..write(name)
@@ -259,6 +262,56 @@ final class ExiDocument {
       throw UnsupportedError('XML reconstruction requires preserved non-empty prefixes for namespaced attributes');
     }
   }
+
+  static void _ensureRenderableComment(String text) {
+    if (text.contains('--') || text.endsWith('-')) {
+      throw const FormatException('XML comments cannot contain "--" or end with "-"');
+    }
+  }
+
+  static void _ensureRenderableProcessingInstruction(String target, String text) {
+    _ensureXmlName(target, 'processing-instruction target');
+    if (target.toLowerCase() == 'xml') {
+      throw const FormatException('XML processing-instruction target cannot be "xml"');
+    }
+    if (text.contains('?>')) {
+      throw const FormatException('XML processing-instruction text cannot contain "?>"');
+    }
+  }
+
+  static void _ensureXmlName(String value, String label) {
+    final runes = value.runes.toList();
+    if (runes.isEmpty || !_isXmlNameStart(runes.first) || runes.skip(1).any((rune) => !_isXmlNameChar(rune))) {
+      throw FormatException('Invalid XML $label name');
+    }
+  }
+
+  static bool _isXmlNameStart(int rune) =>
+      rune == 0x3a ||
+      rune == 0x5f ||
+      (rune >= 0x41 && rune <= 0x5a) ||
+      (rune >= 0x61 && rune <= 0x7a) ||
+      (rune >= 0xc0 && rune <= 0xd6) ||
+      (rune >= 0xd8 && rune <= 0xf6) ||
+      (rune >= 0xf8 && rune <= 0x2ff) ||
+      (rune >= 0x370 && rune <= 0x37d) ||
+      (rune >= 0x37f && rune <= 0x1fff) ||
+      (rune >= 0x200c && rune <= 0x200d) ||
+      (rune >= 0x2070 && rune <= 0x218f) ||
+      (rune >= 0x2c00 && rune <= 0x2fef) ||
+      (rune >= 0x3001 && rune <= 0xd7ff) ||
+      (rune >= 0xf900 && rune <= 0xfdcf) ||
+      (rune >= 0xfdf0 && rune <= 0xfffd) ||
+      (rune >= 0x10000 && rune <= 0xeffff);
+
+  static bool _isXmlNameChar(int rune) =>
+      _isXmlNameStart(rune) ||
+      rune == 0x2d ||
+      rune == 0x2e ||
+      (rune >= 0x30 && rune <= 0x39) ||
+      rune == 0xb7 ||
+      (rune >= 0x300 && rune <= 0x36f) ||
+      (rune >= 0x203f && rune <= 0x2040);
 
   static String _escapeXml(String value, {bool attribute = false}) {
     var escaped = value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
