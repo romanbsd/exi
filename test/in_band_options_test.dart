@@ -93,6 +93,29 @@ void main() {
       expect(document.toXmlString(), '<root/>');
     });
 
+    test('rejects strict with forbidden preserve options from the options document', () {
+      final bits = StringBuffer('10100000')
+        // header/lesscommon/preserve/comments, then strict.
+        ..write('000010111101');
+
+      expect(() => ExiDecoder().decode(_pack(bits.toString())), throwsArgumentError);
+    });
+
+    test('allows strict with lexical values from the options document', () {
+      final bits = StringBuffer('10100000')
+        // header/lesscommon/preserve/lexicalValues, then strict.
+        ..write('0000101010101')
+        // Empty schema-less document body.
+        ..write(_qName('', 'root'))
+        ..write('00');
+
+      final document = ExiDecoder().decode(_pack(bits.toString()));
+
+      expect(document.options.strict, isTrue);
+      expect(document.options.fidelity.lexicalValues, isTrue);
+      expect(document.toXmlString(), '<root/>');
+    });
+
     test('applies self-contained mode to the following body', () {
       final bits = StringBuffer('10100000')
         // header/lesscommon/uncommon/selfContained, then close each sequence.

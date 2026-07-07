@@ -361,6 +361,78 @@ void main() {
     expect(document.toXmlString(), '<p:root xmlns:p="urn:example"/>');
   });
 
+  test('rejects more than one local namespace declaration in a non-strict schema grammar', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'particles',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:example"
+            elementFormDefault="qualified">
+          <xs:element name="root"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Document root=0; escape=1; second-level NS=100.
+      ..write('01100')
+      ..write(_rawString('urn:example'))
+      ..write(_rawString('p'))
+      ..write('1')
+      // Escape=1; second-level NS=100 again.
+      ..write('1100')
+      ..write(_rawString('urn:example'))
+      ..write(_rawString('q'))
+      ..write('1');
+
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(
+          schemaId: ExiSchemaId.named('particles'),
+          fidelity: ExiFidelityOptions(prefixes: true),
+        ),
+        schemaResolver: (_) => schema,
+      ).decode(_pack(bits.toString())),
+      throwsFormatException,
+    );
+  });
+
+  test('uses non-strict namespace declarations as URI entries for undeclared child QNames', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'particles',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:example"
+            elementFormDefault="qualified">
+          <xs:element name="root"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Document root=0; escape=1; second-level NS=100.
+      ..write('01100')
+      ..write(_rawString('urn:other'))
+      ..write(_rawString('p'))
+      ..write('0')
+      // Escape=1; second-level SE(*)=101; QName URI hit for the NS URI.
+      ..write('1101')
+      ..write(_qNameUriHit(uriId: 5, uriCount: 6, localName: 'child'))
+      // Built-in child StartTagContent -> EE; schema root EE.
+      ..write('000')
+      ..write('0');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(schemaId: ExiSchemaId.named('particles'), fidelity: ExiFidelityOptions(prefixes: true)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    final namespace = document.events.whereType<ExiNamespaceDeclaration>().single;
+    final child = document.events.whereType<ExiStartElement>().last;
+    expect(namespace, const ExiNamespaceDeclaration(uri: 'urn:other', prefix: 'p', localElementNamespace: false));
+    expect(child.name, const ExiQName(uri: 'urn:other', localName: 'child', prefix: 'p'));
+  });
+
   test('decodes a self-contained non-strict schema element', () {
     final schema = _compile('''
       <xs:element name="root">
@@ -2136,6 +2208,50 @@ void main() {
     expect(document.toXmlString(), '<p:item xmlns:p="urn:example"/>');
   });
 
+  test('rejects more than one local namespace declaration in a relaxed fragment grammar', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'particles',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:example">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:choice>
+                <xs:element name="item" type="xs:string" form="qualified"/>
+                <xs:element name="item" type="xs:integer" form="qualified"/>
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Fragment item=00; relaxed non-strict NS escape=6.
+      ..write('00110')
+      ..write(_rawString('urn:example'))
+      ..write(_rawString('p'))
+      ..write('1')
+      // Relaxed non-strict NS escape=6 again.
+      ..write('110')
+      ..write(_rawString('urn:example'))
+      ..write(_rawString('q'))
+      ..write('1');
+
+    expect(
+      () => ExiDecoder(
+        options: const ExiOptions(
+          strict: false,
+          fragment: true,
+          schemaId: ExiSchemaId.named('particles'),
+          fidelity: ExiFidelityOptions(prefixes: true),
+        ),
+        schemaResolver: (_) => schema,
+      ).decode(_pack(bits.toString())),
+      throwsFormatException,
+    );
+  });
+
   test('decodes self-contained content in a non-strict relaxed fragment grammar', () {
     final schema = _compile('''
       <xs:element name="root">
@@ -2573,6 +2689,11 @@ String _schemaQName(
       ? _literal(localName, 1)
       : '${_unsigned(0)}${localNameIndex.toRadixString(2).padLeft(_nBitWidth(names.length), '0')}';
   return '$encodedUri$encodedLocalName';
+}
+
+String _qNameUriHit({required int uriId, required int uriCount, required String localName}) {
+  final encodedUri = (uriId + 1).toRadixString(2).padLeft(_nBitWidth(uriCount + 1), '0');
+  return '$encodedUri${_literal(localName, 1)}';
 }
 
 int _nBitWidth(int valueCount) => valueCount <= 1 ? 0 : (valueCount - 1).bitLength;

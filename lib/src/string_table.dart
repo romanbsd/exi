@@ -176,6 +176,9 @@ final class ExiStringTable {
       _readCharacters(input, _readLength(input), restrictedCharacters: restrictedCharacters);
 
   void addPrefix(String uri, String prefix) {
+    if (!_uris.contains(uri)) {
+      _uris.add(uri);
+    }
     final partition = _prefixes.putIfAbsent(uri, () => []);
     if (!partition.contains(prefix)) {
       partition.add(prefix);

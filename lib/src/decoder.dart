@@ -385,6 +385,7 @@ final class _DecoderState {
     final seenAttributes = <ExiQName>{};
     var attributesAllowed = true;
     var seenNamespaceDeclaration = false;
+    var seenLocalNamespaceDeclaration = false;
     var specialAttributesAllowed = true;
     var nilSeen = false;
     var nilled = false;
@@ -512,6 +513,10 @@ final class _DecoderState {
             seenNamespaceDeclaration = true;
             strings.addPrefix(uri, prefix);
             if (localElementNamespace) {
+              if (seenLocalNamespaceDeclaration) {
+                throw const FormatException('Only one local namespace declaration is allowed per element');
+              }
+              seenLocalNamespaceDeclaration = true;
               if (uri != currentElementName.uri) {
                 throw const FormatException('Local namespace URI does not match the start-element URI');
               }
@@ -720,6 +725,7 @@ final class _DecoderState {
     var current = grammar.startTag;
     final seenAttributes = <ExiQName>{};
     var seenNamespaceDeclaration = false;
+    var seenLocalNamespaceDeclaration = false;
     var seenXsiNil = false;
     var seenOrdinaryAttribute = false;
 
@@ -768,6 +774,10 @@ final class _DecoderState {
           seenNamespaceDeclaration = true;
           strings.addPrefix(uri, prefix);
           if (localElementNamespace) {
+            if (seenLocalNamespaceDeclaration) {
+              throw const FormatException('Only one local namespace declaration is allowed per element');
+            }
+            seenLocalNamespaceDeclaration = true;
             if (uri != elementName.uri) {
               throw const FormatException('Local namespace URI does not match the start-element URI');
             }
@@ -861,6 +871,7 @@ final class _DecoderState {
     var nilled = false;
     var specialAttributesAllowed = allowSpecialAttributes;
     var contentStarted = false;
+    var seenLocalNamespaceDeclaration = false;
     final seenAttributes = <ExiQName>{};
 
     while (true) {
@@ -1057,6 +1068,10 @@ final class _DecoderState {
             final localElementNamespace = input.readNBitUnsigned(1) == 1;
             strings.addPrefix(uri, prefix);
             if (localElementNamespace) {
+              if (seenLocalNamespaceDeclaration) {
+                throw const FormatException('Only one local namespace declaration is allowed per element');
+              }
+              seenLocalNamespaceDeclaration = true;
               if (uri != currentElementName.uri) {
                 throw const FormatException('Local namespace URI does not match the start-element URI');
               }

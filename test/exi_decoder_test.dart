@@ -151,9 +151,9 @@ void main() {
         ..write('0')
         // StartTagContent -> AT(*) with xsi:type.
         ..write('001')
-        ..write(_qNameHit(uriId: 2, localNameId: 1, localNameCount: 2))
+        ..write(_qNameHit(uriId: 2, uriCount: 4, localNameId: 1, localNameCount: 2))
         // QName value uses the declared xsd prefix partition.
-        ..write(_literalQName(xsdUri, 'integer'))
+        ..write(_literalQName(xsdUri, 'integer', uriCount: 4))
         // StartTagContent -> EE.
         ..write('100');
 
@@ -248,15 +248,15 @@ String _qName(String uri, String localName) {
   return '01${_literal(localName, lengthOffset: 1)}';
 }
 
-String _qNameHit({required int uriId, required int localNameId, required int localNameCount}) {
-  final encodedUri = (uriId + 1).toRadixString(2).padLeft(2, '0');
+String _qNameHit({required int uriId, int uriCount = 3, required int localNameId, required int localNameCount}) {
+  final encodedUri = (uriId + 1).toRadixString(2).padLeft(uriCount.bitLength, '0');
   final localNameWidth = (localNameCount - 1).bitLength;
   final encodedLocalName = localNameId.toRadixString(2).padLeft(localNameWidth, '0');
   return '$encodedUri${_unsigned(0)}$encodedLocalName';
 }
 
-String _literalQName(String uri, String localName) =>
-    '00${_literal(uri, lengthOffset: 0)}${_literal(localName, lengthOffset: 1)}';
+String _literalQName(String uri, String localName, {int uriCount = 3}) =>
+    '${''.padLeft(uriCount.bitLength, '0')}${_literal(uri, lengthOffset: 0)}${_literal(localName, lengthOffset: 1)}';
 
 String _value(String value) => _literal(value, lengthOffset: 2);
 

@@ -46,6 +46,34 @@ void main() {
       expect(document.toXmlString(), '<root><?target data?></root>');
     });
 
+    test('preserves document-level comments and processing instructions', () {
+      final bits = StringBuffer('10000000')
+        // DocContent -> CM.
+        ..write('10')
+        ..write(_rawString('before'))
+        // DocContent -> SE(*).
+        ..write('0')
+        ..write(_qName('', 'root'))
+        // StartTagContent -> EE.
+        ..write('000')
+        // DocEnd -> PI.
+        ..write('11')
+        ..write(_rawString('after'))
+        ..write(_rawString('done'))
+        // DocEnd -> ED.
+        ..write('0');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fidelity: ExiFidelityOptions(comments: true, processingInstructions: true)),
+      ).decode(_pack(bits.toString()));
+
+      expect(document.events.whereType<ExiComment>().single.text, 'before');
+      final instruction = document.events.whereType<ExiProcessingInstruction>().single;
+      expect(instruction.target, 'after');
+      expect(instruction.text, 'done');
+      expect(document.toXmlString(), '<!--before--><root/><?after done?>');
+    });
+
     test('preserves a document type and entity reference', () {
       final bits = StringBuffer('10000000')
         // DocContent -> DT.
@@ -95,6 +123,107 @@ void main() {
       final namespace = document.events.whereType<ExiNamespaceDeclaration>().single;
       expect(namespace, const ExiNamespaceDeclaration(uri: 'urn:example', prefix: 'p', localElementNamespace: true));
       expect(document.toXmlString(), '<p:root xmlns:p="urn:example"/>');
+    });
+
+    test('uses namespace declarations as URI and prefix partition entries for child QNames', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'root'))
+        // StartTagContent -> NS.
+        ..write('010')
+        ..write(_rawString('urn:example'))
+        ..write(_rawString('p'))
+        ..write('0')
+        // StartTagContent -> SE(*), with a QName URI hit for the namespace declaration.
+        ..write('011')
+        ..write(_qNameUriHit(uriId: 3, uriCount: 4, localName: 'child'))
+        // child StartTagContent -> EE.
+        ..write('000')
+        // root ElementContent -> EE.
+        ..write('0');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fidelity: ExiFidelityOptions(prefixes: true)),
+      ).decode(_pack(bits.toString()));
+
+      final child = document.events.whereType<ExiStartElement>().last;
+      expect(child.name, const ExiQName(uri: 'urn:example', localName: 'child', prefix: 'p'));
+      expect(document.toXmlString(), '<root xmlns:p="urn:example"><p:child/></root>');
+    });
+
+    test('uses namespace declarations as multiple prefix partition entries for QNames', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'root'))
+        // StartTagContent -> NS.
+        ..write('010')
+        ..write(_rawString('urn:example'))
+        ..write(_rawString('p'))
+        ..write('0')
+        // StartTagContent -> a second NS for the same URI.
+        ..write('010')
+        ..write(_rawString('urn:example'))
+        ..write(_rawString('q'))
+        ..write('0')
+        // StartTagContent -> SE(*), with URI id 3 and prefix id 1 ("q").
+        ..write('011')
+        ..write(_qNameUriHit(uriId: 3, uriCount: 4, localName: 'child', prefixId: 1, prefixCount: 2))
+        // child StartTagContent -> EE.
+        ..write('000')
+        // root ElementContent -> EE.
+        ..write('0');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fidelity: ExiFidelityOptions(prefixes: true)),
+      ).decode(_pack(bits.toString()));
+
+      final child = document.events.whereType<ExiStartElement>().last;
+      expect(child.name, const ExiQName(uri: 'urn:example', localName: 'child', prefix: 'q'));
+      expect(document.toXmlString(), '<root xmlns:p="urn:example" xmlns:q="urn:example"><q:child/></root>');
+    });
+
+    test('rejects more than one local namespace declaration for an element', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('urn:example', 'root'))
+        // StartTagContent -> first local NS.
+        ..write('010')
+        ..write(_rawString('urn:example'))
+        ..write(_rawString('p'))
+        ..write('1')
+        // StartTagContent -> second local NS for the same element.
+        ..write('010')
+        ..write(_rawString('urn:example'))
+        ..write(_rawString('q'))
+        ..write('1');
+
+      expect(
+        () => ExiDecoder(
+          options: const ExiOptions(fidelity: ExiFidelityOptions(prefixes: true)),
+        ).decode(_pack(bits.toString())),
+        throwsFormatException,
+      );
+    });
+
+    test('uses namespace declarations as URI and prefix partition entries for attribute QNames', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'root'))
+        // StartTagContent -> NS.
+        ..write('010')
+        ..write(_rawString('urn:example'))
+        ..write(_rawString('p'))
+        ..write('0')
+        // StartTagContent -> AT(*), with a QName URI hit for the namespace declaration.
+        ..write('001')
+        ..write(_qNameUriHit(uriId: 3, uriCount: 4, localName: 'id'))
+        ..write(_value('42'))
+        // StartTagContent -> EE after the learned attribute.
+        ..write('1000');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fidelity: ExiFidelityOptions(prefixes: true)),
+      ).decode(_pack(bits.toString()));
+
+      final attribute = document.events.whereType<ExiAttribute>().single;
+      expect(attribute.name, const ExiQName(uri: 'urn:example', localName: 'id', prefix: 'p'));
+      expect(document.toXmlString(), '<root xmlns:p="urn:example" p:id="42"/>');
     });
 
     test('rejects a namespace declaration after an attribute', () {
@@ -168,6 +297,7 @@ void main() {
         // FragmentContent -> SE(*).
         ..write('0')
         ..write(_qName('', 'item'))
+        // StartTagContent -> EE.
         ..write('00')
         // Learned SE(item), followed by learned EE in its global grammar.
         ..write('00')
@@ -179,6 +309,54 @@ void main() {
 
       expect(document.events.whereType<ExiStartElement>(), hasLength(2));
       expect(document.toXmlString(), '<item/><item/>');
+    });
+
+    test('preserves fragment-level comments', () {
+      final bits = StringBuffer('10000000')
+        // FragmentContent -> CM.
+        ..write('10')
+        ..write(_rawString('before'))
+        // FragmentContent -> SE(*).
+        ..write('00')
+        ..write(_qName('', 'item'))
+        // StartTagContent -> EE.
+        ..write('000')
+        // FragmentContent -> CM after one learned SE(item).
+        ..write('11')
+        ..write(_rawString('after'))
+        // FragmentContent -> ED.
+        ..write('10');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fragment: true, fidelity: ExiFidelityOptions(comments: true)),
+      ).decode(_pack(bits.toString()));
+
+      expect(document.events.whereType<ExiComment>().map((event) => event.text), ['before', 'after']);
+      expect(document.toXmlString(), '<!--before--><item/><!--after-->');
+    });
+
+    test('preserves fragment-level processing instructions', () {
+      final bits = StringBuffer('10000000')
+        // FragmentContent -> PI.
+        ..write('10')
+        ..write(_rawString('target'))
+        ..write(_rawString('data'))
+        // FragmentContent -> SE(*).
+        ..write('00')
+        ..write(_qName('', 'item'))
+        // StartTagContent -> EE.
+        ..write('000')
+        // FragmentContent -> ED after one learned SE(item).
+        ..write('10');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fragment: true, fidelity: ExiFidelityOptions(processingInstructions: true)),
+      ).decode(_pack(bits.toString()));
+
+      final instruction = document.events.whereType<ExiProcessingInstruction>().single;
+      expect(instruction.target, 'target');
+      expect(instruction.text, 'data');
+      expect(document.toXmlString(), '<?target data?><item/>');
     });
   });
 
@@ -216,6 +394,26 @@ void main() {
 
   test('accepts pre-compression options', () {
     expect(ExiDecoder(options: const ExiOptions(alignment: ExiAlignment.preCompression)), isA<ExiDecoder>());
+  });
+
+  test('rejects strict mode combined with forbidden fidelity options', () {
+    const forbidden = [
+      ExiFidelityOptions(dtd: true),
+      ExiFidelityOptions(prefixes: true),
+      ExiFidelityOptions(comments: true),
+      ExiFidelityOptions(processingInstructions: true),
+    ];
+
+    for (final fidelity in forbidden) {
+      expect(() => ExiDecoder(options: ExiOptions(strict: true, fidelity: fidelity)), throwsArgumentError);
+    }
+  });
+
+  test('allows strict mode with lexical value preservation', () {
+    expect(
+      ExiDecoder(options: const ExiOptions(strict: true, fidelity: ExiFidelityOptions(lexicalValues: true))),
+      isA<ExiDecoder>(),
+    );
   });
 
   test('enforces a zero value-partition capacity', () {
@@ -355,6 +553,21 @@ void main() {
 String _qName(String uri, String localName) {
   final encodedUri = uri.isEmpty ? '01' : '00${_rawString(uri)}';
   return '$encodedUri${_literal(localName, lengthOffset: 1)}';
+}
+
+String _qNameUriHit({
+  required int uriId,
+  required int uriCount,
+  required String localName,
+  int? prefixId,
+  int? prefixCount,
+}) {
+  final encodedUri = (uriId + 1).toRadixString(2).padLeft(uriCount.bitLength, '0');
+  final encodedPrefix = switch ((prefixId, prefixCount)) {
+    (final int id, final int count) => id.toRadixString(2).padLeft((count - 1).bitLength, '0'),
+    _ => '',
+  };
+  return '$encodedUri${_literal(localName, lengthOffset: 1)}$encodedPrefix';
 }
 
 String _rawString(String value) => _literal(value, lengthOffset: 0);
