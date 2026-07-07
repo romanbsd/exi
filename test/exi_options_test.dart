@@ -206,6 +206,46 @@ void main() {
       expect(document.toXmlString(), '<root xmlns="urn:example"/>');
     });
 
+    test('rejects malformed namespace prefixes during XML reconstruction', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('urn:example', 'root'))
+        // StartTagContent -> NS.
+        ..write('010')
+        ..write(_rawString('urn:example'))
+        ..write(_rawString('bad prefix'))
+        ..write('1')
+        // StartTagContent -> EE.
+        ..write('000');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fidelity: ExiFidelityOptions(prefixes: true)),
+      ).decode(_pack(bits.toString()));
+
+      final namespace = document.events.whereType<ExiNamespaceDeclaration>().single;
+      expect(namespace.prefix, 'bad prefix');
+      expect(document.toXmlString, throwsFormatException);
+    });
+
+    test('rejects malformed non-local namespace declaration prefixes during XML reconstruction', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'root'))
+        // StartTagContent -> NS.
+        ..write('010')
+        ..write(_rawString('urn:example'))
+        ..write(_rawString('bad prefix'))
+        ..write('0')
+        // StartTagContent -> EE.
+        ..write('000');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fidelity: ExiFidelityOptions(prefixes: true)),
+      ).decode(_pack(bits.toString()));
+
+      final namespace = document.events.whereType<ExiNamespaceDeclaration>().single;
+      expect(namespace.prefix, 'bad prefix');
+      expect(document.toXmlString, throwsFormatException);
+    });
+
     test('rejects a namespaced element without a resolvable prefix', () {
       final bits = StringBuffer('10000000')
         ..write(_qName('urn:example', 'root'))

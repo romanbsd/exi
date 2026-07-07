@@ -71,6 +71,33 @@ void main() {
       expect(document.toXmlString(), '<item id="42"/>');
     });
 
+    test('rejects malformed element names during XML reconstruction', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'bad name'))
+        ..write('00');
+
+      final document = ExiDecoder().decode(_pack(bits.toString()));
+
+      expect(document.events.whereType<ExiStartElement>().single.name, const ExiQName(localName: 'bad name'));
+      expect(document.toXmlString, throwsFormatException);
+    });
+
+    test('rejects malformed attribute names during XML reconstruction', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'item'))
+        ..write('01')
+        ..write(_qName('', 'bad name'))
+        ..write(_value('42'))
+        ..write('100');
+
+      final document = ExiDecoder().decode(_pack(bits.toString()));
+
+      final attribute = document.events.whereType<ExiAttribute>().single;
+      expect(attribute.name, const ExiQName(localName: 'bad name'));
+      expect(attribute.value, '42');
+      expect(document.toXmlString, throwsFormatException);
+    });
+
     test('rejects duplicate attributes in a built-in element grammar', () {
       final bits = StringBuffer('10000000')
         ..write(_qName('', 'item'))

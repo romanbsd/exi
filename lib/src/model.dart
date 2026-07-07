@@ -160,6 +160,9 @@ final class ExiDocument {
           if (!startTagIsOpen) {
             throw StateError('Namespace event occurred outside a start tag');
           }
+          if (prefix.isNotEmpty) {
+            _ensureXmlNcName(prefix, 'namespace prefix');
+          }
           output
             ..write(prefix.isEmpty ? ' xmlns="' : ' xmlns:$prefix="')
             ..write(_escapeXml(uri, attribute: true))
@@ -255,12 +258,14 @@ final class ExiDocument {
     if (name.uri.isNotEmpty && name.prefix == null) {
       throw UnsupportedError('XML reconstruction requires preserved prefixes for namespaced QNames');
     }
+    _ensureXmlQName(name, 'element');
   }
 
   static void _ensureRenderableAttribute(ExiQName name) {
     if (name.uri.isNotEmpty && (name.prefix == null || name.prefix!.isEmpty)) {
       throw UnsupportedError('XML reconstruction requires preserved non-empty prefixes for namespaced attributes');
     }
+    _ensureXmlQName(name, 'attribute');
   }
 
   static void _ensureRenderableComment(String text) {
@@ -282,6 +287,21 @@ final class ExiDocument {
   static void _ensureXmlName(String value, String label) {
     final runes = value.runes.toList();
     if (runes.isEmpty || !_isXmlNameStart(runes.first) || runes.skip(1).any((rune) => !_isXmlNameChar(rune))) {
+      throw FormatException('Invalid XML $label name');
+    }
+  }
+
+  static void _ensureXmlQName(ExiQName name, String label) {
+    _ensureXmlNcName(name.localName, '$label local-name');
+    final prefix = name.prefix;
+    if (prefix != null && prefix.isNotEmpty) {
+      _ensureXmlNcName(prefix, '$label prefix');
+    }
+  }
+
+  static void _ensureXmlNcName(String value, String label) {
+    _ensureXmlName(value, label);
+    if (value.contains(':')) {
       throw FormatException('Invalid XML $label name');
     }
   }
