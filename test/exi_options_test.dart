@@ -125,6 +125,60 @@ void main() {
       expect(document.toXmlString(), '<p:root xmlns:p="urn:example"/>');
     });
 
+    test('renders an element resolved through a default namespace declaration', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('urn:example', 'root'))
+        // StartTagContent -> NS.
+        ..write('010')
+        ..write(_rawString('urn:example'))
+        ..write(_rawString(''))
+        ..write('1')
+        // StartTagContent -> EE.
+        ..write('000');
+
+      final document = ExiDecoder(
+        options: const ExiOptions(fidelity: ExiFidelityOptions(prefixes: true)),
+      ).decode(_pack(bits.toString()));
+
+      final root = document.events.whereType<ExiStartElement>().single;
+      expect(root.name, const ExiQName(uri: 'urn:example', localName: 'root', prefix: ''));
+      final namespace = document.events.whereType<ExiNamespaceDeclaration>().single;
+      expect(namespace, const ExiNamespaceDeclaration(uri: 'urn:example', prefix: '', localElementNamespace: true));
+      expect(document.toXmlString(), '<root xmlns="urn:example"/>');
+    });
+
+    test('rejects a namespaced element without a resolvable prefix', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('urn:example', 'root'))
+        // StartTagContent -> EE without a local NS resolving the prefix.
+        ..write('000');
+
+      expect(
+        () => ExiDecoder(
+          options: const ExiOptions(fidelity: ExiFidelityOptions(prefixes: true)),
+        ).decode(_pack(bits.toString())),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects a namespaced attribute without a resolvable prefix', () {
+      final bits = StringBuffer('10000000')
+        ..write(_qName('', 'root'))
+        // StartTagContent -> AT(*).
+        ..write('001')
+        ..write(_qName('urn:example', 'attr'))
+        ..write(_value('value'))
+        // StartTagContent -> EE after the learned attribute.
+        ..write('1000');
+
+      expect(
+        () => ExiDecoder(
+          options: const ExiOptions(fidelity: ExiFidelityOptions(prefixes: true)),
+        ).decode(_pack(bits.toString())),
+        throwsFormatException,
+      );
+    });
+
     test('uses namespace declarations as URI and prefix partition entries for child QNames', () {
       final bits = StringBuffer('10000000')
         ..write(_qName('', 'root'))

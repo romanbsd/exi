@@ -139,7 +139,7 @@ final class ExiDocument {
           if (startTagIsOpen) {
             output.write('>');
           }
-          _ensureRenderable(name);
+          _ensureRenderableElement(name);
           output
             ..write('<')
             ..write(name.lexicalName);
@@ -149,7 +149,7 @@ final class ExiDocument {
           if (!startTagIsOpen) {
             throw StateError('Attribute event occurred outside a start tag');
           }
-          _ensureRenderable(name);
+          _ensureRenderableAttribute(name);
           output
             ..write(' ')
             ..write(name.lexicalName)
@@ -248,9 +248,15 @@ final class ExiDocument {
     return output.toString();
   }
 
-  static void _ensureRenderable(ExiQName name) {
-    if (name.uri.isNotEmpty && (name.prefix == null || name.prefix!.isEmpty)) {
+  static void _ensureRenderableElement(ExiQName name) {
+    if (name.uri.isNotEmpty && name.prefix == null) {
       throw UnsupportedError('XML reconstruction requires preserved prefixes for namespaced QNames');
+    }
+  }
+
+  static void _ensureRenderableAttribute(ExiQName name) {
+    if (name.uri.isNotEmpty && (name.prefix == null || name.prefix!.isEmpty)) {
+      throw UnsupportedError('XML reconstruction requires preserved non-empty prefixes for namespaced attributes');
     }
   }
 

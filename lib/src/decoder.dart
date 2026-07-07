@@ -156,6 +156,20 @@ void _validateOptions(ExiOptions options) {
   }
 }
 
+void _ensureResolvableElementPrefix(ExiQName name, ExiOptions options) {
+  if (!options.fidelity.prefixes || name.uri.isEmpty || name.prefix != null) {
+    return;
+  }
+  throw const FormatException('Namespaced element QName has no resolvable prefix');
+}
+
+void _ensureResolvableAttributePrefix(ExiQName name, ExiOptions options) {
+  if (!options.fidelity.prefixes || name.uri.isEmpty || (name.prefix != null && name.prefix!.isNotEmpty)) {
+    return;
+  }
+  throw const FormatException('Namespaced attribute QName has no resolvable prefix');
+}
+
 ExiStringTable _newStringTable(ExiOptions options, ExiSchema? schema) => ExiStringTable(
   preservePrefixes: options.fidelity.prefixes,
   valueMaxLength: options.valueMaxLength,
@@ -419,6 +433,7 @@ final class _DecoderState {
         if (!seenAttributes.add(name)) {
           throw const FormatException('Duplicate relaxed fragment attribute');
         }
+        _ensureResolvableAttributePrefix(name, options);
         specialAttributesAllowed = false;
         final declaration = schema?.globalAttributes.where((attribute) => attribute.name == name).firstOrNull;
         final value = declaration == null
@@ -502,6 +517,7 @@ final class _DecoderState {
             if (!seenAttributes.add(name)) {
               throw const FormatException('Duplicate relaxed fragment attribute');
             }
+            _ensureResolvableAttributePrefix(name, options);
             events.add(ExiAttribute(name, _readValue(name, () => _readUntypedAttributeValue(name))));
           case _EventType.namespaceDeclaration:
             if (seenAttributes.isNotEmpty) {
@@ -733,6 +749,7 @@ final class _DecoderState {
       final production = current.readProduction(input);
       switch (production.type) {
         case _EventType.endElement:
+          _ensureResolvableElementPrefix(elementName, options);
           current.learn(production);
           events.add(ExiEndElement(elementName));
           return;
@@ -752,15 +769,18 @@ final class _DecoderState {
           if (!seenAttributes.add(name)) {
             throw const FormatException('Duplicate built-in element attribute');
           }
+          _ensureResolvableAttributePrefix(name, options);
           current.learn(_Production(_EventType.attribute, name));
           events.add(ExiAttribute(name, _readValue(name, () => _readUntypedAttributeValue(name))));
         case _EventType.startElement:
+          _ensureResolvableElementPrefix(elementName, options);
           final name = production.name ?? strings.readQName(input);
           current.learn(_Production(_EventType.startElement, name));
           final globalDeclaration = schema?.globalElements.where((element) => element.name == name).firstOrNull;
           _decodeElement(name, declaration: globalDeclaration);
           current = grammar.elementContent;
         case _EventType.characters:
+          _ensureResolvableElementPrefix(elementName, options);
           current.learn(production);
           events.add(ExiCharacters(_readValue(elementName, () => strings.readValue(input, elementName))));
           current = grammar.elementContent;
@@ -786,18 +806,22 @@ final class _DecoderState {
           }
           events.add(ExiNamespaceDeclaration(uri: uri, prefix: prefix, localElementNamespace: localElementNamespace));
         case _EventType.selfContained:
+          _ensureResolvableElementPrefix(elementName, options);
           if (seenNamespaceDeclaration || seenAttributes.isNotEmpty) {
             throw const FormatException('Self-contained elements must precede namespaces and attributes');
           }
           _decodeSelfContained(elementName, startEventIndex);
           return;
         case _EventType.entityReference:
+          _ensureResolvableElementPrefix(elementName, options);
           events.add(ExiEntityReference(strings.readString(input)));
           current = grammar.elementContent;
         case _EventType.comment:
+          _ensureResolvableElementPrefix(elementName, options);
           events.add(ExiComment(strings.readString(input)));
           current = grammar.elementContent;
         case _EventType.processingInstruction:
+          _ensureResolvableElementPrefix(elementName, options);
           _decodeProcessingInstruction();
           current = grammar.elementContent;
         default:
@@ -952,6 +976,7 @@ final class _DecoderState {
           case _NonStrictDeviation.attribute:
             specialAttributesAllowed = false;
             final name = strings.readQName(input);
+            _ensureResolvableAttributePrefix(name, options);
             if (!seenAttributes.add(name)) {
               throw const FormatException('Duplicate non-strict schema attribute');
             }
@@ -1001,6 +1026,7 @@ final class _DecoderState {
               name = event.attribute!.name;
             } else {
               name = strings.readQName(input);
+              _ensureResolvableAttributePrefix(name, options);
             }
             if (name == _xsiTypeName) {
               throw const FormatException('xsi:type cannot use the non-strict untyped wildcard attribute');
