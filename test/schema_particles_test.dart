@@ -1189,6 +1189,36 @@ void main() {
     expect(document.toXmlString(), '<root id="7" kind="example"><first/><second/></root>');
   });
 
+  test('decodes complex-content extension particles from multiple compositors in order', () {
+    final schema = _compile('''
+      <xs:complexType name="Base">
+        <xs:sequence>
+          <xs:element name="first"/>
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="Derived">
+        <xs:complexContent>
+          <xs:extension base="Base">
+            <xs:sequence>
+              <xs:element name="second"/>
+            </xs:sequence>
+            <xs:choice>
+              <xs:element name="third"/>
+              <xs:element name="fourth"/>
+            </xs:choice>
+          </xs:extension>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:element name="root" type="Derived"/>
+    ''');
+
+    // Root selection; first and second are required; choose fourth from the
+    // extension choice.
+    final document = _decode(schema, '01');
+
+    expect(document.toXmlString(), '<root><first/><second/><fourth/></root>');
+  });
+
   test('switches to a named derived grammar through xsi:type', () {
     final schema = _compile('''
       <xs:complexType name="Base"/>

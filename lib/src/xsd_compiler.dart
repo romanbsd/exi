@@ -569,10 +569,10 @@ final class _Compiler {
     }
 
     final compositors = [
-      ..._children(extension, 'sequence'),
-      ..._children(extension, 'choice'),
-      ..._children(extension, 'all'),
-      ..._children(extension, 'group'),
+      for (final child in extension.children.whereType<XmlElement>())
+        if (child.name.namespaceUri == _xsdUri &&
+            const {'sequence', 'choice', 'all', 'group'}.contains(child.name.local))
+          child,
     ];
     for (final child in extension.children.whereType<XmlElement>()) {
       if (child.name.namespaceUri == _xsdUri &&
@@ -588,10 +588,10 @@ final class _Compiler {
         throw UnsupportedError('Unsupported XSD complex-content component "${child.name.local}"');
       }
     }
-    if (compositors.length > 1) {
-      throw UnsupportedError('A complex-content extension with multiple compositors is not supported');
-    }
-    final extensionContent = compositors.isEmpty ? const ExiEmptyParticle() : _compileParticle(compositors.single);
+    final extensionContent = compositors.fold<ExiParticle>(
+      const ExiEmptyParticle(),
+      (content, compositor) => _concatenateParticles(content, _compileParticle(compositor)),
+    );
     final content = _concatenateParticles(_declarationContent(base), extensionContent);
     final contentMixed = switch (complexContent.getAttribute('mixed')) {
       null || 'false' || '0' => false,
