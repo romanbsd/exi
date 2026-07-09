@@ -1702,6 +1702,44 @@ void main() {
     expect(document.events.whereType<ExiEndElement>(), hasLength(2));
   });
 
+  test('decodes a child through an XSD 1.1 excluded-namespace wildcard', () {
+    final schema = ExiSchemaCompiler.compile(
+      id: 'particles',
+      source: '''
+        <xs:schema
+            xmlns:xs="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="urn:example">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:any notNamespace="##local" processContents="skip"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer()
+      // Root=0; the excluded-namespace wildcard has no finite URI event, so
+      // the child QName is encoded in full.
+      ..write('0')
+      ..write(
+        _schemaQName(
+          'urn:other',
+          'child',
+          schemaUris: ['urn:example'],
+          localNames: ['root'],
+        ),
+      )
+      // The unknown child uses its schema-less start-tag EE production.
+      ..write('00');
+
+    final document = _decode(schema, bits.toString());
+    final elements = document.events.whereType<ExiStartElement>().toList();
+
+    expect(elements[1].name, const ExiQName(uri: 'urn:other', localName: 'child'));
+  });
+
   test('collapses duplicate leading element wildcards with the same namespace constraints', () {
     final schema = ExiSchemaCompiler.compile(
       id: 'particles',

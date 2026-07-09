@@ -755,6 +755,9 @@ final class _Compiler {
   }
 
   Set<String>? _wildcardNamespaces(XmlElement wildcard) {
+    if (wildcard.getAttribute('namespace') != null && wildcard.getAttribute('notNamespace') != null) {
+      throw const FormatException('An XSD wildcard cannot specify both namespace and notNamespace');
+    }
     final namespace = wildcard.getAttribute('namespace')?.trim();
     if (namespace == null || namespace == '##any') {
       return null;
@@ -787,7 +790,28 @@ final class _Compiler {
   }
 
   Set<String>? _wildcardExcludedNamespaces(XmlElement wildcard) {
-    return wildcard.getAttribute('namespace')?.trim() == '##other' ? {'', targetNamespace} : null;
+    if (wildcard.getAttribute('namespace')?.trim() == '##other') {
+      return {'', targetNamespace};
+    }
+    final notNamespace = wildcard.getAttribute('notNamespace')?.trim();
+    if (notNamespace == null || notNamespace.isEmpty) {
+      return null;
+    }
+    final result = <String>{};
+    for (final token in notNamespace.split(RegExp(r'\s+')).where((token) => token.isNotEmpty)) {
+      switch (token) {
+        case '##local':
+          result.add('');
+        case '##targetNamespace':
+          result.add(targetNamespace);
+        case '##any':
+        case '##other':
+          throw FormatException('Invalid XSD notNamespace token "$token"');
+        default:
+          result.add(token);
+      }
+    }
+    return result;
   }
 
   ExiProcessContents _attributeProcessContents(XmlElement container) {
@@ -908,8 +932,8 @@ final class _Compiler {
   }
 
   ExiParticle _compileWildcardParticle(XmlElement wildcard) {
-    if (wildcard.getAttribute('notNamespace') != null || wildcard.getAttribute('notQName') != null) {
-      throw UnsupportedError('XSD 1.1 wildcard exclusions are not supported yet');
+    if (wildcard.getAttribute('notQName') != null) {
+      throw UnsupportedError('XSD 1.1 wildcard QName exclusions are not supported yet');
     }
     for (final child in wildcard.children.whereType<XmlElement>()) {
       if (child.name.namespaceUri == _xsdUri && child.name.local != 'annotation') {
