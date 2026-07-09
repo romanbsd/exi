@@ -30,6 +30,8 @@ typedef _SimpleType = ({
   int? fractionDigits,
   int? listItemTotalDigits,
   int? listItemFractionDigits,
+  String? whiteSpace,
+  String? listItemWhiteSpace,
 });
 
 final class ExiSchemaCompiler {
@@ -308,6 +310,8 @@ final class _Compiler {
           fractionDigits: simpleDatatype.fractionDigits,
           listItemTotalDigits: simpleDatatype.listItemTotalDigits,
           listItemFractionDigits: simpleDatatype.listItemFractionDigits,
+          whiteSpace: simpleDatatype.whiteSpace,
+          listItemWhiteSpace: simpleDatatype.listItemWhiteSpace,
           nillable: nillable,
         );
       }
@@ -361,6 +365,8 @@ final class _Compiler {
         fractionDigits: simpleType.fractionDigits,
         listItemTotalDigits: simpleType.listItemTotalDigits,
         listItemFractionDigits: simpleType.listItemFractionDigits,
+        whiteSpace: simpleType.whiteSpace,
+        listItemWhiteSpace: simpleType.listItemWhiteSpace,
         nillable: nillable,
       );
     }
@@ -430,6 +436,8 @@ final class _Compiler {
         fractionDigits: declaration.fractionDigits,
         listItemTotalDigits: declaration.listItemTotalDigits,
         listItemFractionDigits: declaration.listItemFractionDigits,
+        whiteSpace: declaration.whiteSpace,
+        listItemWhiteSpace: declaration.listItemWhiteSpace,
         attributes: declaration.attributes,
         nillable: declaration.nillable,
         typeAlternatives: alternatives,
@@ -766,6 +774,8 @@ final class _Compiler {
       fractionDigits: simpleType.fractionDigits,
       listItemTotalDigits: simpleType.listItemTotalDigits,
       listItemFractionDigits: simpleType.listItemFractionDigits,
+      whiteSpace: simpleType.whiteSpace,
+      listItemWhiteSpace: simpleType.listItemWhiteSpace,
       attributes: attributes,
       nillable: nillable,
       anyAttribute: _hasAnyAttribute(derivation),
@@ -1156,6 +1166,8 @@ final class _Compiler {
         fractionDigits: declaration.fractionDigits,
         listItemTotalDigits: declaration.listItemTotalDigits,
         listItemFractionDigits: declaration.listItemFractionDigits,
+        whiteSpace: declaration.whiteSpace,
+        listItemWhiteSpace: declaration.listItemWhiteSpace,
         required: _isRequiredAttribute(attribute),
       );
     }
@@ -1202,6 +1214,8 @@ final class _Compiler {
       fractionDigits: simpleType.fractionDigits,
       listItemTotalDigits: simpleType.listItemTotalDigits,
       listItemFractionDigits: simpleType.listItemFractionDigits,
+      whiteSpace: simpleType.whiteSpace,
+      listItemWhiteSpace: simpleType.listItemWhiteSpace,
       required: _isRequiredAttribute(attribute),
     );
   }
@@ -1264,6 +1278,8 @@ final class _Compiler {
       fractionDigits: simpleType.fractionDigits,
       listItemTotalDigits: simpleType.listItemTotalDigits,
       listItemFractionDigits: simpleType.listItemFractionDigits,
+      whiteSpace: simpleType.whiteSpace,
+      listItemWhiteSpace: simpleType.listItemWhiteSpace,
     );
   }
 
@@ -1384,6 +1400,8 @@ final class _Compiler {
         fractionDigits: null,
         listItemTotalDigits: itemType.totalDigits,
         listItemFractionDigits: itemType.fractionDigits,
+        whiteSpace: null,
+        listItemWhiteSpace: itemType.whiteSpace,
       );
     }
 
@@ -1442,6 +1460,7 @@ final class _Compiler {
     var maxLength = baseType.maxLength;
     var totalDigits = baseType.totalDigits;
     var fractionDigits = baseType.fractionDigits;
+    var whiteSpace = baseType.whiteSpace;
     final seenLengthFacets = <String>{};
     final seenNumericFacets = <String>{};
     for (final facet in facets.where(
@@ -1461,6 +1480,7 @@ final class _Compiler {
         if (lexical != 'preserve' && lexical != 'replace' && lexical != 'collapse') {
           throw FormatException('Invalid XSD whiteSpace facet "$lexical"');
         }
+        whiteSpace = lexical;
       } else {
         final parsed = int.tryParse(lexical.trim());
         final minimum = facet.name.local == 'totalDigits' ? 1 : 0;
@@ -1586,6 +1606,8 @@ final class _Compiler {
       fractionDigits: fractionDigits,
       listItemTotalDigits: baseType.listItemTotalDigits,
       listItemFractionDigits: baseType.listItemFractionDigits,
+      whiteSpace: whiteSpace,
+      listItemWhiteSpace: baseType.listItemWhiteSpace,
     );
   }
 
@@ -1718,6 +1740,8 @@ final class _Compiler {
         fractionDigits: null,
         listItemTotalDigits: null,
         listItemFractionDigits: null,
+        whiteSpace: null,
+        listItemWhiteSpace: null,
       ),
       'boolean' => _scalarType(ExiDatatype.boolean),
       'decimal' => _scalarType(ExiDatatype.decimal),
@@ -1816,6 +1840,8 @@ _SimpleType _scalarType(
   fractionDigits: null,
   listItemTotalDigits: null,
   listItemFractionDigits: null,
+  whiteSpace: null,
+  listItemWhiteSpace: null,
 );
 
 _SimpleType _withSchemaDatatype(_SimpleType type, ExiQName datatype) =>
@@ -1846,6 +1872,8 @@ _SimpleType _withSchemaDatatypeHierarchy(_SimpleType type, List<ExiQName> hierar
   fractionDigits: type.fractionDigits,
   listItemTotalDigits: type.listItemTotalDigits,
   listItemFractionDigits: type.listItemFractionDigits,
+  whiteSpace: type.whiteSpace,
+  listItemWhiteSpace: type.listItemWhiteSpace,
 );
 
 List<ExiQName> _builtinDatatypeHierarchy(String localName) {

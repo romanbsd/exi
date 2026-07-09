@@ -43,13 +43,18 @@ final class ExiValueDecoder {
     int? fractionDigits,
     int? listItemTotalDigits,
     int? listItemFractionDigits,
+    String? whiteSpace,
+    String? listItemWhiteSpace,
   }) {
     if (preserveLexicalValues) {
       return _checkLength(
-        strings.readValue(
-          input,
-          context,
-          restrictedCharacters: _restrictedCharacters(datatype, listItemDatatype: listItemDatatype),
+        _applyWhiteSpace(
+          strings.readValue(
+            input,
+            context,
+            restrictedCharacters: _restrictedCharacters(datatype, listItemDatatype: listItemDatatype),
+          ),
+          whiteSpace,
         ),
         minLength: minLength,
         maxLength: maxLength,
@@ -61,11 +66,15 @@ final class ExiValueDecoder {
       if (ordinal >= enumerationValues.length) {
         throw const FormatException('Invalid EXI enumeration ordinal');
       }
-      return _checkLength(enumerationValues[ordinal], minLength: minLength, maxLength: maxLength);
+      return _checkLength(
+        _applyWhiteSpace(enumerationValues[ordinal], whiteSpace),
+        minLength: minLength,
+        maxLength: maxLength,
+      );
     }
     return switch (representation) {
       ExiDatatype.string => _checkLength(
-        strings.readValue(input, context, restrictedCharacters: restrictedCharacters),
+        _applyWhiteSpace(strings.readValue(input, context, restrictedCharacters: restrictedCharacters), whiteSpace),
         minLength: minLength,
         maxLength: maxLength,
       ),
@@ -122,6 +131,7 @@ final class ExiValueDecoder {
         itemMaxLength: listItemMaxLength,
         itemTotalDigits: listItemTotalDigits,
         itemFractionDigits: listItemFractionDigits,
+        itemWhiteSpace: listItemWhiteSpace,
       ),
     };
   }
@@ -170,6 +180,7 @@ final class ExiValueDecoder {
     int? itemMaxLength,
     int? itemTotalDigits,
     int? itemFractionDigits,
+    String? itemWhiteSpace,
   }) {
     final encodedLength = input.readUnsignedInteger();
     if (encodedLength > BigInt.from(0x7fffffff)) {
@@ -184,7 +195,10 @@ final class ExiValueDecoder {
       for (var index = 0; index < length; index++)
         itemRepresentation == ExiDatatype.string && itemEnumerationValues.isEmpty
             ? _checkLength(
-                strings.readString(input, restrictedCharacters: itemRestrictedCharacters),
+                _applyWhiteSpace(
+                  strings.readString(input, restrictedCharacters: itemRestrictedCharacters),
+                  itemWhiteSpace,
+                ),
                 minLength: itemMinLength,
                 maxLength: itemMaxLength,
               )
@@ -200,8 +214,18 @@ final class ExiValueDecoder {
                 maxLength: itemMaxLength,
                 totalDigits: itemTotalDigits,
                 fractionDigits: itemFractionDigits,
+                whiteSpace: itemWhiteSpace,
               ),
     ].join(' ');
+  }
+
+  String _applyWhiteSpace(String value, String? whiteSpace) {
+    return switch (whiteSpace) {
+      null || 'preserve' => value,
+      'replace' => value.replaceAll(RegExp(r'[\t\n\r]'), ' '),
+      'collapse' => value.replaceAll(RegExp(r'[\t\n\r ]+'), ' ').trim(),
+      final invalid => throw StateError('Unsupported XSD whiteSpace facet "$invalid"'),
+    };
   }
 
   String _checkIntegerDigits(String value, {int? totalDigits}) {

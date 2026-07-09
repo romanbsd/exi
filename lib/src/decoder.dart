@@ -766,6 +766,8 @@ final class _DecoderState {
         fractionDigits: attribute.fractionDigits,
         listItemTotalDigits: attribute.listItemTotalDigits,
         listItemFractionDigits: attribute.listItemFractionDigits,
+        whiteSpace: attribute.whiteSpace,
+        listItemWhiteSpace: attribute.listItemWhiteSpace,
       );
 
   String _readXsiNilValue() {
@@ -1095,6 +1097,8 @@ final class _DecoderState {
                           fractionDigits: globalAttribute.fractionDigits,
                           listItemTotalDigits: globalAttribute.listItemTotalDigits,
                           listItemFractionDigits: globalAttribute.listItemFractionDigits,
+                          whiteSpace: globalAttribute.whiteSpace,
+                          listItemWhiteSpace: globalAttribute.listItemWhiteSpace,
                         ),
                   );
             events.add(ExiAttribute(name, value));
@@ -1276,6 +1280,8 @@ final class _DecoderState {
                   fractionDigits: attribute.fractionDigits,
                   listItemTotalDigits: attribute.listItemTotalDigits,
                   listItemFractionDigits: attribute.listItemFractionDigits,
+                  whiteSpace: attribute.whiteSpace,
+                  listItemWhiteSpace: attribute.listItemWhiteSpace,
                 ),
           );
           if (!seenAttributes.add(attribute.name)) {
@@ -1330,6 +1336,8 @@ final class _DecoderState {
                         fractionDigits: globalAttribute.fractionDigits,
                         listItemTotalDigits: globalAttribute.listItemTotalDigits,
                         listItemFractionDigits: globalAttribute.listItemFractionDigits,
+                        whiteSpace: globalAttribute.whiteSpace,
+                        listItemWhiteSpace: globalAttribute.listItemWhiteSpace,
                       ),
                 );
           events.add(ExiAttribute(name, value));
@@ -1417,6 +1425,8 @@ final class _DecoderState {
                       fractionDigits: declaration.fractionDigits,
                       listItemTotalDigits: declaration.listItemTotalDigits,
                       listItemFractionDigits: declaration.listItemFractionDigits,
+                      whiteSpace: declaration.whiteSpace,
+                      listItemWhiteSpace: declaration.listItemWhiteSpace,
                     ),
               ),
             ),
@@ -2006,7 +2016,9 @@ bool _hasSameAnonymousDatatypeShape(ExiElementDeclaration left, ExiElementDeclar
       left.totalDigits == right.totalDigits &&
       left.fractionDigits == right.fractionDigits &&
       left.listItemTotalDigits == right.listItemTotalDigits &&
-      left.listItemFractionDigits == right.listItemFractionDigits;
+      left.listItemFractionDigits == right.listItemFractionDigits &&
+      left.whiteSpace == right.whiteSpace &&
+      left.listItemWhiteSpace == right.listItemWhiteSpace;
 }
 
 bool _isAnonymousValueGrammar(ExiElementDeclaration declaration) =>
@@ -2185,6 +2197,8 @@ bool _sameAttribute(ExiAttributeDeclaration left, ExiAttributeDeclaration right)
     left.fractionDigits == right.fractionDigits &&
     left.listItemTotalDigits == right.listItemTotalDigits &&
     left.listItemFractionDigits == right.listItemFractionDigits &&
+    left.whiteSpace == right.whiteSpace &&
+    left.listItemWhiteSpace == right.listItemWhiteSpace &&
     left.required == right.required;
 
 bool _isAnonymousGrammarBase(ExiElementDeclaration declaration) =>

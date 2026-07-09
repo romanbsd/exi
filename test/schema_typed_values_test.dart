@@ -660,6 +660,56 @@ void main() {
     }
   });
 
+  test('applies string whiteSpace facets before value validation', () {
+    const schemaId = 'white-space-facets';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="CollapsedCode">
+            <xs:restriction base="xs:string">
+              <xs:whiteSpace value="collapse"/>
+              <xs:length value="3"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="ReplacedCode">
+            <xs:restriction base="xs:string">
+              <xs:whiteSpace value="replace"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="Codes">
+            <xs:list itemType="CollapsedCode"/>
+          </xs:simpleType>
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="code" type="CollapsedCode"/>
+                <xs:element name="notes" type="Codes"/>
+              </xs:sequence>
+              <xs:attribute name="raw" type="ReplacedCode" use="required"/>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('100000000')
+      // Attribute raw: tabs/newlines become spaces but are not collapsed.
+      ..write(_value('a\tb\nc'))
+      // Element code: collapsed to "a b", then length=3 is checked.
+      ..write(_value('  a\t b  '))
+      // List with two collapsed string items.
+      ..write(_unsigned(2))
+      ..write(_rawString(' x\t y '))
+      ..write(_rawString('p\n q'));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root raw="a b c"><code>a b</code><notes>x y p q</notes></root>');
+  });
+
   test('enforces integer and decimal digit facets', () {
     const schemaId = 'numeric-facets';
     final schema = ExiSchemaCompiler.compile(

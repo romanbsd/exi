@@ -77,6 +77,8 @@ final class ExiElementDeclaration {
        fractionDigits = null,
        listItemTotalDigits = null,
        listItemFractionDigits = null,
+       whiteSpace = null,
+       listItemWhiteSpace = null,
        attributes = const [],
        content = null,
        mixed = false;
@@ -113,6 +115,8 @@ final class ExiElementDeclaration {
        fractionDigits = null,
        listItemTotalDigits = null,
        listItemFractionDigits = null,
+       whiteSpace = null,
+       listItemWhiteSpace = null,
        attributes = const [],
        content = null,
        mixed = false;
@@ -142,6 +146,8 @@ final class ExiElementDeclaration {
     this.fractionDigits,
     this.listItemTotalDigits,
     this.listItemFractionDigits,
+    this.whiteSpace,
+    this.listItemWhiteSpace,
     this.nillable = false,
     this.typeAlternatives = const {},
     this.anyAttribute = false,
@@ -179,6 +185,8 @@ final class ExiElementDeclaration {
     this.fractionDigits,
     this.listItemTotalDigits,
     this.listItemFractionDigits,
+    this.whiteSpace,
+    this.listItemWhiteSpace,
     this.attributes = const [],
     this.nillable = false,
     this.typeAlternatives = const {},
@@ -225,7 +233,9 @@ final class ExiElementDeclaration {
        totalDigits = null,
        fractionDigits = null,
        listItemTotalDigits = null,
-       listItemFractionDigits = null;
+       listItemFractionDigits = null,
+       whiteSpace = null,
+       listItemWhiteSpace = null;
 
   final ExiQName name;
   final ExiQName? schemaTypeName;
@@ -252,6 +262,8 @@ final class ExiElementDeclaration {
   final int? fractionDigits;
   final int? listItemTotalDigits;
   final int? listItemFractionDigits;
+  final String? whiteSpace;
+  final String? listItemWhiteSpace;
   final List<ExiAttributeDeclaration> attributes;
   final ExiParticle? content;
   final bool mixed;
@@ -288,6 +300,8 @@ final class ExiAttributeDeclaration {
     this.fractionDigits,
     this.listItemTotalDigits,
     this.listItemFractionDigits,
+    this.whiteSpace,
+    this.listItemWhiteSpace,
     this.required = false,
   }) : assert((datatype == ExiDatatype.list) == (listItemDatatype != null));
 
@@ -314,6 +328,8 @@ final class ExiAttributeDeclaration {
   final int? fractionDigits;
   final int? listItemTotalDigits;
   final int? listItemFractionDigits;
+  final String? whiteSpace;
+  final String? listItemWhiteSpace;
   final bool required;
 }
 
