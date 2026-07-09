@@ -736,18 +736,11 @@ final class _Compiler {
   }
 
   bool _hasAnyAttribute(XmlElement container) {
-    final wildcards = _children(container, 'anyAttribute');
-    if (wildcards.length > 1) {
-      throw const FormatException('An XSD declaration cannot contain multiple attribute wildcards');
-    }
-    if (wildcards.isEmpty) {
-      return false;
-    }
-    return true;
+    return _attributeWildcards(container).isNotEmpty;
   }
 
   Set<String>? _attributeWildcardNamespaces(XmlElement container) {
-    final wildcards = _children(container, 'anyAttribute');
+    final wildcards = _attributeWildcards(container);
     if (wildcards.isEmpty) {
       return null;
     }
@@ -782,7 +775,7 @@ final class _Compiler {
   }
 
   Set<String>? _attributeWildcardExcludedNamespaces(XmlElement container) {
-    final wildcards = _children(container, 'anyAttribute');
+    final wildcards = _attributeWildcards(container);
     if (wildcards.isEmpty) {
       return null;
     }
@@ -815,8 +808,36 @@ final class _Compiler {
   }
 
   ExiProcessContents _attributeProcessContents(XmlElement container) {
-    final wildcard = _children(container, 'anyAttribute').firstOrNull;
+    final wildcard = _attributeWildcards(container).firstOrNull;
     return wildcard == null ? ExiProcessContents.strict : _wildcardProcessContents(wildcard);
+  }
+
+  List<XmlElement> _attributeWildcards(XmlElement container, [Set<String>? visitedGroups]) {
+    final wildcards = <XmlElement>[..._children(container, 'anyAttribute')];
+    final visited = visitedGroups ?? <String>{};
+    for (final reference in _children(container, 'attributeGroup')) {
+      final name = reference.getAttribute('ref');
+      if (name == null || name.isEmpty || reference.getAttribute('name') != null) {
+        throw const FormatException('An XSD attribute-group reference must specify only ref');
+      }
+      final localName = _resolveLocalReference(reference, name, 'attribute-group');
+      final group = _attributeGroups[localName];
+      if (group == null) {
+        throw FormatException('Unknown global XSD attribute group "$localName"');
+      }
+      if (!visited.add(localName)) {
+        throw UnsupportedError('Recursive XSD attribute group "$localName" is not supported');
+      }
+      try {
+        wildcards.addAll(_attributeWildcards(group, visited));
+      } finally {
+        visited.remove(localName);
+      }
+    }
+    if (wildcards.length > 1) {
+      throw const FormatException('An XSD declaration cannot contain multiple attribute wildcards');
+    }
+    return wildcards;
   }
 
   ExiProcessContents _wildcardProcessContents(XmlElement wildcard) {
@@ -1042,7 +1063,7 @@ final class _Compiler {
     try {
       for (final child in group.children.whereType<XmlElement>()) {
         if (child.name.namespaceUri == _xsdUri &&
-            !const {'annotation', 'attribute', 'attributeGroup'}.contains(child.name.local)) {
+            !const {'annotation', 'attribute', 'attributeGroup', 'anyAttribute'}.contains(child.name.local)) {
           throw UnsupportedError('Unsupported XSD attribute-group component "${child.name.local}"');
         }
       }

@@ -1472,6 +1472,32 @@ void main() {
     expect(document.toXmlString(), '<root id="7" kind="example"/>');
   });
 
+  test('decodes an attribute wildcard expanded from a named attribute group', () {
+    final schema = _compile('''
+      <xs:attributeGroup name="metadata">
+        <xs:anyAttribute namespace="urn:extra" processContents="lax"/>
+      </xs:attributeGroup>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:attributeGroup ref="metadata"/>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Root=0; finite AT(urn:extra:*)=0 encodes only the local name.
+      ..write('00')
+      ..write(_rawString('extra'))
+      ..write(_value('7'))
+      // EE=1 after the wildcard attribute.
+      ..write('1');
+
+    final document = _decode(schema, bits.toString());
+    final attribute = document.events.whereType<ExiAttribute>().single;
+
+    expect(attribute.name, const ExiQName(uri: 'urn:extra', localName: 'extra'));
+    expect(attribute.value, '7');
+  });
+
   test('decodes an unconstrained schema attribute wildcard', () {
     final schema = _compile('''
       <xs:element name="root">
@@ -1723,14 +1749,7 @@ void main() {
       // Root=0; the excluded-namespace wildcard has no finite URI event, so
       // the child QName is encoded in full.
       ..write('0')
-      ..write(
-        _schemaQName(
-          'urn:other',
-          'child',
-          schemaUris: ['urn:example'],
-          localNames: ['root'],
-        ),
-      )
+      ..write(_schemaQName('urn:other', 'child', schemaUris: ['urn:example'], localNames: ['root']))
       // The unknown child uses its schema-less start-tag EE production.
       ..write('00');
 
