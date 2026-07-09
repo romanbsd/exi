@@ -710,6 +710,42 @@ void main() {
     expect(document.toXmlString(), '<root raw="a b c"><code>a b</code><notes>x y p q</notes></root>');
   });
 
+  test('applies built-in XML Schema whitespace defaults', () {
+    const schemaId = 'builtin-white-space';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="normalized" type="xs:normalizedString"/>
+                <xs:element name="token" type="xs:token"/>
+                <xs:element name="tokens" type="xs:NMTOKENS"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('100000000')
+      ..write(_value('a\tb\nc'))
+      ..write(_value('  a\t b\nc  '))
+      ..write(_unsigned(2))
+      ..write(_rawString(' x\t y '))
+      ..write(_rawString('p\n q'));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(
+      document.toXmlString(),
+      '<root><normalized>a b c</normalized><token>a b c</token><tokens>x y p q</tokens></root>',
+    );
+  });
+
   test('enforces integer and decimal digit facets', () {
     const schemaId = 'numeric-facets';
     final schema = ExiSchemaCompiler.compile(

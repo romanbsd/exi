@@ -1700,8 +1700,8 @@ final class _Compiler {
     }
     final localName = _localPart(qualifiedName);
     final _SimpleType? simpleType = switch (localName) {
-      'string' ||
-      'normalizedString' ||
+      'string' => _scalarType(ExiDatatype.string, patternCharsetEligible: true),
+      'normalizedString' => _scalarType(ExiDatatype.string, patternCharsetEligible: true, whiteSpace: 'replace'),
       'token' ||
       'language' ||
       'Name' ||
@@ -1709,8 +1709,9 @@ final class _Compiler {
       'NMTOKEN' ||
       'ID' ||
       'IDREF' ||
-      'ENTITY' => _scalarType(ExiDatatype.string, patternCharsetEligible: true),
-      'anySimpleType' || 'anyURI' => _scalarType(ExiDatatype.string),
+      'ENTITY' => _scalarType(ExiDatatype.string, patternCharsetEligible: true, whiteSpace: 'collapse'),
+      'anySimpleType' => _scalarType(ExiDatatype.string),
+      'anyURI' => _scalarType(ExiDatatype.string, whiteSpace: 'collapse'),
       'NMTOKENS' || 'IDREFS' || 'ENTITIES' => (
         datatype: ExiDatatype.list,
         listItemDatatype: ExiDatatype.string,
@@ -1741,7 +1742,7 @@ final class _Compiler {
         listItemTotalDigits: null,
         listItemFractionDigits: null,
         whiteSpace: null,
-        listItemWhiteSpace: null,
+        listItemWhiteSpace: 'collapse',
       ),
       'boolean' => _scalarType(ExiDatatype.boolean),
       'decimal' => _scalarType(ExiDatatype.decimal),
@@ -1815,6 +1816,7 @@ _SimpleType _scalarType(
   bool patternCharsetEligible = false,
   BigInt? integerMinInclusive,
   BigInt? integerMaxInclusive,
+  String? whiteSpace,
 }) => (
   datatype: datatype,
   listItemDatatype: null,
@@ -1840,7 +1842,7 @@ _SimpleType _scalarType(
   fractionDigits: null,
   listItemTotalDigits: null,
   listItemFractionDigits: null,
-  whiteSpace: null,
+  whiteSpace: whiteSpace,
   listItemWhiteSpace: null,
 );
 
