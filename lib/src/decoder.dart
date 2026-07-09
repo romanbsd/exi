@@ -388,13 +388,31 @@ final class _DecoderState {
     _decodeRelaxedFragmentElement(group);
   }
 
-  void _decodeRelaxedFragmentElement(_FragmentElementGroup group) {
+  void _decodeRelaxedFragmentElement(
+    _FragmentElementGroup group, {
+    List<_FragmentElementGroup>? declarations,
+    List<_FragmentAttributeGroup>? attributes,
+  }) {
     final startEventIndex = events.length;
     events.add(ExiStartElement(group.name));
-    _decodeRelaxedFragmentContent(group, group.name, startEventIndex);
+    _decodeRelaxedFragmentContent(
+      group,
+      group.name,
+      startEventIndex,
+      declarations: declarations,
+      attributes: attributes,
+    );
   }
 
-  void _decodeRelaxedFragmentContent(_FragmentElementGroup group, ExiQName elementName, int startEventIndex) {
+  void _decodeRelaxedFragmentContent(
+    _FragmentElementGroup group,
+    ExiQName elementName,
+    int startEventIndex, {
+    List<_FragmentElementGroup>? declarations,
+    List<_FragmentAttributeGroup>? attributes,
+  }) {
+    final declarationGroups = declarations ?? _fragmentDeclarations;
+    final attributeGroups = attributes ?? _fragmentAttributes;
     var currentElementName = elementName;
     final seenAttributes = <ExiQName>{};
     var attributesAllowed = true;
@@ -405,15 +423,15 @@ final class _DecoderState {
     var nilled = false;
 
     while (true) {
-      final attributeCount = attributesAllowed ? _fragmentAttributes.length + 1 : 0;
+      final attributeCount = attributesAllowed ? attributeGroups.length + 1 : 0;
       final typeCount =
           attributesAllowed && group.hasTypeAlternatives && !seenAttributes.contains(_xsiTypeName) && !nilSeen ? 1 : 0;
       final nilCount = attributesAllowed && group.hasNillableDeclaration && !nilSeen ? 1 : 0;
-      final baseCount = attributeCount + typeCount + nilCount + _fragmentDeclarations.length + 3;
+      final baseCount = attributeCount + typeCount + nilCount + declarationGroups.length + 3;
       final nonStrictCount = !options.strict && _hasRelaxedFragmentDeviation(attributesAllowed) ? 1 : 0;
       final selected = input.readNBitUnsigned(_bitWidth(baseCount + nonStrictCount));
-      if (attributesAllowed && selected < _fragmentAttributes.length) {
-        final attribute = _fragmentAttributes[selected];
+      if (attributesAllowed && selected < attributeGroups.length) {
+        final attribute = attributeGroups[selected];
         if (!seenAttributes.add(attribute.name)) {
           throw const FormatException('Duplicate relaxed fragment attribute');
         }
@@ -425,7 +443,7 @@ final class _DecoderState {
         events.add(ExiAttribute(attribute.name, value));
         continue;
       }
-      if (attributesAllowed && selected == _fragmentAttributes.length) {
+      if (attributesAllowed && selected == attributeGroups.length) {
         final name = strings.readQName(input);
         if (name == _xsiTypeName || name == _xsiNilName) {
           throw const FormatException('xsi:type and xsi:nil cannot use the relaxed wildcard attribute');
@@ -493,12 +511,12 @@ final class _DecoderState {
         switch (production.type) {
           case _EventType.attribute:
             attributesAllowed = true;
-            final selectedAttribute = input.readNBitUnsigned(_bitWidth(_fragmentAttributes.length + 1));
-            if (selectedAttribute > _fragmentAttributes.length) {
+            final selectedAttribute = input.readNBitUnsigned(_bitWidth(attributeGroups.length + 1));
+            if (selectedAttribute > attributeGroups.length) {
               throw const FormatException('Invalid relaxed fragment untyped-attribute event code');
             }
-            final name = selectedAttribute < _fragmentAttributes.length
-                ? _fragmentAttributes[selectedAttribute].name
+            final name = selectedAttribute < attributeGroups.length
+                ? attributeGroups[selectedAttribute].name
                 : strings.readQName(input);
             if (name == _xsiTypeName) {
               throw const FormatException('xsi:type cannot use a relaxed untyped attribute');
@@ -565,14 +583,24 @@ final class _DecoderState {
 
       attributesAllowed = false;
       final contentIndex = selected - attributeCount - typeCount - nilCount;
-      if (contentIndex < _fragmentDeclarations.length) {
+      if (contentIndex < declarationGroups.length) {
         if (nilled) {
           throw const FormatException('A nilled relaxed fragment element cannot contain child elements');
         }
-        _decodeFragmentElement(_fragmentDeclarations[contentIndex]);
+        final childGroup = declarationGroups[contentIndex];
+        final declaration = childGroup.declaration;
+        if (declaration != null) {
+          _decodeElement(childGroup.name, declaration: declaration);
+        } else {
+          _decodeRelaxedFragmentElement(
+            childGroup,
+            declarations: _collectRelaxedElementContentDeclarations(childGroup.declarations),
+            attributes: _collectRelaxedElementAttributes(childGroup.declarations),
+          );
+        }
         continue;
       }
-      if (contentIndex == _fragmentDeclarations.length) {
+      if (contentIndex == declarationGroups.length) {
         if (nilled) {
           throw const FormatException('A nilled relaxed fragment element cannot contain child elements');
         }
@@ -581,11 +609,11 @@ final class _DecoderState {
         _decodeElement(name, declaration: declaration);
         continue;
       }
-      if (contentIndex == _fragmentDeclarations.length + 1) {
+      if (contentIndex == declarationGroups.length + 1) {
         events.add(ExiEndElement(currentElementName));
         return;
       }
-      if (contentIndex == _fragmentDeclarations.length + 2) {
+      if (contentIndex == declarationGroups.length + 2) {
         if (nilled) {
           throw const FormatException('A nilled relaxed fragment element cannot contain characters');
         }
@@ -1239,7 +1267,14 @@ final class _DecoderState {
             throw const FormatException('Element does not match the schema particle');
           }
           content = derivative;
-          _decodeElement(child.name, declaration: child);
+          if (event.elementDeclarations.any((declaration) => !_hasSameElementGrammarIdentity(child, declaration))) {
+            final group = _FragmentElementGroup(child.name, [...event.elementDeclarations]);
+            final declarations = _collectRelaxedElementContentDeclarations(group.declarations);
+            final attributes = _collectRelaxedElementAttributes(group.declarations);
+            _decodeRelaxedFragmentElement(group, declarations: declarations, attributes: attributes);
+          } else {
+            _decodeElement(child.name, declaration: child);
+          }
         case _DeclaredEventKind.wildcardElement:
           specialAttributesAllowed = false;
           contentStarted = true;
@@ -1536,6 +1571,54 @@ ExiParticle _legacyContent(List<ExiElementDeclaration> children) {
   return ExiSequenceParticle([for (final child in children) ExiElementParticle(child)]);
 }
 
+List<_FragmentElementGroup> _collectRelaxedElementContentDeclarations(List<ExiElementDeclaration> declarations) {
+  final children = <ExiElementDeclaration>[];
+  final seen = Set<ExiElementDeclaration>.identity();
+
+  void collectParticle(ExiParticle particle) {
+    switch (particle) {
+      case ExiEmptyParticle():
+      case ExiWildcardParticle():
+        return;
+      case ExiElementParticle(:final element):
+        if (seen.add(element)) {
+          children.add(element);
+        }
+      case ExiSequenceParticle(:final particles):
+      case ExiChoiceParticle(:final particles):
+      case ExiAllParticle(:final particles):
+        for (final child in particles) {
+          collectParticle(child);
+        }
+      case ExiRepeatedParticle(:final particle):
+        collectParticle(particle);
+    }
+  }
+
+  for (final declaration in declarations) {
+    collectParticle(declaration.content ?? _legacyContent(declaration.children));
+  }
+
+  return _groupFragmentElements(children);
+}
+
+List<_FragmentAttributeGroup> _collectRelaxedElementAttributes(List<ExiElementDeclaration> declarations) {
+  final attributes = <ExiAttributeDeclaration>[for (final declaration in declarations) ...declaration.attributes]
+    ..sort((left, right) {
+      final localNameOrder = left.name.localName.compareTo(right.name.localName);
+      return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
+    });
+  final groups = <_FragmentAttributeGroup>[];
+  for (final attribute in attributes) {
+    if (groups.isEmpty || groups.last.name != attribute.name) {
+      groups.add(_FragmentAttributeGroup(attribute.name, [attribute]));
+    } else if (!groups.last.declarations.contains(attribute)) {
+      groups.last.declarations.add(attribute);
+    }
+  }
+  return groups;
+}
+
 List<_FragmentElementGroup> _collectFragmentDeclarations(ExiSchema? schema) {
   if (schema == null) {
     return const [];
@@ -1587,6 +1670,10 @@ List<_FragmentElementGroup> _collectFragmentDeclarations(ExiSchema? schema) {
     }
   }
 
+  return _groupFragmentElements(declarations);
+}
+
+List<_FragmentElementGroup> _groupFragmentElements(List<ExiElementDeclaration> declarations) {
   declarations.sort((left, right) {
     final localNameOrder = left.name.localName.compareTo(right.name.localName);
     return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
@@ -1650,9 +1737,6 @@ List<_DeclaredEvent> _leadingElementEvents(ExiParticle particle) {
           if (existingIndex != -1) {
             final existing = result[existingIndex];
             final declarations = existing.elementDeclarations;
-            if (!declarations.every((declaration) => _hasSameElementGrammarIdentity(declaration, element))) {
-              throw UnsupportedError('Ambiguous schema particles with the same leading QName are not supported yet');
-            }
             result[existingIndex] = _DeclaredEvent.element(
               existing.element!,
               elementAlternatives: [...declarations, element],

@@ -828,7 +828,7 @@ void main() {
       expect(document.toXmlString(), '<root><item code="7"><child/></item></root>');
     });
 
-    test('keeps duplicate leading element QNames unsupported when anonymous content differs', () {
+    test('uses a relaxed grammar when duplicate leading element QNames have different anonymous content', () {
       final schema = _compile('''
         <xs:element name="root">
           <xs:complexType>
@@ -852,10 +852,16 @@ void main() {
         </xs:element>
       ''');
 
-      expect(() => _decode(schema, '0'), throwsUnsupportedError);
+      final document = _decode(
+        schema,
+        // Root selection; relaxed item grammar selects left, then item EE.
+        '0001011',
+      );
+
+      expect(document.toXmlString(), '<root><item><left/></item></root>');
     });
 
-    test('keeps duplicate leading element QNames unsupported when typed anonymous child names differ', () {
+    test('uses a relaxed grammar when duplicate leading element QNames have typed child-name conflicts', () {
       final schema = _compile('''
         <xs:element name="root">
           <xs:complexType>
@@ -879,10 +885,17 @@ void main() {
         </xs:element>
       ''');
 
-      expect(() => _decode(schema, '0${_value('text')}'), throwsUnsupportedError);
+      final document = _decode(
+        schema,
+        // Root selection; relaxed item grammar selects left, its typed value,
+        // then item EE.
+        '0001${_value('text')}011',
+      );
+
+      expect(document.toXmlString(), '<root><item><left>text</left></item></root>');
     });
 
-    test('keeps duplicate leading element QNames unsupported when anonymous occurrence ranges differ', () {
+    test('uses a relaxed grammar when duplicate leading element QNames have occurrence conflicts', () {
       final schema = _compile('''
         <xs:element name="root">
           <xs:complexType>
@@ -906,10 +919,17 @@ void main() {
         </xs:element>
       ''');
 
-      expect(() => _decode(schema, '0'), throwsUnsupportedError);
+      final document = _decode(
+        schema,
+        // Root selection; relaxed item grammar selects child, child EE, then
+        // item EE.
+        '00011010',
+      );
+
+      expect(document.toXmlString(), '<root><item><child/></item></root>');
     });
 
-    test('keeps duplicate leading element QNames unsupported when schema types conflict', () {
+    test('uses String fallback when duplicate leading element QNames have conflicting schema types', () {
       final schema = _compile('''
         <xs:element name="root">
           <xs:complexType>
@@ -921,7 +941,14 @@ void main() {
         </xs:element>
       ''');
 
-      expect(() => _decode(schema, '0${_value('text')}0'), throwsUnsupportedError);
+      final document = _decode(
+        schema,
+        // Root selection; relaxed item grammar selects CH, string value, then
+        // item EE.
+        '011${_value('text')}01',
+      );
+
+      expect(document.toXmlString(), '<root><item>text</item></root>');
     });
 
     test('decodes a particle that references a global element', () {
