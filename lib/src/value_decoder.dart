@@ -103,12 +103,14 @@ final class ExiValueDecoder {
         _readIntegerValue(representation, minimum: integerMinInclusive, maximum: integerMaxInclusive),
         totalDigits: totalDigits,
       ),
-      ExiDatatype.base64Binary => _checkLength(base64Encode(_readBinary()), minLength: minLength, maxLength: maxLength),
-      ExiDatatype.hexBinary => _checkLength(
-        _readBinary().map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(),
+      ExiDatatype.base64Binary => base64Encode(
+        _checkBinaryLength(_readBinary(), minLength: minLength, maxLength: maxLength),
+      ),
+      ExiDatatype.hexBinary => _checkBinaryLength(
+        _readBinary(),
         minLength: minLength,
         maxLength: maxLength,
-      ),
+      ).map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(),
       ExiDatatype.dateTime => _readDateTime(includeDate: true, includeTime: true),
       ExiDatatype.date => _readDateTime(includeDate: true, includeTime: false),
       ExiDatatype.time => _readDateTime(includeDate: false, includeTime: true),
@@ -146,6 +148,13 @@ final class ExiValueDecoder {
     final length = value.runes.length;
     if ((minLength != null && length < minLength) || (maxLength != null && length > maxLength)) {
       throw const FormatException('EXI value length is outside its schema range');
+    }
+    return value;
+  }
+
+  List<int> _checkBinaryLength(List<int> value, {int? minLength, int? maxLength}) {
+    if ((minLength != null && value.length < minLength) || (maxLength != null && value.length > maxLength)) {
+      throw const FormatException('EXI binary value length is outside its schema range');
     }
     return value;
   }

@@ -1019,6 +1019,105 @@ void main() {
     expect(document.toXmlString(), '<root><base64>AQL/</base64><hex>0a0bff</hex></root>');
   });
 
+  test('enforces binary length facets by octet count', () {
+    const schemaId = 'binary-length-facets';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="ThreeBytes">
+            <xs:restriction base="xs:base64Binary">
+              <xs:length value="3"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="TwoToThreeBytes">
+            <xs:restriction base="xs:hexBinary">
+              <xs:minLength value="2"/>
+              <xs:maxLength value="3"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="base64" type="ThreeBytes"/>
+                <xs:element name="hex" type="TwoToThreeBytes"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('100000000')
+      ..write(_unsigned(3))
+      ..write('00000001')
+      ..write('00000010')
+      ..write('11111111')
+      ..write(_unsigned(2))
+      ..write('00001010')
+      ..write('00001011');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root><base64>AQL/</base64><hex>0a0b</hex></root>');
+  });
+
+  test('rejects binary length facet violations by octet count', () {
+    const schemaId = 'invalid-binary-length-facets';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="ThreeBytes">
+            <xs:restriction base="xs:base64Binary">
+              <xs:length value="3"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="TwoToThreeBytes">
+            <xs:restriction base="xs:hexBinary">
+              <xs:minLength value="2"/>
+              <xs:maxLength value="3"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="base64" type="ThreeBytes"/>
+                <xs:element name="hex" type="TwoToThreeBytes"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final shortBase64 = StringBuffer('100000000')
+      ..write(_unsigned(2))
+      ..write('00000001')
+      ..write('00000010')
+      ..write(_unsigned(2))
+      ..write('00001010')
+      ..write('00001011');
+    final shortHex = StringBuffer('100000000')
+      ..write(_unsigned(3))
+      ..write('00000001')
+      ..write('00000010')
+      ..write('11111111')
+      ..write(_unsigned(1))
+      ..write('00001010');
+
+    for (final bits in [shortBase64, shortHex]) {
+      expect(
+        () => ExiDecoder(
+          options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+          schemaResolver: (_) => schema,
+        ).decode(_pack(bits.toString())),
+        throwsFormatException,
+      );
+    }
+  });
+
   test('applies datatype representation maps to built-in list item hierarchies', () {
     const schemaId = 'mapped-builtin-list-items';
     final schema = ExiSchemaCompiler.compile(
@@ -1034,8 +1133,8 @@ void main() {
     );
     final bits = StringBuffer('100000000')
       ..write(_unsigned(2))
-      ..write(_rawString('yes'))
-      ..write(_rawString('no'));
+      ..write(_rawString(' yes\tmaybe '))
+      ..write(_rawString(' no\nnever '));
 
     final document = ExiDecoder(
       options: const ExiOptions(
@@ -1051,7 +1150,7 @@ void main() {
       schemaResolver: (_) => schema,
     ).decode(_pack(bits.toString()));
 
-    expect(document.toXmlString(), '<flags>yes no</flags>');
+    expect(document.toXmlString(), '<flags>yes maybe no never</flags>');
   });
 
   test('decodes list items constrained by a named enumeration type', () {
@@ -1927,7 +2026,7 @@ void main() {
         </xs:schema>
       ''',
     );
-    final bits = '100000000${_value('12.50')}';
+    final bits = '100000000${_value('  12.50\t\n')}';
 
     final document = ExiDecoder(
       options: const ExiOptions(
