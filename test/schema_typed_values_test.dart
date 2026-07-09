@@ -660,6 +660,104 @@ void main() {
     }
   });
 
+  test('enforces integer and decimal digit facets', () {
+    const schemaId = 'numeric-facets';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="SmallInteger">
+            <xs:restriction base="xs:integer">
+              <xs:totalDigits value="2"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="Amount">
+            <xs:restriction base="xs:decimal">
+              <xs:totalDigits value="4"/>
+              <xs:fractionDigits value="2"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="count" type="SmallInteger"/>
+                <xs:element name="amount" type="Amount"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('100000000')
+      // Integer 99.
+      ..write('0')
+      ..write(_unsigned(99))
+      // Decimal 12.34.
+      ..write('0')
+      ..write(_unsigned(12))
+      ..write(_unsigned(43));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root><count>99</count><amount>12.34</amount></root>');
+  });
+
+  test('rejects numeric digit facet violations', () {
+    const schemaId = 'invalid-numeric-facets';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="SmallInteger">
+            <xs:restriction base="xs:integer">
+              <xs:totalDigits value="2"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="Amount">
+            <xs:restriction base="xs:decimal">
+              <xs:totalDigits value="4"/>
+              <xs:fractionDigits value="2"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="count" type="SmallInteger"/>
+                <xs:element name="amount" type="Amount"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final tooManyIntegerDigits = StringBuffer('100000000')
+      ..write('0')
+      ..write(_unsigned(100))
+      ..write('0')
+      ..write(_unsigned(12))
+      ..write(_unsigned(43));
+    final tooManyFractionDigits = StringBuffer('100000000')
+      ..write('0')
+      ..write(_unsigned(99))
+      // Decimal 1.234.
+      ..write('0')
+      ..write(_unsigned(1))
+      ..write(_unsigned(432));
+
+    for (final bits in [tooManyIntegerDigits, tooManyFractionDigits]) {
+      expect(
+        () => ExiDecoder(
+          options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+          schemaResolver: (_) => schema,
+        ).decode(_pack(bits.toString())),
+        throwsFormatException,
+      );
+    }
+  });
+
   test('decodes binary schema values', () {
     const schemaId = 'binary-values';
     const schema = ExiSchema(

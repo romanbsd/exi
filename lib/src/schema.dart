@@ -73,6 +73,10 @@ final class ExiElementDeclaration {
        maxLength = null,
        listItemMinLength = null,
        listItemMaxLength = null,
+       totalDigits = null,
+       fractionDigits = null,
+       listItemTotalDigits = null,
+       listItemFractionDigits = null,
        attributes = const [],
        content = null,
        mixed = false;
@@ -105,6 +109,10 @@ final class ExiElementDeclaration {
        maxLength = null,
        listItemMinLength = null,
        listItemMaxLength = null,
+       totalDigits = null,
+       fractionDigits = null,
+       listItemTotalDigits = null,
+       listItemFractionDigits = null,
        attributes = const [],
        content = null,
        mixed = false;
@@ -130,6 +138,10 @@ final class ExiElementDeclaration {
     this.maxLength,
     this.listItemMinLength,
     this.listItemMaxLength,
+    this.totalDigits,
+    this.fractionDigits,
+    this.listItemTotalDigits,
+    this.listItemFractionDigits,
     this.nillable = false,
     this.typeAlternatives = const {},
     this.anyAttribute = false,
@@ -163,6 +175,10 @@ final class ExiElementDeclaration {
     this.maxLength,
     this.listItemMinLength,
     this.listItemMaxLength,
+    this.totalDigits,
+    this.fractionDigits,
+    this.listItemTotalDigits,
+    this.listItemFractionDigits,
     this.attributes = const [],
     this.nillable = false,
     this.typeAlternatives = const {},
@@ -205,7 +221,11 @@ final class ExiElementDeclaration {
        minLength = null,
        maxLength = null,
        listItemMinLength = null,
-       listItemMaxLength = null;
+       listItemMaxLength = null,
+       totalDigits = null,
+       fractionDigits = null,
+       listItemTotalDigits = null,
+       listItemFractionDigits = null;
 
   final ExiQName name;
   final ExiQName? schemaTypeName;
@@ -228,6 +248,10 @@ final class ExiElementDeclaration {
   final int? maxLength;
   final int? listItemMinLength;
   final int? listItemMaxLength;
+  final int? totalDigits;
+  final int? fractionDigits;
+  final int? listItemTotalDigits;
+  final int? listItemFractionDigits;
   final List<ExiAttributeDeclaration> attributes;
   final ExiParticle? content;
   final bool mixed;
@@ -260,6 +284,10 @@ final class ExiAttributeDeclaration {
     this.maxLength,
     this.listItemMinLength,
     this.listItemMaxLength,
+    this.totalDigits,
+    this.fractionDigits,
+    this.listItemTotalDigits,
+    this.listItemFractionDigits,
     this.required = false,
   }) : assert((datatype == ExiDatatype.list) == (listItemDatatype != null));
 
@@ -282,6 +310,10 @@ final class ExiAttributeDeclaration {
   final int? maxLength;
   final int? listItemMinLength;
   final int? listItemMaxLength;
+  final int? totalDigits;
+  final int? fractionDigits;
+  final int? listItemTotalDigits;
+  final int? listItemFractionDigits;
   final bool required;
 }
 

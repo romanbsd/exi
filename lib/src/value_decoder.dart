@@ -39,6 +39,10 @@ final class ExiValueDecoder {
     int? maxLength,
     int? listItemMinLength,
     int? listItemMaxLength,
+    int? totalDigits,
+    int? fractionDigits,
+    int? listItemTotalDigits,
+    int? listItemFractionDigits,
   }) {
     if (preserveLexicalValues) {
       return _checkLength(
@@ -76,10 +80,19 @@ final class ExiValueDecoder {
             : input.readNBitUnsigned(1) == 0
             ? 'false'
             : 'true',
-      ExiDatatype.decimal => _readDecimal(),
+      ExiDatatype.decimal => _checkDecimalDigits(
+        _readDecimal(),
+        totalDigits: totalDigits,
+        fractionDigits: fractionDigits,
+      ),
       ExiDatatype.float => _readFloat(),
-      ExiDatatype.integer || ExiDatatype.unsignedInteger || ExiDatatype.byte || ExiDatatype.unsignedByte =>
+      ExiDatatype.integer ||
+      ExiDatatype.unsignedInteger ||
+      ExiDatatype.byte ||
+      ExiDatatype.unsignedByte => _checkIntegerDigits(
         _readIntegerValue(representation, minimum: integerMinInclusive, maximum: integerMaxInclusive),
+        totalDigits: totalDigits,
+      ),
       ExiDatatype.base64Binary => _checkLength(base64Encode(_readBinary()), minLength: minLength, maxLength: maxLength),
       ExiDatatype.hexBinary => _checkLength(
         _readBinary().map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(),
@@ -107,6 +120,8 @@ final class ExiValueDecoder {
         maxLength: maxLength,
         itemMinLength: listItemMinLength,
         itemMaxLength: listItemMaxLength,
+        itemTotalDigits: listItemTotalDigits,
+        itemFractionDigits: listItemFractionDigits,
       ),
     };
   }
@@ -153,6 +168,8 @@ final class ExiValueDecoder {
     int? maxLength,
     int? itemMinLength,
     int? itemMaxLength,
+    int? itemTotalDigits,
+    int? itemFractionDigits,
   }) {
     final encodedLength = input.readUnsignedInteger();
     if (encodedLength > BigInt.from(0x7fffffff)) {
@@ -181,9 +198,44 @@ final class ExiValueDecoder {
                 integerMaxInclusive: itemIntegerMaxInclusive,
                 minLength: itemMinLength,
                 maxLength: itemMaxLength,
+                totalDigits: itemTotalDigits,
+                fractionDigits: itemFractionDigits,
               ),
     ].join(' ');
   }
+
+  String _checkIntegerDigits(String value, {int? totalDigits}) {
+    if (totalDigits == null) {
+      return value;
+    }
+    final digits = _signlessDigits(value).replaceFirst(RegExp('^0+'), '');
+    if ((digits.isEmpty ? 1 : digits.length) > totalDigits) {
+      throw const FormatException('EXI integer digit count exceeds its schema range');
+    }
+    return value;
+  }
+
+  String _checkDecimalDigits(String value, {int? totalDigits, int? fractionDigits}) {
+    if (totalDigits == null && fractionDigits == null) {
+      return value;
+    }
+    final unsigned = value.startsWith('-') ? value.substring(1) : value;
+    final separator = unsigned.indexOf('.');
+    final integral = separator == -1 ? unsigned : unsigned.substring(0, separator);
+    final fraction = separator == -1 ? '' : unsigned.substring(separator + 1);
+    final significantIntegral = integral.replaceFirst(RegExp('^0+'), '');
+    final significantFraction = fraction.replaceFirst(RegExp(r'0+$'), '');
+    final digitCount = significantIntegral.length + significantFraction.length;
+    if (totalDigits != null && (digitCount == 0 ? 1 : digitCount) > totalDigits) {
+      throw const FormatException('EXI decimal digit count exceeds its schema range');
+    }
+    if (fractionDigits != null && significantFraction.length > fractionDigits) {
+      throw const FormatException('EXI decimal fraction digit count exceeds its schema range');
+    }
+    return value;
+  }
+
+  String _signlessDigits(String value) => value.startsWith('-') ? value.substring(1) : value;
 
   BigInt _readInteger() {
     final negative = input.readNBitUnsigned(1) == 1;

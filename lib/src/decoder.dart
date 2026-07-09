@@ -762,6 +762,10 @@ final class _DecoderState {
         maxLength: attribute.maxLength,
         listItemMinLength: attribute.listItemMinLength,
         listItemMaxLength: attribute.listItemMaxLength,
+        totalDigits: attribute.totalDigits,
+        fractionDigits: attribute.fractionDigits,
+        listItemTotalDigits: attribute.listItemTotalDigits,
+        listItemFractionDigits: attribute.listItemFractionDigits,
       );
 
   String _readXsiNilValue() {
@@ -1087,6 +1091,10 @@ final class _DecoderState {
                           maxLength: globalAttribute.maxLength,
                           listItemMinLength: globalAttribute.listItemMinLength,
                           listItemMaxLength: globalAttribute.listItemMaxLength,
+                          totalDigits: globalAttribute.totalDigits,
+                          fractionDigits: globalAttribute.fractionDigits,
+                          listItemTotalDigits: globalAttribute.listItemTotalDigits,
+                          listItemFractionDigits: globalAttribute.listItemFractionDigits,
                         ),
                   );
             events.add(ExiAttribute(name, value));
@@ -1264,6 +1272,10 @@ final class _DecoderState {
                   maxLength: attribute.maxLength,
                   listItemMinLength: attribute.listItemMinLength,
                   listItemMaxLength: attribute.listItemMaxLength,
+                  totalDigits: attribute.totalDigits,
+                  fractionDigits: attribute.fractionDigits,
+                  listItemTotalDigits: attribute.listItemTotalDigits,
+                  listItemFractionDigits: attribute.listItemFractionDigits,
                 ),
           );
           if (!seenAttributes.add(attribute.name)) {
@@ -1314,6 +1326,10 @@ final class _DecoderState {
                         maxLength: globalAttribute.maxLength,
                         listItemMinLength: globalAttribute.listItemMinLength,
                         listItemMaxLength: globalAttribute.listItemMaxLength,
+                        totalDigits: globalAttribute.totalDigits,
+                        fractionDigits: globalAttribute.fractionDigits,
+                        listItemTotalDigits: globalAttribute.listItemTotalDigits,
+                        listItemFractionDigits: globalAttribute.listItemFractionDigits,
                       ),
                 );
           events.add(ExiAttribute(name, value));
@@ -1397,6 +1413,10 @@ final class _DecoderState {
                       maxLength: declaration.maxLength,
                       listItemMinLength: declaration.listItemMinLength,
                       listItemMaxLength: declaration.listItemMaxLength,
+                      totalDigits: declaration.totalDigits,
+                      fractionDigits: declaration.fractionDigits,
+                      listItemTotalDigits: declaration.listItemTotalDigits,
+                      listItemFractionDigits: declaration.listItemFractionDigits,
                     ),
               ),
             ),
@@ -1982,7 +2002,11 @@ bool _hasSameAnonymousDatatypeShape(ExiElementDeclaration left, ExiElementDeclar
       left.minLength == right.minLength &&
       left.maxLength == right.maxLength &&
       left.listItemMinLength == right.listItemMinLength &&
-      left.listItemMaxLength == right.listItemMaxLength;
+      left.listItemMaxLength == right.listItemMaxLength &&
+      left.totalDigits == right.totalDigits &&
+      left.fractionDigits == right.fractionDigits &&
+      left.listItemTotalDigits == right.listItemTotalDigits &&
+      left.listItemFractionDigits == right.listItemFractionDigits;
 }
 
 bool _isAnonymousValueGrammar(ExiElementDeclaration declaration) =>
@@ -2157,6 +2181,10 @@ bool _sameAttribute(ExiAttributeDeclaration left, ExiAttributeDeclaration right)
     left.maxLength == right.maxLength &&
     left.listItemMinLength == right.listItemMinLength &&
     left.listItemMaxLength == right.listItemMaxLength &&
+    left.totalDigits == right.totalDigits &&
+    left.fractionDigits == right.fractionDigits &&
+    left.listItemTotalDigits == right.listItemTotalDigits &&
+    left.listItemFractionDigits == right.listItemFractionDigits &&
     left.required == right.required;
 
 bool _isAnonymousGrammarBase(ExiElementDeclaration declaration) =>

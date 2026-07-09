@@ -26,6 +26,10 @@ typedef _SimpleType = ({
   int? maxLength,
   int? listItemMinLength,
   int? listItemMaxLength,
+  int? totalDigits,
+  int? fractionDigits,
+  int? listItemTotalDigits,
+  int? listItemFractionDigits,
 });
 
 final class ExiSchemaCompiler {
@@ -300,6 +304,10 @@ final class _Compiler {
           maxLength: simpleDatatype.maxLength,
           listItemMinLength: simpleDatatype.listItemMinLength,
           listItemMaxLength: simpleDatatype.listItemMaxLength,
+          totalDigits: simpleDatatype.totalDigits,
+          fractionDigits: simpleDatatype.fractionDigits,
+          listItemTotalDigits: simpleDatatype.listItemTotalDigits,
+          listItemFractionDigits: simpleDatatype.listItemFractionDigits,
           nillable: nillable,
         );
       }
@@ -349,6 +357,10 @@ final class _Compiler {
         maxLength: simpleType.maxLength,
         listItemMinLength: simpleType.listItemMinLength,
         listItemMaxLength: simpleType.listItemMaxLength,
+        totalDigits: simpleType.totalDigits,
+        fractionDigits: simpleType.fractionDigits,
+        listItemTotalDigits: simpleType.listItemTotalDigits,
+        listItemFractionDigits: simpleType.listItemFractionDigits,
         nillable: nillable,
       );
     }
@@ -414,6 +426,10 @@ final class _Compiler {
         maxLength: declaration.maxLength,
         listItemMinLength: declaration.listItemMinLength,
         listItemMaxLength: declaration.listItemMaxLength,
+        totalDigits: declaration.totalDigits,
+        fractionDigits: declaration.fractionDigits,
+        listItemTotalDigits: declaration.listItemTotalDigits,
+        listItemFractionDigits: declaration.listItemFractionDigits,
         attributes: declaration.attributes,
         nillable: declaration.nillable,
         typeAlternatives: alternatives,
@@ -746,6 +762,10 @@ final class _Compiler {
       maxLength: simpleType.maxLength,
       listItemMinLength: simpleType.listItemMinLength,
       listItemMaxLength: simpleType.listItemMaxLength,
+      totalDigits: simpleType.totalDigits,
+      fractionDigits: simpleType.fractionDigits,
+      listItemTotalDigits: simpleType.listItemTotalDigits,
+      listItemFractionDigits: simpleType.listItemFractionDigits,
       attributes: attributes,
       nillable: nillable,
       anyAttribute: _hasAnyAttribute(derivation),
@@ -1132,6 +1152,10 @@ final class _Compiler {
         maxLength: declaration.maxLength,
         listItemMinLength: declaration.listItemMinLength,
         listItemMaxLength: declaration.listItemMaxLength,
+        totalDigits: declaration.totalDigits,
+        fractionDigits: declaration.fractionDigits,
+        listItemTotalDigits: declaration.listItemTotalDigits,
+        listItemFractionDigits: declaration.listItemFractionDigits,
         required: _isRequiredAttribute(attribute),
       );
     }
@@ -1174,6 +1198,10 @@ final class _Compiler {
       maxLength: simpleType.maxLength,
       listItemMinLength: simpleType.listItemMinLength,
       listItemMaxLength: simpleType.listItemMaxLength,
+      totalDigits: simpleType.totalDigits,
+      fractionDigits: simpleType.fractionDigits,
+      listItemTotalDigits: simpleType.listItemTotalDigits,
+      listItemFractionDigits: simpleType.listItemFractionDigits,
       required: _isRequiredAttribute(attribute),
     );
   }
@@ -1232,6 +1260,10 @@ final class _Compiler {
       maxLength: simpleType.maxLength,
       listItemMinLength: simpleType.listItemMinLength,
       listItemMaxLength: simpleType.listItemMaxLength,
+      totalDigits: simpleType.totalDigits,
+      fractionDigits: simpleType.fractionDigits,
+      listItemTotalDigits: simpleType.listItemTotalDigits,
+      listItemFractionDigits: simpleType.listItemFractionDigits,
     );
   }
 
@@ -1348,6 +1380,10 @@ final class _Compiler {
         maxLength: null,
         listItemMinLength: itemType.minLength,
         listItemMaxLength: itemType.maxLength,
+        totalDigits: null,
+        fractionDigits: null,
+        listItemTotalDigits: itemType.totalDigits,
+        listItemFractionDigits: itemType.fractionDigits,
       );
     }
 
@@ -1404,7 +1440,10 @@ final class _Compiler {
     }
     var minLength = baseType.minLength;
     var maxLength = baseType.maxLength;
+    var totalDigits = baseType.totalDigits;
+    var fractionDigits = baseType.fractionDigits;
     final seenLengthFacets = <String>{};
+    final seenNumericFacets = <String>{};
     for (final facet in facets.where(
       (facet) =>
           facet.name.local == 'length' ||
@@ -1445,11 +1484,24 @@ final class _Compiler {
               throw const FormatException('Duplicate XSD maxLength facet');
             }
             maxLength = maxLength == null || parsed < maxLength ? parsed : maxLength;
+          case 'totalDigits':
+            if (!seenNumericFacets.add('totalDigits')) {
+              throw const FormatException('Duplicate XSD totalDigits facet');
+            }
+            totalDigits = totalDigits == null || parsed < totalDigits ? parsed : totalDigits;
+          case 'fractionDigits':
+            if (!seenNumericFacets.add('fractionDigits')) {
+              throw const FormatException('Duplicate XSD fractionDigits facet');
+            }
+            fractionDigits = fractionDigits == null || parsed < fractionDigits ? parsed : fractionDigits;
         }
       }
     }
     if (minLength != null && maxLength != null && maxLength < minLength) {
       throw const FormatException('XSD length restriction has an empty value range');
+    }
+    if (totalDigits != null && fractionDigits != null && fractionDigits > totalDigits) {
+      throw const FormatException('XSD numeric restriction has an empty digit range');
     }
     var minimum = baseType.integerMinInclusive;
     var maximum = baseType.integerMaxInclusive;
@@ -1530,6 +1582,10 @@ final class _Compiler {
       maxLength: maxLength,
       listItemMinLength: baseType.listItemMinLength,
       listItemMaxLength: baseType.listItemMaxLength,
+      totalDigits: totalDigits,
+      fractionDigits: fractionDigits,
+      listItemTotalDigits: baseType.listItemTotalDigits,
+      listItemFractionDigits: baseType.listItemFractionDigits,
     );
   }
 
@@ -1658,6 +1714,10 @@ final class _Compiler {
         maxLength: null,
         listItemMinLength: null,
         listItemMaxLength: null,
+        totalDigits: null,
+        fractionDigits: null,
+        listItemTotalDigits: null,
+        listItemFractionDigits: null,
       ),
       'boolean' => _scalarType(ExiDatatype.boolean),
       'decimal' => _scalarType(ExiDatatype.decimal),
@@ -1752,6 +1812,10 @@ _SimpleType _scalarType(
   maxLength: null,
   listItemMinLength: null,
   listItemMaxLength: null,
+  totalDigits: null,
+  fractionDigits: null,
+  listItemTotalDigits: null,
+  listItemFractionDigits: null,
 );
 
 _SimpleType _withSchemaDatatype(_SimpleType type, ExiQName datatype) =>
@@ -1778,6 +1842,10 @@ _SimpleType _withSchemaDatatypeHierarchy(_SimpleType type, List<ExiQName> hierar
   maxLength: type.maxLength,
   listItemMinLength: type.listItemMinLength,
   listItemMaxLength: type.listItemMaxLength,
+  totalDigits: type.totalDigits,
+  fractionDigits: type.fractionDigits,
+  listItemTotalDigits: type.listItemTotalDigits,
+  listItemFractionDigits: type.listItemFractionDigits,
 );
 
 List<ExiQName> _builtinDatatypeHierarchy(String localName) {
