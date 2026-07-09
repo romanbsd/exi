@@ -961,7 +961,7 @@ final class _Compiler {
 
   List<ExiAttributeDeclaration> _compileAttributes(XmlElement container) {
     final attributes = <ExiAttributeDeclaration>[
-      for (final attribute in _children(container, 'attribute')) _compileAttribute(attribute),
+      for (final attribute in _children(container, 'attribute')) ?_compileAttribute(attribute),
     ];
     for (final reference in _children(container, 'attributeGroup')) {
       final name = reference.getAttribute('ref');
@@ -1009,8 +1009,11 @@ final class _Compiler {
     return localNameOrder != 0 ? localNameOrder : left.name.uri.compareTo(right.name.uri);
   }
 
-  ExiAttributeDeclaration _compileAttribute(XmlElement attribute) {
+  ExiAttributeDeclaration? _compileAttribute(XmlElement attribute) {
     _rejectUnsupportedAttributeSemantics(attribute);
+    if (attribute.getAttribute('use') == 'prohibited') {
+      return null;
+    }
     final reference = attribute.getAttribute('ref');
     if (reference != null) {
       if (attribute.getAttribute('name') != null ||
@@ -1135,7 +1138,7 @@ final class _Compiler {
     return switch (attribute.getAttribute('use')) {
       null || 'optional' => false,
       'required' => true,
-      'prohibited' => throw UnsupportedError('Prohibited XSD attributes are not supported yet'),
+      'prohibited' => false,
       final value => throw FormatException('Invalid XSD attribute use "$value"'),
     };
   }

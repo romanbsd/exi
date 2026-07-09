@@ -1179,6 +1179,27 @@ void main() {
     expect(document.toXmlString(), '<root id="7"/>');
   });
 
+  test('ignores prohibited schema attributes when building attribute productions', () {
+    final schema = _compile('''
+      <xs:attribute name="legacy"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:attribute ref="legacy" use="prohibited"/>
+          <xs:attribute name="id" type="xs:string" use="required"/>
+        </xs:complexType>
+      </xs:element>
+    ''');
+    final bits = StringBuffer()
+      // Root and required id productions are implicit. The prohibited legacy
+      // attribute is not part of the grammar.
+      ..write('0')
+      ..write(_value('7'));
+
+    final document = _decode(schema, bits.toString());
+
+    expect(document.toXmlString(), '<root id="7"/>');
+  });
+
   test('decodes inherited complex-type attributes and particles', () {
     final schema = _compile('''
       <xs:complexType name="Base">
