@@ -22,6 +22,10 @@ typedef _SimpleType = ({
   BigInt? integerMaxInclusive,
   BigInt? listItemIntegerMinInclusive,
   BigInt? listItemIntegerMaxInclusive,
+  ExiDecimalBound? decimalMin,
+  ExiDecimalBound? decimalMax,
+  ExiDecimalBound? listItemDecimalMin,
+  ExiDecimalBound? listItemDecimalMax,
   int? minLength,
   int? maxLength,
   int? listItemMinLength,
@@ -302,6 +306,10 @@ final class _Compiler {
           integerMaxInclusive: simpleDatatype.integerMaxInclusive,
           listItemIntegerMinInclusive: simpleDatatype.listItemIntegerMinInclusive,
           listItemIntegerMaxInclusive: simpleDatatype.listItemIntegerMaxInclusive,
+          decimalMin: simpleDatatype.decimalMin,
+          decimalMax: simpleDatatype.decimalMax,
+          listItemDecimalMin: simpleDatatype.listItemDecimalMin,
+          listItemDecimalMax: simpleDatatype.listItemDecimalMax,
           minLength: simpleDatatype.minLength,
           maxLength: simpleDatatype.maxLength,
           listItemMinLength: simpleDatatype.listItemMinLength,
@@ -357,6 +365,10 @@ final class _Compiler {
         integerMaxInclusive: simpleType.integerMaxInclusive,
         listItemIntegerMinInclusive: simpleType.listItemIntegerMinInclusive,
         listItemIntegerMaxInclusive: simpleType.listItemIntegerMaxInclusive,
+        decimalMin: simpleType.decimalMin,
+        decimalMax: simpleType.decimalMax,
+        listItemDecimalMin: simpleType.listItemDecimalMin,
+        listItemDecimalMax: simpleType.listItemDecimalMax,
         minLength: simpleType.minLength,
         maxLength: simpleType.maxLength,
         listItemMinLength: simpleType.listItemMinLength,
@@ -428,6 +440,10 @@ final class _Compiler {
         listItemBooleanPattern: declaration.listItemBooleanPattern,
         integerMinInclusive: declaration.integerMinInclusive,
         integerMaxInclusive: declaration.integerMaxInclusive,
+        decimalMin: declaration.decimalMin,
+        decimalMax: declaration.decimalMax,
+        listItemDecimalMin: declaration.listItemDecimalMin,
+        listItemDecimalMax: declaration.listItemDecimalMax,
         minLength: declaration.minLength,
         maxLength: declaration.maxLength,
         listItemMinLength: declaration.listItemMinLength,
@@ -766,6 +782,10 @@ final class _Compiler {
       integerMaxInclusive: simpleType.integerMaxInclusive,
       listItemIntegerMinInclusive: simpleType.listItemIntegerMinInclusive,
       listItemIntegerMaxInclusive: simpleType.listItemIntegerMaxInclusive,
+      decimalMin: simpleType.decimalMin,
+      decimalMax: simpleType.decimalMax,
+      listItemDecimalMin: simpleType.listItemDecimalMin,
+      listItemDecimalMax: simpleType.listItemDecimalMax,
       minLength: simpleType.minLength,
       maxLength: simpleType.maxLength,
       listItemMinLength: simpleType.listItemMinLength,
@@ -1158,6 +1178,10 @@ final class _Compiler {
         integerMaxInclusive: declaration.integerMaxInclusive,
         listItemIntegerMinInclusive: declaration.listItemIntegerMinInclusive,
         listItemIntegerMaxInclusive: declaration.listItemIntegerMaxInclusive,
+        decimalMin: declaration.decimalMin,
+        decimalMax: declaration.decimalMax,
+        listItemDecimalMin: declaration.listItemDecimalMin,
+        listItemDecimalMax: declaration.listItemDecimalMax,
         minLength: declaration.minLength,
         maxLength: declaration.maxLength,
         listItemMinLength: declaration.listItemMinLength,
@@ -1206,6 +1230,10 @@ final class _Compiler {
       integerMaxInclusive: simpleType.integerMaxInclusive,
       listItemIntegerMinInclusive: simpleType.listItemIntegerMinInclusive,
       listItemIntegerMaxInclusive: simpleType.listItemIntegerMaxInclusive,
+      decimalMin: simpleType.decimalMin,
+      decimalMax: simpleType.decimalMax,
+      listItemDecimalMin: simpleType.listItemDecimalMin,
+      listItemDecimalMax: simpleType.listItemDecimalMax,
       minLength: simpleType.minLength,
       maxLength: simpleType.maxLength,
       listItemMinLength: simpleType.listItemMinLength,
@@ -1270,6 +1298,10 @@ final class _Compiler {
       integerMaxInclusive: simpleType.integerMaxInclusive,
       listItemIntegerMinInclusive: simpleType.listItemIntegerMinInclusive,
       listItemIntegerMaxInclusive: simpleType.listItemIntegerMaxInclusive,
+      decimalMin: simpleType.decimalMin,
+      decimalMax: simpleType.decimalMax,
+      listItemDecimalMin: simpleType.listItemDecimalMin,
+      listItemDecimalMax: simpleType.listItemDecimalMax,
       minLength: simpleType.minLength,
       maxLength: simpleType.maxLength,
       listItemMinLength: simpleType.listItemMinLength,
@@ -1392,6 +1424,10 @@ final class _Compiler {
         integerMaxInclusive: null,
         listItemIntegerMinInclusive: itemType.integerMinInclusive,
         listItemIntegerMaxInclusive: itemType.integerMaxInclusive,
+        decimalMin: null,
+        decimalMax: null,
+        listItemDecimalMin: itemType.decimalMin,
+        listItemDecimalMax: itemType.decimalMax,
         minLength: null,
         maxLength: null,
         listItemMinLength: itemType.minLength,
@@ -1525,6 +1561,8 @@ final class _Compiler {
     }
     var minimum = baseType.integerMinInclusive;
     var maximum = baseType.integerMaxInclusive;
+    var decimalMinimum = baseType.decimalMin;
+    var decimalMaximum = baseType.decimalMax;
     final boundFacets = facets
         .where(
           (facet) =>
@@ -1539,6 +1577,7 @@ final class _Compiler {
         baseType.datatype == ExiDatatype.unsignedInteger ||
         baseType.datatype == ExiDatatype.byte ||
         baseType.datatype == ExiDatatype.unsignedByte;
+    final decimalDatatype = baseType.datatype == ExiDatatype.decimal;
     if (integerDatatype) {
       final seenBounds = <String>{};
       for (final facet in boundFacets) {
@@ -1565,6 +1604,27 @@ final class _Compiler {
             maximum = maximum == null || inclusive < maximum ? inclusive : maximum;
         }
       }
+    } else if (decimalDatatype) {
+      final seenBounds = <String>{};
+      for (final facet in boundFacets) {
+        if (!seenBounds.add(facet.name.local)) {
+          throw FormatException('Duplicate XSD ${facet.name.local} facet');
+        }
+        final lexical =
+            facet.getAttribute('value') ??
+            (throw FormatException('An XSD ${facet.name.local} facet must specify a value'));
+        final parsed = _normalizeDecimalBound(lexical);
+        switch (facet.name.local) {
+          case 'minInclusive':
+            decimalMinimum = _stricterDecimalMin(decimalMinimum, ExiDecimalBound(parsed, inclusive: true));
+          case 'minExclusive':
+            decimalMinimum = _stricterDecimalMin(decimalMinimum, ExiDecimalBound(parsed, inclusive: false));
+          case 'maxInclusive':
+            decimalMaximum = _stricterDecimalMax(decimalMaximum, ExiDecimalBound(parsed, inclusive: true));
+          case 'maxExclusive':
+            decimalMaximum = _stricterDecimalMax(decimalMaximum, ExiDecimalBound(parsed, inclusive: false));
+        }
+      }
     } else {
       for (final facet in boundFacets) {
         if (facet.getAttribute('value') == null) {
@@ -1574,6 +1634,12 @@ final class _Compiler {
     }
     if (minimum != null && maximum != null && maximum < minimum) {
       throw const FormatException('XSD integer restriction has an empty value range');
+    }
+    if (decimalMinimum != null && decimalMaximum != null) {
+      final comparison = _compareDecimals(decimalMinimum.value, decimalMaximum.value);
+      if (comparison > 0 || (comparison == 0 && (!decimalMinimum.inclusive || !decimalMaximum.inclusive))) {
+        throw const FormatException('XSD decimal restriction has an empty value range');
+      }
     }
     return (
       datatype: baseType.datatype,
@@ -1598,6 +1664,10 @@ final class _Compiler {
       integerMaxInclusive: maximum,
       listItemIntegerMinInclusive: baseType.listItemIntegerMinInclusive,
       listItemIntegerMaxInclusive: baseType.listItemIntegerMaxInclusive,
+      decimalMin: decimalMinimum,
+      decimalMax: decimalMaximum,
+      listItemDecimalMin: baseType.listItemDecimalMin,
+      listItemDecimalMax: baseType.listItemDecimalMax,
       minLength: minLength,
       maxLength: maxLength,
       listItemMinLength: baseType.listItemMinLength,
@@ -1733,6 +1803,10 @@ final class _Compiler {
         integerMaxInclusive: null,
         listItemIntegerMinInclusive: null,
         listItemIntegerMaxInclusive: null,
+        decimalMin: null,
+        decimalMax: null,
+        listItemDecimalMin: null,
+        listItemDecimalMax: null,
         minLength: null,
         maxLength: null,
         listItemMinLength: null,
@@ -1834,6 +1908,10 @@ _SimpleType _scalarType(
   integerMaxInclusive: integerMaxInclusive,
   listItemIntegerMinInclusive: null,
   listItemIntegerMaxInclusive: null,
+  decimalMin: null,
+  decimalMax: null,
+  listItemDecimalMin: null,
+  listItemDecimalMax: null,
   minLength: null,
   maxLength: null,
   listItemMinLength: null,
@@ -1866,6 +1944,10 @@ _SimpleType _withSchemaDatatypeHierarchy(_SimpleType type, List<ExiQName> hierar
   integerMaxInclusive: type.integerMaxInclusive,
   listItemIntegerMinInclusive: type.listItemIntegerMinInclusive,
   listItemIntegerMaxInclusive: type.listItemIntegerMaxInclusive,
+  decimalMin: type.decimalMin,
+  decimalMax: type.decimalMax,
+  listItemDecimalMin: type.listItemDecimalMin,
+  listItemDecimalMax: type.listItemDecimalMax,
   minLength: type.minLength,
   maxLength: type.maxLength,
   listItemMinLength: type.listItemMinLength,
@@ -1877,6 +1959,58 @@ _SimpleType _withSchemaDatatypeHierarchy(_SimpleType type, List<ExiQName> hierar
   whiteSpace: type.whiteSpace,
   listItemWhiteSpace: type.listItemWhiteSpace,
 );
+
+ExiDecimalBound _stricterDecimalMin(ExiDecimalBound? current, ExiDecimalBound candidate) {
+  if (current == null) {
+    return candidate;
+  }
+  final comparison = _compareDecimals(candidate.value, current.value);
+  if (comparison > 0 || (comparison == 0 && !candidate.inclusive && current.inclusive)) {
+    return candidate;
+  }
+  return current;
+}
+
+ExiDecimalBound _stricterDecimalMax(ExiDecimalBound? current, ExiDecimalBound candidate) {
+  if (current == null) {
+    return candidate;
+  }
+  final comparison = _compareDecimals(candidate.value, current.value);
+  if (comparison < 0 || (comparison == 0 && !candidate.inclusive && current.inclusive)) {
+    return candidate;
+  }
+  return current;
+}
+
+String _normalizeDecimalBound(String lexical) {
+  final value = lexical.trim();
+  if (!_xsdDecimal.hasMatch(value)) {
+    throw FormatException('Invalid XSD decimal bound "$lexical"');
+  }
+  return value;
+}
+
+int _compareDecimals(String left, String right) {
+  final leftDecimal = _parseComparableDecimal(left);
+  final rightDecimal = _parseComparableDecimal(right);
+  final scale = leftDecimal.scale > rightDecimal.scale ? leftDecimal.scale : rightDecimal.scale;
+  final leftValue = leftDecimal.significand * BigInt.from(10).pow(scale - leftDecimal.scale);
+  final rightValue = rightDecimal.significand * BigInt.from(10).pow(scale - rightDecimal.scale);
+  return leftValue.compareTo(rightValue);
+}
+
+({BigInt significand, int scale}) _parseComparableDecimal(String value) {
+  final negative = value.startsWith('-');
+  final unsigned = value.startsWith('-') || value.startsWith('+') ? value.substring(1) : value;
+  final separator = unsigned.indexOf('.');
+  final integral = separator == -1 ? unsigned : unsigned.substring(0, separator);
+  final fraction = separator == -1 ? '' : unsigned.substring(separator + 1);
+  final digits = '${integral.isEmpty ? '0' : integral}$fraction';
+  final significand = BigInt.parse(digits.isEmpty ? '0' : digits) * (negative ? -BigInt.one : BigInt.one);
+  return (significand: significand, scale: fraction.length);
+}
+
+final _xsdDecimal = RegExp(r'^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$');
 
 List<ExiQName> _builtinDatatypeHierarchy(String localName) {
   final hierarchy = <ExiQName>[];

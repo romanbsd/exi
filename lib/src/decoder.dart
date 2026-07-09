@@ -758,6 +758,10 @@ final class _DecoderState {
         integerMaxInclusive: attribute.integerMaxInclusive,
         listItemIntegerMinInclusive: attribute.listItemIntegerMinInclusive,
         listItemIntegerMaxInclusive: attribute.listItemIntegerMaxInclusive,
+        decimalMin: attribute.decimalMin,
+        decimalMax: attribute.decimalMax,
+        listItemDecimalMin: attribute.listItemDecimalMin,
+        listItemDecimalMax: attribute.listItemDecimalMax,
         minLength: attribute.minLength,
         maxLength: attribute.maxLength,
         listItemMinLength: attribute.listItemMinLength,
@@ -1089,6 +1093,10 @@ final class _DecoderState {
                           integerMaxInclusive: globalAttribute.integerMaxInclusive,
                           listItemIntegerMinInclusive: globalAttribute.listItemIntegerMinInclusive,
                           listItemIntegerMaxInclusive: globalAttribute.listItemIntegerMaxInclusive,
+                          decimalMin: globalAttribute.decimalMin,
+                          decimalMax: globalAttribute.decimalMax,
+                          listItemDecimalMin: globalAttribute.listItemDecimalMin,
+                          listItemDecimalMax: globalAttribute.listItemDecimalMax,
                           minLength: globalAttribute.minLength,
                           maxLength: globalAttribute.maxLength,
                           listItemMinLength: globalAttribute.listItemMinLength,
@@ -1272,6 +1280,10 @@ final class _DecoderState {
                   integerMaxInclusive: attribute.integerMaxInclusive,
                   listItemIntegerMinInclusive: attribute.listItemIntegerMinInclusive,
                   listItemIntegerMaxInclusive: attribute.listItemIntegerMaxInclusive,
+                  decimalMin: attribute.decimalMin,
+                  decimalMax: attribute.decimalMax,
+                  listItemDecimalMin: attribute.listItemDecimalMin,
+                  listItemDecimalMax: attribute.listItemDecimalMax,
                   minLength: attribute.minLength,
                   maxLength: attribute.maxLength,
                   listItemMinLength: attribute.listItemMinLength,
@@ -1328,6 +1340,10 @@ final class _DecoderState {
                         integerMaxInclusive: globalAttribute.integerMaxInclusive,
                         listItemIntegerMinInclusive: globalAttribute.listItemIntegerMinInclusive,
                         listItemIntegerMaxInclusive: globalAttribute.listItemIntegerMaxInclusive,
+                        decimalMin: globalAttribute.decimalMin,
+                        decimalMax: globalAttribute.decimalMax,
+                        listItemDecimalMin: globalAttribute.listItemDecimalMin,
+                        listItemDecimalMax: globalAttribute.listItemDecimalMax,
                         minLength: globalAttribute.minLength,
                         maxLength: globalAttribute.maxLength,
                         listItemMinLength: globalAttribute.listItemMinLength,
@@ -1417,6 +1433,10 @@ final class _DecoderState {
                       integerMaxInclusive: declaration.integerMaxInclusive,
                       listItemIntegerMinInclusive: declaration.listItemIntegerMinInclusive,
                       listItemIntegerMaxInclusive: declaration.listItemIntegerMaxInclusive,
+                      decimalMin: declaration.decimalMin,
+                      decimalMax: declaration.decimalMax,
+                      listItemDecimalMin: declaration.listItemDecimalMin,
+                      listItemDecimalMax: declaration.listItemDecimalMax,
                       minLength: declaration.minLength,
                       maxLength: declaration.maxLength,
                       listItemMinLength: declaration.listItemMinLength,
@@ -2009,6 +2029,10 @@ bool _hasSameAnonymousDatatypeShape(ExiElementDeclaration left, ExiElementDeclar
       left.integerMaxInclusive == right.integerMaxInclusive &&
       left.listItemIntegerMinInclusive == right.listItemIntegerMinInclusive &&
       left.listItemIntegerMaxInclusive == right.listItemIntegerMaxInclusive &&
+      left.decimalMin == right.decimalMin &&
+      left.decimalMax == right.decimalMax &&
+      left.listItemDecimalMin == right.listItemDecimalMin &&
+      left.listItemDecimalMax == right.listItemDecimalMax &&
       left.minLength == right.minLength &&
       left.maxLength == right.maxLength &&
       left.listItemMinLength == right.listItemMinLength &&
@@ -2189,6 +2213,10 @@ bool _sameAttribute(ExiAttributeDeclaration left, ExiAttributeDeclaration right)
     left.integerMaxInclusive == right.integerMaxInclusive &&
     left.listItemIntegerMinInclusive == right.listItemIntegerMinInclusive &&
     left.listItemIntegerMaxInclusive == right.listItemIntegerMaxInclusive &&
+    left.decimalMin == right.decimalMin &&
+    left.decimalMax == right.decimalMax &&
+    left.listItemDecimalMin == right.listItemDecimalMin &&
+    left.listItemDecimalMax == right.listItemDecimalMax &&
     left.minLength == right.minLength &&
     left.maxLength == right.maxLength &&
     left.listItemMinLength == right.listItemMinLength &&

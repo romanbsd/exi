@@ -746,6 +746,35 @@ void main() {
     );
   });
 
+  test('preserves lexical whitespace when lexical values are enabled', () {
+    const schemaId = 'lexical-white-space';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="CollapsedCode">
+            <xs:restriction base="xs:string">
+              <xs:whiteSpace value="collapse"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="code" type="CollapsedCode"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = '100000000${_value('  a\t b\nc  ')}';
+
+    final document = ExiDecoder(
+      options: const ExiOptions(
+        strict: true,
+        schemaId: ExiSchemaId.named(schemaId),
+        fidelity: ExiFidelityOptions(lexicalValues: true),
+      ),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits));
+
+    expect(document.events.whereType<ExiCharacters>().single.value, '  a\t b\nc  ');
+  });
+
   test('enforces integer and decimal digit facets', () {
     const schemaId = 'numeric-facets';
     final schema = ExiSchemaCompiler.compile(
@@ -834,6 +863,122 @@ void main() {
       ..write(_unsigned(432));
 
     for (final bits in [tooManyIntegerDigits, tooManyFractionDigits]) {
+      expect(
+        () => ExiDecoder(
+          options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+          schemaResolver: (_) => schema,
+        ).decode(_pack(bits.toString())),
+        throwsFormatException,
+      );
+    }
+  });
+
+  test('enforces decimal bound facets on scalar and list values', () {
+    const schemaId = 'decimal-bound-facets';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Amount">
+            <xs:restriction base="xs:decimal">
+              <xs:minExclusive value="1.50"/>
+              <xs:maxInclusive value="2.25"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="SmallAmount">
+            <xs:restriction base="xs:decimal">
+              <xs:minInclusive value="0.5"/>
+              <xs:maxExclusive value="2.0"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="SmallAmounts">
+            <xs:list itemType="SmallAmount"/>
+          </xs:simpleType>
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="amount" type="Amount"/>
+                <xs:element name="values" type="SmallAmounts"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('100000000')
+      // Decimal 2.25.
+      ..write('0')
+      ..write(_unsigned(2))
+      ..write(_unsigned(52))
+      // List values 0.5 and 1.75.
+      ..write(_unsigned(2))
+      ..write('0')
+      ..write(_unsigned(0))
+      ..write(_unsigned(5))
+      ..write('0')
+      ..write(_unsigned(1))
+      ..write(_unsigned(57));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<root><amount>2.25</amount><values>0.5 1.75</values></root>');
+  });
+
+  test('rejects decimal bound facet violations', () {
+    const schemaId = 'invalid-decimal-bound-facets';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Amount">
+            <xs:restriction base="xs:decimal">
+              <xs:minExclusive value="1.50"/>
+              <xs:maxInclusive value="2.25"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="SmallAmount">
+            <xs:restriction base="xs:decimal">
+              <xs:minInclusive value="0.5"/>
+              <xs:maxExclusive value="2.0"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="SmallAmounts">
+            <xs:list itemType="SmallAmount"/>
+          </xs:simpleType>
+          <xs:element name="root">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="amount" type="Amount"/>
+                <xs:element name="values" type="SmallAmounts"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final exclusiveScalarMinimum = StringBuffer('100000000')
+      // Decimal 1.50 violates minExclusive.
+      ..write('0')
+      ..write(_unsigned(1))
+      ..write(_unsigned(5))
+      ..write(_unsigned(1))
+      ..write('0')
+      ..write(_unsigned(1))
+      ..write(_unsigned(0));
+    final exclusiveListItemMaximum = StringBuffer('100000000')
+      ..write('0')
+      ..write(_unsigned(2))
+      ..write(_unsigned(52))
+      ..write(_unsigned(1))
+      // Decimal 2.0 violates item maxExclusive.
+      ..write('0')
+      ..write(_unsigned(2))
+      ..write(_unsigned(0));
+
+    for (final bits in [exclusiveScalarMinimum, exclusiveListItemMaximum]) {
       expect(
         () => ExiDecoder(
           options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),

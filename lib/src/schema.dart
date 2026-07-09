@@ -26,6 +26,19 @@ enum ExiDatatype {
 
 enum ExiProcessContents { strict, lax, skip }
 
+final class ExiDecimalBound {
+  const ExiDecimalBound(this.value, {required this.inclusive});
+
+  final String value;
+  final bool inclusive;
+
+  @override
+  bool operator ==(Object other) => other is ExiDecimalBound && value == other.value && inclusive == other.inclusive;
+
+  @override
+  int get hashCode => Object.hash(value, inclusive);
+}
+
 final class ExiSchema {
   const ExiSchema({
     required this.id,
@@ -69,6 +82,10 @@ final class ExiElementDeclaration {
        integerMaxInclusive = null,
        listItemIntegerMinInclusive = null,
        listItemIntegerMaxInclusive = null,
+       decimalMin = null,
+       decimalMax = null,
+       listItemDecimalMin = null,
+       listItemDecimalMax = null,
        minLength = null,
        maxLength = null,
        listItemMinLength = null,
@@ -107,6 +124,10 @@ final class ExiElementDeclaration {
        integerMaxInclusive = null,
        listItemIntegerMinInclusive = null,
        listItemIntegerMaxInclusive = null,
+       decimalMin = null,
+       decimalMax = null,
+       listItemDecimalMin = null,
+       listItemDecimalMax = null,
        minLength = null,
        maxLength = null,
        listItemMinLength = null,
@@ -138,6 +159,10 @@ final class ExiElementDeclaration {
     this.integerMaxInclusive,
     this.listItemIntegerMinInclusive,
     this.listItemIntegerMaxInclusive,
+    this.decimalMin,
+    this.decimalMax,
+    this.listItemDecimalMin,
+    this.listItemDecimalMax,
     this.minLength,
     this.maxLength,
     this.listItemMinLength,
@@ -177,6 +202,10 @@ final class ExiElementDeclaration {
     this.integerMaxInclusive,
     this.listItemIntegerMinInclusive,
     this.listItemIntegerMaxInclusive,
+    this.decimalMin,
+    this.decimalMax,
+    this.listItemDecimalMin,
+    this.listItemDecimalMax,
     this.minLength,
     this.maxLength,
     this.listItemMinLength,
@@ -226,6 +255,10 @@ final class ExiElementDeclaration {
        integerMaxInclusive = null,
        listItemIntegerMinInclusive = null,
        listItemIntegerMaxInclusive = null,
+       decimalMin = null,
+       decimalMax = null,
+       listItemDecimalMin = null,
+       listItemDecimalMax = null,
        minLength = null,
        maxLength = null,
        listItemMinLength = null,
@@ -254,6 +287,10 @@ final class ExiElementDeclaration {
   final BigInt? integerMaxInclusive;
   final BigInt? listItemIntegerMinInclusive;
   final BigInt? listItemIntegerMaxInclusive;
+  final ExiDecimalBound? decimalMin;
+  final ExiDecimalBound? decimalMax;
+  final ExiDecimalBound? listItemDecimalMin;
+  final ExiDecimalBound? listItemDecimalMax;
   final int? minLength;
   final int? maxLength;
   final int? listItemMinLength;
@@ -292,6 +329,10 @@ final class ExiAttributeDeclaration {
     this.integerMaxInclusive,
     this.listItemIntegerMinInclusive,
     this.listItemIntegerMaxInclusive,
+    this.decimalMin,
+    this.decimalMax,
+    this.listItemDecimalMin,
+    this.listItemDecimalMax,
     this.minLength,
     this.maxLength,
     this.listItemMinLength,
@@ -320,6 +361,10 @@ final class ExiAttributeDeclaration {
   final BigInt? integerMaxInclusive;
   final BigInt? listItemIntegerMinInclusive;
   final BigInt? listItemIntegerMaxInclusive;
+  final ExiDecimalBound? decimalMin;
+  final ExiDecimalBound? decimalMax;
+  final ExiDecimalBound? listItemDecimalMin;
+  final ExiDecimalBound? listItemDecimalMax;
   final int? minLength;
   final int? maxLength;
   final int? listItemMinLength;

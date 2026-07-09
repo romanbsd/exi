@@ -35,6 +35,10 @@ final class ExiValueDecoder {
     BigInt? integerMaxInclusive,
     BigInt? listItemIntegerMinInclusive,
     BigInt? listItemIntegerMaxInclusive,
+    ExiDecimalBound? decimalMin,
+    ExiDecimalBound? decimalMax,
+    ExiDecimalBound? listItemDecimalMin,
+    ExiDecimalBound? listItemDecimalMax,
     int? minLength,
     int? maxLength,
     int? listItemMinLength,
@@ -48,13 +52,10 @@ final class ExiValueDecoder {
   }) {
     if (preserveLexicalValues) {
       return _checkLength(
-        _applyWhiteSpace(
-          strings.readValue(
-            input,
-            context,
-            restrictedCharacters: _restrictedCharacters(datatype, listItemDatatype: listItemDatatype),
-          ),
-          whiteSpace,
+        strings.readValue(
+          input,
+          context,
+          restrictedCharacters: _restrictedCharacters(datatype, listItemDatatype: listItemDatatype),
         ),
         minLength: minLength,
         maxLength: maxLength,
@@ -90,7 +91,7 @@ final class ExiValueDecoder {
             ? 'false'
             : 'true',
       ExiDatatype.decimal => _checkDecimalDigits(
-        _readDecimal(),
+        _checkDecimalRange(_readDecimal(), minimum: decimalMin, maximum: decimalMax),
         totalDigits: totalDigits,
         fractionDigits: fractionDigits,
       ),
@@ -125,6 +126,8 @@ final class ExiValueDecoder {
         itemEnumerationValues: listItemEnumerationValues,
         itemIntegerMinInclusive: listItemIntegerMinInclusive,
         itemIntegerMaxInclusive: listItemIntegerMaxInclusive,
+        itemDecimalMin: listItemDecimalMin,
+        itemDecimalMax: listItemDecimalMax,
         minLength: minLength,
         maxLength: maxLength,
         itemMinLength: listItemMinLength,
@@ -174,6 +177,8 @@ final class ExiValueDecoder {
     List<String> itemEnumerationValues = const [],
     BigInt? itemIntegerMinInclusive,
     BigInt? itemIntegerMaxInclusive,
+    ExiDecimalBound? itemDecimalMin,
+    ExiDecimalBound? itemDecimalMax,
     int? minLength,
     int? maxLength,
     int? itemMinLength,
@@ -210,6 +215,8 @@ final class ExiValueDecoder {
                 booleanPattern: itemBooleanPattern,
                 integerMinInclusive: itemIntegerMinInclusive,
                 integerMaxInclusive: itemIntegerMaxInclusive,
+                decimalMin: itemDecimalMin,
+                decimalMax: itemDecimalMax,
                 minLength: itemMinLength,
                 maxLength: itemMaxLength,
                 totalDigits: itemTotalDigits,
@@ -255,6 +262,22 @@ final class ExiValueDecoder {
     }
     if (fractionDigits != null && significantFraction.length > fractionDigits) {
       throw const FormatException('EXI decimal fraction digit count exceeds its schema range');
+    }
+    return value;
+  }
+
+  String _checkDecimalRange(String value, {ExiDecimalBound? minimum, ExiDecimalBound? maximum}) {
+    if (minimum != null) {
+      final comparison = _compareDecimals(value, minimum.value);
+      if (comparison < 0 || (comparison == 0 && !minimum.inclusive)) {
+        throw const FormatException('EXI decimal value is outside its schema range');
+      }
+    }
+    if (maximum != null) {
+      final comparison = _compareDecimals(value, maximum.value);
+      if (comparison > 0 || (comparison == 0 && !maximum.inclusive)) {
+        throw const FormatException('EXI decimal value is outside its schema range');
+      }
     }
     return value;
   }
@@ -555,6 +578,26 @@ String _year(int value) {
     return '-${(-value).toString().padLeft(4, '0')}';
   }
   return value.toString().padLeft(4, '0');
+}
+
+int _compareDecimals(String left, String right) {
+  final leftDecimal = _parseComparableDecimal(left);
+  final rightDecimal = _parseComparableDecimal(right);
+  final scale = leftDecimal.scale > rightDecimal.scale ? leftDecimal.scale : rightDecimal.scale;
+  final leftValue = leftDecimal.significand * BigInt.from(10).pow(scale - leftDecimal.scale);
+  final rightValue = rightDecimal.significand * BigInt.from(10).pow(scale - rightDecimal.scale);
+  return leftValue.compareTo(rightValue);
+}
+
+({BigInt significand, int scale}) _parseComparableDecimal(String value) {
+  final negative = value.startsWith('-');
+  final unsigned = value.startsWith('-') || value.startsWith('+') ? value.substring(1) : value;
+  final separator = unsigned.indexOf('.');
+  final integral = separator == -1 ? unsigned : unsigned.substring(0, separator);
+  final fraction = separator == -1 ? '' : unsigned.substring(separator + 1);
+  final digits = '${integral.isEmpty ? '0' : integral}$fraction';
+  final significand = BigInt.parse(digits.isEmpty ? '0' : digits) * (negative ? -BigInt.one : BigInt.one);
+  return (significand: significand, scale: fraction.length);
 }
 
 List<ExiQName> _defaultSchemaDatatypeHierarchy(ExiDatatype datatype) {
