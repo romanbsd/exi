@@ -1202,6 +1202,41 @@ void main() {
     expect(document.toXmlString(), '<label id="7">hello</label>');
   });
 
+  test('decodes restricted simple content after a required attribute', () {
+    const schemaId = 'restricted-simple-content';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:element name="count">
+            <xs:complexType>
+              <xs:simpleContent>
+                <xs:restriction base="xs:integer">
+                  <xs:minInclusive value="5"/>
+                  <xs:maxInclusive value="8"/>
+                  <xs:attribute name="id" type="xs:string" use="required"/>
+                </xs:restriction>
+              </xs:simpleContent>
+            </xs:complexType>
+          </xs:element>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('10000000')
+      // Root selection; required id is implicit; restricted value 7 is offset 2
+      // from the minInclusive bound 5.
+      ..write('0')
+      ..write(_value('7'))
+      ..write('10');
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<count id="7">7</count>');
+  });
+
   test('applies the empty grammar to nilled simple content', () {
     const schemaId = 'nilled-simple-content';
     final schema = ExiSchemaCompiler.compile(

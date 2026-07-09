@@ -673,14 +673,38 @@ final class _Compiler {
     if (base == null) {
       throw const FormatException('XSD simple-content derivation is missing its base type');
     }
-    final simpleType =
+    final simpleType = switch (derivation.name.local) {
+      'extension' =>
         _resolveSimpleDatatype(derivation, base) ??
-        (throw UnsupportedError('Unsupported XSD simple-content base "$base"'));
+            (throw UnsupportedError('Unsupported XSD simple-content base "$base"')),
+      'restriction' => _compileSimpleTypeRestriction(
+        derivation,
+        additionalComponents: const {'attribute', 'attributeGroup', 'anyAttribute'},
+      ),
+      final name => throw UnsupportedError('Unsupported XSD simple-content derivation "$name"'),
+    };
+    final supportedComponents = derivation.name.local == 'restriction'
+        ? const {
+            'annotation',
+            'attribute',
+            'attributeGroup',
+            'anyAttribute',
+            'enumeration',
+            'minInclusive',
+            'minExclusive',
+            'maxInclusive',
+            'maxExclusive',
+            'pattern',
+            'length',
+            'minLength',
+            'maxLength',
+            'whiteSpace',
+            'totalDigits',
+            'fractionDigits',
+          }
+        : const {'annotation', 'attribute', 'attributeGroup', 'anyAttribute'};
     for (final child in derivation.children.whereType<XmlElement>()) {
-      if (child.name.namespaceUri == _xsdUri &&
-          child.name.local != 'annotation' &&
-          child.name.local != 'attribute' &&
-          child.name.local != 'attributeGroup') {
+      if (child.name.namespaceUri == _xsdUri && !supportedComponents.contains(child.name.local)) {
         throw UnsupportedError('Unsupported XSD simple-content component "${child.name.local}"');
       }
     }
@@ -1246,15 +1270,27 @@ final class _Compiler {
       );
     }
 
-    final base = restriction?.getAttribute('base');
+    if (restriction == null) {
+      throw UnsupportedError('Only XSD simple-type restrictions are supported');
+    }
+    return _compileSimpleTypeRestriction(restriction);
+  }
+
+  _SimpleType _compileSimpleTypeRestriction(XmlElement restriction, {Set<String> additionalComponents = const {}}) {
+    final base = restriction.getAttribute('base');
     if (base == null) {
       throw UnsupportedError('Only XSD simple-type restrictions are supported');
     }
     final baseType =
-        _resolveSimpleDatatype(restriction!, base) ?? (throw UnsupportedError('Unsupported XSD simple type "$base"'));
+        _resolveSimpleDatatype(restriction, base) ?? (throw UnsupportedError('Unsupported XSD simple type "$base"'));
     final facets = restriction.children
         .whereType<XmlElement>()
-        .where((child) => child.name.namespaceUri == _xsdUri && child.name.local != 'annotation')
+        .where(
+          (child) =>
+              child.name.namespaceUri == _xsdUri &&
+              child.name.local != 'annotation' &&
+              !additionalComponents.contains(child.name.local),
+        )
         .toList();
     const supportedFacets = {
       'enumeration',
