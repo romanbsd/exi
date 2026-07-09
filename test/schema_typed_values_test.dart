@@ -581,6 +581,85 @@ void main() {
     expect(document.toXmlString(), '<root flags="true false"><tokens>one two</tokens></root>');
   });
 
+  test('enforces string and list length facets', () {
+    const schemaId = 'length-facets';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Code">
+            <xs:restriction base="xs:string">
+              <xs:minLength value="2"/>
+              <xs:maxLength value="4"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="Codes">
+            <xs:list itemType="Code"/>
+          </xs:simpleType>
+          <xs:simpleType name="CodePair">
+            <xs:restriction base="Codes">
+              <xs:length value="2"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="codes" type="CodePair"/>
+        </xs:schema>
+      ''',
+    );
+    final bits = StringBuffer('100000000')
+      ..write(_unsigned(2))
+      ..write(_rawString('ab'))
+      ..write(_rawString('wxyz'));
+
+    final document = ExiDecoder(
+      options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+      schemaResolver: (_) => schema,
+    ).decode(_pack(bits.toString()));
+
+    expect(document.toXmlString(), '<codes>ab wxyz</codes>');
+  });
+
+  test('rejects string and list length facet violations', () {
+    const schemaId = 'invalid-length-facets';
+    final schema = ExiSchemaCompiler.compile(
+      id: schemaId,
+      source: '''
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          <xs:simpleType name="Code">
+            <xs:restriction base="xs:string">
+              <xs:minLength value="2"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:simpleType name="Codes">
+            <xs:list itemType="Code"/>
+          </xs:simpleType>
+          <xs:simpleType name="CodePair">
+            <xs:restriction base="Codes">
+              <xs:length value="2"/>
+            </xs:restriction>
+          </xs:simpleType>
+          <xs:element name="codes" type="CodePair"/>
+        </xs:schema>
+      ''',
+    );
+    final shortList = StringBuffer('100000000')
+      ..write(_unsigned(1))
+      ..write(_rawString('ab'));
+    final shortItem = StringBuffer('100000000')
+      ..write(_unsigned(2))
+      ..write(_rawString('a'))
+      ..write(_rawString('bc'));
+
+    for (final bits in [shortList, shortItem]) {
+      expect(
+        () => ExiDecoder(
+          options: const ExiOptions(strict: true, schemaId: ExiSchemaId.named(schemaId)),
+          schemaResolver: (_) => schema,
+        ).decode(_pack(bits.toString())),
+        throwsFormatException,
+      );
+    }
+  });
+
   test('decodes binary schema values', () {
     const schemaId = 'binary-values';
     const schema = ExiSchema(

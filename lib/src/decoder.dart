@@ -758,6 +758,10 @@ final class _DecoderState {
         integerMaxInclusive: attribute.integerMaxInclusive,
         listItemIntegerMinInclusive: attribute.listItemIntegerMinInclusive,
         listItemIntegerMaxInclusive: attribute.listItemIntegerMaxInclusive,
+        minLength: attribute.minLength,
+        maxLength: attribute.maxLength,
+        listItemMinLength: attribute.listItemMinLength,
+        listItemMaxLength: attribute.listItemMaxLength,
       );
 
   String _readXsiNilValue() {
@@ -1079,6 +1083,10 @@ final class _DecoderState {
                           integerMaxInclusive: globalAttribute.integerMaxInclusive,
                           listItemIntegerMinInclusive: globalAttribute.listItemIntegerMinInclusive,
                           listItemIntegerMaxInclusive: globalAttribute.listItemIntegerMaxInclusive,
+                          minLength: globalAttribute.minLength,
+                          maxLength: globalAttribute.maxLength,
+                          listItemMinLength: globalAttribute.listItemMinLength,
+                          listItemMaxLength: globalAttribute.listItemMaxLength,
                         ),
                   );
             events.add(ExiAttribute(name, value));
@@ -1252,6 +1260,10 @@ final class _DecoderState {
                   integerMaxInclusive: attribute.integerMaxInclusive,
                   listItemIntegerMinInclusive: attribute.listItemIntegerMinInclusive,
                   listItemIntegerMaxInclusive: attribute.listItemIntegerMaxInclusive,
+                  minLength: attribute.minLength,
+                  maxLength: attribute.maxLength,
+                  listItemMinLength: attribute.listItemMinLength,
+                  listItemMaxLength: attribute.listItemMaxLength,
                 ),
           );
           if (!seenAttributes.add(attribute.name)) {
@@ -1298,6 +1310,10 @@ final class _DecoderState {
                         integerMaxInclusive: globalAttribute.integerMaxInclusive,
                         listItemIntegerMinInclusive: globalAttribute.listItemIntegerMinInclusive,
                         listItemIntegerMaxInclusive: globalAttribute.listItemIntegerMaxInclusive,
+                        minLength: globalAttribute.minLength,
+                        maxLength: globalAttribute.maxLength,
+                        listItemMinLength: globalAttribute.listItemMinLength,
+                        listItemMaxLength: globalAttribute.listItemMaxLength,
                       ),
                 );
           events.add(ExiAttribute(name, value));
@@ -1377,6 +1393,10 @@ final class _DecoderState {
                       integerMaxInclusive: declaration.integerMaxInclusive,
                       listItemIntegerMinInclusive: declaration.listItemIntegerMinInclusive,
                       listItemIntegerMaxInclusive: declaration.listItemIntegerMaxInclusive,
+                      minLength: declaration.minLength,
+                      maxLength: declaration.maxLength,
+                      listItemMinLength: declaration.listItemMinLength,
+                      listItemMaxLength: declaration.listItemMaxLength,
                     ),
               ),
             ),
@@ -1958,7 +1978,11 @@ bool _hasSameAnonymousDatatypeShape(ExiElementDeclaration left, ExiElementDeclar
       left.integerMinInclusive == right.integerMinInclusive &&
       left.integerMaxInclusive == right.integerMaxInclusive &&
       left.listItemIntegerMinInclusive == right.listItemIntegerMinInclusive &&
-      left.listItemIntegerMaxInclusive == right.listItemIntegerMaxInclusive;
+      left.listItemIntegerMaxInclusive == right.listItemIntegerMaxInclusive &&
+      left.minLength == right.minLength &&
+      left.maxLength == right.maxLength &&
+      left.listItemMinLength == right.listItemMinLength &&
+      left.listItemMaxLength == right.listItemMaxLength;
 }
 
 bool _isAnonymousValueGrammar(ExiElementDeclaration declaration) =>
@@ -2129,6 +2153,10 @@ bool _sameAttribute(ExiAttributeDeclaration left, ExiAttributeDeclaration right)
     left.integerMaxInclusive == right.integerMaxInclusive &&
     left.listItemIntegerMinInclusive == right.listItemIntegerMinInclusive &&
     left.listItemIntegerMaxInclusive == right.listItemIntegerMaxInclusive &&
+    left.minLength == right.minLength &&
+    left.maxLength == right.maxLength &&
+    left.listItemMinLength == right.listItemMinLength &&
+    left.listItemMaxLength == right.listItemMaxLength &&
     left.required == right.required;
 
 bool _isAnonymousGrammarBase(ExiElementDeclaration declaration) =>

@@ -35,12 +35,20 @@ final class ExiValueDecoder {
     BigInt? integerMaxInclusive,
     BigInt? listItemIntegerMinInclusive,
     BigInt? listItemIntegerMaxInclusive,
+    int? minLength,
+    int? maxLength,
+    int? listItemMinLength,
+    int? listItemMaxLength,
   }) {
     if (preserveLexicalValues) {
-      return strings.readValue(
-        input,
-        context,
-        restrictedCharacters: _restrictedCharacters(datatype, listItemDatatype: listItemDatatype),
+      return _checkLength(
+        strings.readValue(
+          input,
+          context,
+          restrictedCharacters: _restrictedCharacters(datatype, listItemDatatype: listItemDatatype),
+        ),
+        minLength: minLength,
+        maxLength: maxLength,
       );
     }
     final representation = _representationFor(datatype, schemaDatatypeHierarchy);
@@ -49,10 +57,14 @@ final class ExiValueDecoder {
       if (ordinal >= enumerationValues.length) {
         throw const FormatException('Invalid EXI enumeration ordinal');
       }
-      return enumerationValues[ordinal];
+      return _checkLength(enumerationValues[ordinal], minLength: minLength, maxLength: maxLength);
     }
     return switch (representation) {
-      ExiDatatype.string => strings.readValue(input, context, restrictedCharacters: restrictedCharacters),
+      ExiDatatype.string => _checkLength(
+        strings.readValue(input, context, restrictedCharacters: restrictedCharacters),
+        minLength: minLength,
+        maxLength: maxLength,
+      ),
       ExiDatatype.boolean =>
         booleanPattern
             ? switch (input.readNBitUnsigned(2)) {
@@ -68,8 +80,12 @@ final class ExiValueDecoder {
       ExiDatatype.float => _readFloat(),
       ExiDatatype.integer || ExiDatatype.unsignedInteger || ExiDatatype.byte || ExiDatatype.unsignedByte =>
         _readIntegerValue(representation, minimum: integerMinInclusive, maximum: integerMaxInclusive),
-      ExiDatatype.base64Binary => base64Encode(_readBinary()),
-      ExiDatatype.hexBinary => _readBinary().map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(),
+      ExiDatatype.base64Binary => _checkLength(base64Encode(_readBinary()), minLength: minLength, maxLength: maxLength),
+      ExiDatatype.hexBinary => _checkLength(
+        _readBinary().map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(),
+        minLength: minLength,
+        maxLength: maxLength,
+      ),
       ExiDatatype.dateTime => _readDateTime(includeDate: true, includeTime: true),
       ExiDatatype.date => _readDateTime(includeDate: true, includeTime: false),
       ExiDatatype.time => _readDateTime(includeDate: false, includeTime: true),
@@ -87,8 +103,23 @@ final class ExiValueDecoder {
         itemEnumerationValues: listItemEnumerationValues,
         itemIntegerMinInclusive: listItemIntegerMinInclusive,
         itemIntegerMaxInclusive: listItemIntegerMaxInclusive,
+        minLength: minLength,
+        maxLength: maxLength,
+        itemMinLength: listItemMinLength,
+        itemMaxLength: listItemMaxLength,
       ),
     };
+  }
+
+  String _checkLength(String value, {int? minLength, int? maxLength}) {
+    if (minLength == null && maxLength == null) {
+      return value;
+    }
+    final length = value.runes.length;
+    if ((minLength != null && length < minLength) || (maxLength != null && length > maxLength)) {
+      throw const FormatException('EXI value length is outside its schema range');
+    }
+    return value;
   }
 
   ExiDatatype _representationFor(ExiDatatype datatype, List<ExiQName> hierarchy) {
@@ -118,16 +149,28 @@ final class ExiValueDecoder {
     List<String> itemEnumerationValues = const [],
     BigInt? itemIntegerMinInclusive,
     BigInt? itemIntegerMaxInclusive,
+    int? minLength,
+    int? maxLength,
+    int? itemMinLength,
+    int? itemMaxLength,
   }) {
     final encodedLength = input.readUnsignedInteger();
     if (encodedLength > BigInt.from(0x7fffffff)) {
       throw const FormatException('EXI list value is too large to materialize');
     }
+    final length = encodedLength.toInt();
+    if ((minLength != null && length < minLength) || (maxLength != null && length > maxLength)) {
+      throw const FormatException('EXI list length is outside its schema range');
+    }
     final itemRepresentation = _representationFor(itemDatatype, itemSchemaDatatypeHierarchy);
     return [
-      for (var index = 0; index < encodedLength.toInt(); index++)
+      for (var index = 0; index < length; index++)
         itemRepresentation == ExiDatatype.string && itemEnumerationValues.isEmpty
-            ? strings.readString(input, restrictedCharacters: itemRestrictedCharacters)
+            ? _checkLength(
+                strings.readString(input, restrictedCharacters: itemRestrictedCharacters),
+                minLength: itemMinLength,
+                maxLength: itemMaxLength,
+              )
             : read(
                 itemDatatype,
                 context,
@@ -136,6 +179,8 @@ final class ExiValueDecoder {
                 booleanPattern: itemBooleanPattern,
                 integerMinInclusive: itemIntegerMinInclusive,
                 integerMaxInclusive: itemIntegerMaxInclusive,
+                minLength: itemMinLength,
+                maxLength: itemMaxLength,
               ),
     ].join(' ');
   }

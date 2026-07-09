@@ -573,6 +573,35 @@ void main() {
       expect(schema.globalElements.single.attributes.map((attribute) => attribute.name.localName), ['id', 'kind']);
     });
 
+    test('resolves an attribute wildcard from a nested named attribute group', () {
+      final schema = ExiSchemaCompiler.compile(
+        id: 'attribute-group-wildcard.xsd',
+        source: '''
+          <xs:schema
+              xmlns:xs="http://www.w3.org/2001/XMLSchema"
+              xmlns:tns="urn:example"
+              targetNamespace="urn:example">
+            <xs:attributeGroup name="metadata">
+              <xs:anyAttribute namespace="##other" processContents="lax"/>
+            </xs:attributeGroup>
+            <xs:attributeGroup name="extended">
+              <xs:attributeGroup ref="tns:metadata"/>
+            </xs:attributeGroup>
+            <xs:element name="root">
+              <xs:complexType>
+                <xs:attributeGroup ref="tns:extended"/>
+              </xs:complexType>
+            </xs:element>
+          </xs:schema>
+        ''',
+      );
+
+      final root = schema.globalElements.single;
+      expect(root.anyAttribute, isTrue);
+      expect(root.attributeWildcardExcludedNamespaces, {'', 'urn:example'});
+      expect(root.attributeProcessContents, ExiProcessContents.lax);
+    });
+
     test('rejects recursive attribute groups', () {
       expect(
         () => ExiSchemaCompiler.compile(
@@ -591,6 +620,28 @@ void main() {
           ''',
         ),
         throwsUnsupportedError,
+      );
+    });
+
+    test('rejects duplicate effective attribute wildcards', () {
+      expect(
+        () => ExiSchemaCompiler.compile(
+          id: 'duplicate-any-attribute.xsd',
+          source: '''
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:attributeGroup name="metadata">
+                <xs:anyAttribute/>
+              </xs:attributeGroup>
+              <xs:element name="root">
+                <xs:complexType>
+                  <xs:attributeGroup ref="metadata"/>
+                  <xs:anyAttribute/>
+                </xs:complexType>
+              </xs:element>
+            </xs:schema>
+          ''',
+        ),
+        throwsFormatException,
       );
     });
 

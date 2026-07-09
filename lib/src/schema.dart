@@ -69,6 +69,10 @@ final class ExiElementDeclaration {
        integerMaxInclusive = null,
        listItemIntegerMinInclusive = null,
        listItemIntegerMaxInclusive = null,
+       minLength = null,
+       maxLength = null,
+       listItemMinLength = null,
+       listItemMaxLength = null,
        attributes = const [],
        content = null,
        mixed = false;
@@ -97,6 +101,10 @@ final class ExiElementDeclaration {
        integerMaxInclusive = null,
        listItemIntegerMinInclusive = null,
        listItemIntegerMaxInclusive = null,
+       minLength = null,
+       maxLength = null,
+       listItemMinLength = null,
+       listItemMaxLength = null,
        attributes = const [],
        content = null,
        mixed = false;
@@ -118,6 +126,10 @@ final class ExiElementDeclaration {
     this.integerMaxInclusive,
     this.listItemIntegerMinInclusive,
     this.listItemIntegerMaxInclusive,
+    this.minLength,
+    this.maxLength,
+    this.listItemMinLength,
+    this.listItemMaxLength,
     this.nillable = false,
     this.typeAlternatives = const {},
     this.anyAttribute = false,
@@ -147,6 +159,10 @@ final class ExiElementDeclaration {
     this.integerMaxInclusive,
     this.listItemIntegerMinInclusive,
     this.listItemIntegerMaxInclusive,
+    this.minLength,
+    this.maxLength,
+    this.listItemMinLength,
+    this.listItemMaxLength,
     this.attributes = const [],
     this.nillable = false,
     this.typeAlternatives = const {},
@@ -185,7 +201,11 @@ final class ExiElementDeclaration {
        integerMinInclusive = null,
        integerMaxInclusive = null,
        listItemIntegerMinInclusive = null,
-       listItemIntegerMaxInclusive = null;
+       listItemIntegerMaxInclusive = null,
+       minLength = null,
+       maxLength = null,
+       listItemMinLength = null,
+       listItemMaxLength = null;
 
   final ExiQName name;
   final ExiQName? schemaTypeName;
@@ -204,6 +224,10 @@ final class ExiElementDeclaration {
   final BigInt? integerMaxInclusive;
   final BigInt? listItemIntegerMinInclusive;
   final BigInt? listItemIntegerMaxInclusive;
+  final int? minLength;
+  final int? maxLength;
+  final int? listItemMinLength;
+  final int? listItemMaxLength;
   final List<ExiAttributeDeclaration> attributes;
   final ExiParticle? content;
   final bool mixed;
@@ -232,6 +256,10 @@ final class ExiAttributeDeclaration {
     this.integerMaxInclusive,
     this.listItemIntegerMinInclusive,
     this.listItemIntegerMaxInclusive,
+    this.minLength,
+    this.maxLength,
+    this.listItemMinLength,
+    this.listItemMaxLength,
     this.required = false,
   }) : assert((datatype == ExiDatatype.list) == (listItemDatatype != null));
 
@@ -250,6 +278,10 @@ final class ExiAttributeDeclaration {
   final BigInt? integerMaxInclusive;
   final BigInt? listItemIntegerMinInclusive;
   final BigInt? listItemIntegerMaxInclusive;
+  final int? minLength;
+  final int? maxLength;
+  final int? listItemMinLength;
+  final int? listItemMaxLength;
   final bool required;
 }
 

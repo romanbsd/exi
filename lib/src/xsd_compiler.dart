@@ -22,6 +22,10 @@ typedef _SimpleType = ({
   BigInt? integerMaxInclusive,
   BigInt? listItemIntegerMinInclusive,
   BigInt? listItemIntegerMaxInclusive,
+  int? minLength,
+  int? maxLength,
+  int? listItemMinLength,
+  int? listItemMaxLength,
 });
 
 final class ExiSchemaCompiler {
@@ -292,6 +296,10 @@ final class _Compiler {
           integerMaxInclusive: simpleDatatype.integerMaxInclusive,
           listItemIntegerMinInclusive: simpleDatatype.listItemIntegerMinInclusive,
           listItemIntegerMaxInclusive: simpleDatatype.listItemIntegerMaxInclusive,
+          minLength: simpleDatatype.minLength,
+          maxLength: simpleDatatype.maxLength,
+          listItemMinLength: simpleDatatype.listItemMinLength,
+          listItemMaxLength: simpleDatatype.listItemMaxLength,
           nillable: nillable,
         );
       }
@@ -337,6 +345,10 @@ final class _Compiler {
         integerMaxInclusive: simpleType.integerMaxInclusive,
         listItemIntegerMinInclusive: simpleType.listItemIntegerMinInclusive,
         listItemIntegerMaxInclusive: simpleType.listItemIntegerMaxInclusive,
+        minLength: simpleType.minLength,
+        maxLength: simpleType.maxLength,
+        listItemMinLength: simpleType.listItemMinLength,
+        listItemMaxLength: simpleType.listItemMaxLength,
         nillable: nillable,
       );
     }
@@ -398,6 +410,10 @@ final class _Compiler {
         listItemBooleanPattern: declaration.listItemBooleanPattern,
         integerMinInclusive: declaration.integerMinInclusive,
         integerMaxInclusive: declaration.integerMaxInclusive,
+        minLength: declaration.minLength,
+        maxLength: declaration.maxLength,
+        listItemMinLength: declaration.listItemMinLength,
+        listItemMaxLength: declaration.listItemMaxLength,
         attributes: declaration.attributes,
         nillable: declaration.nillable,
         typeAlternatives: alternatives,
@@ -726,6 +742,10 @@ final class _Compiler {
       integerMaxInclusive: simpleType.integerMaxInclusive,
       listItemIntegerMinInclusive: simpleType.listItemIntegerMinInclusive,
       listItemIntegerMaxInclusive: simpleType.listItemIntegerMaxInclusive,
+      minLength: simpleType.minLength,
+      maxLength: simpleType.maxLength,
+      listItemMinLength: simpleType.listItemMinLength,
+      listItemMaxLength: simpleType.listItemMaxLength,
       attributes: attributes,
       nillable: nillable,
       anyAttribute: _hasAnyAttribute(derivation),
@@ -1108,6 +1128,10 @@ final class _Compiler {
         integerMaxInclusive: declaration.integerMaxInclusive,
         listItemIntegerMinInclusive: declaration.listItemIntegerMinInclusive,
         listItemIntegerMaxInclusive: declaration.listItemIntegerMaxInclusive,
+        minLength: declaration.minLength,
+        maxLength: declaration.maxLength,
+        listItemMinLength: declaration.listItemMinLength,
+        listItemMaxLength: declaration.listItemMaxLength,
         required: _isRequiredAttribute(attribute),
       );
     }
@@ -1146,6 +1170,10 @@ final class _Compiler {
       integerMaxInclusive: simpleType.integerMaxInclusive,
       listItemIntegerMinInclusive: simpleType.listItemIntegerMinInclusive,
       listItemIntegerMaxInclusive: simpleType.listItemIntegerMaxInclusive,
+      minLength: simpleType.minLength,
+      maxLength: simpleType.maxLength,
+      listItemMinLength: simpleType.listItemMinLength,
+      listItemMaxLength: simpleType.listItemMaxLength,
       required: _isRequiredAttribute(attribute),
     );
   }
@@ -1200,6 +1228,10 @@ final class _Compiler {
       integerMaxInclusive: simpleType.integerMaxInclusive,
       listItemIntegerMinInclusive: simpleType.listItemIntegerMinInclusive,
       listItemIntegerMaxInclusive: simpleType.listItemIntegerMaxInclusive,
+      minLength: simpleType.minLength,
+      maxLength: simpleType.maxLength,
+      listItemMinLength: simpleType.listItemMinLength,
+      listItemMaxLength: simpleType.listItemMaxLength,
     );
   }
 
@@ -1312,6 +1344,10 @@ final class _Compiler {
         integerMaxInclusive: null,
         listItemIntegerMinInclusive: itemType.integerMinInclusive,
         listItemIntegerMaxInclusive: itemType.integerMaxInclusive,
+        minLength: null,
+        maxLength: null,
+        listItemMinLength: itemType.minLength,
+        listItemMaxLength: itemType.maxLength,
       );
     }
 
@@ -1366,6 +1402,9 @@ final class _Compiler {
         pattern.getAttribute('value') ?? (throw const FormatException('An XSD pattern facet must specify a value')),
       );
     }
+    var minLength = baseType.minLength;
+    var maxLength = baseType.maxLength;
+    final seenLengthFacets = <String>{};
     for (final facet in facets.where(
       (facet) =>
           facet.name.local == 'length' ||
@@ -1389,7 +1428,28 @@ final class _Compiler {
         if (parsed == null || parsed < minimum) {
           throw FormatException('Invalid XSD ${facet.name.local} facet "$lexical"');
         }
+        switch (facet.name.local) {
+          case 'length':
+            if (!seenLengthFacets.add('length')) {
+              throw const FormatException('Duplicate XSD length facet');
+            }
+            minLength = minLength == null || parsed > minLength ? parsed : minLength;
+            maxLength = maxLength == null || parsed < maxLength ? parsed : maxLength;
+          case 'minLength':
+            if (!seenLengthFacets.add('minLength')) {
+              throw const FormatException('Duplicate XSD minLength facet');
+            }
+            minLength = minLength == null || parsed > minLength ? parsed : minLength;
+          case 'maxLength':
+            if (!seenLengthFacets.add('maxLength')) {
+              throw const FormatException('Duplicate XSD maxLength facet');
+            }
+            maxLength = maxLength == null || parsed < maxLength ? parsed : maxLength;
+        }
       }
+    }
+    if (minLength != null && maxLength != null && maxLength < minLength) {
+      throw const FormatException('XSD length restriction has an empty value range');
     }
     var minimum = baseType.integerMinInclusive;
     var maximum = baseType.integerMaxInclusive;
@@ -1466,6 +1526,10 @@ final class _Compiler {
       integerMaxInclusive: maximum,
       listItemIntegerMinInclusive: baseType.listItemIntegerMinInclusive,
       listItemIntegerMaxInclusive: baseType.listItemIntegerMaxInclusive,
+      minLength: minLength,
+      maxLength: maxLength,
+      listItemMinLength: baseType.listItemMinLength,
+      listItemMaxLength: baseType.listItemMaxLength,
     );
   }
 
@@ -1590,6 +1654,10 @@ final class _Compiler {
         integerMaxInclusive: null,
         listItemIntegerMinInclusive: null,
         listItemIntegerMaxInclusive: null,
+        minLength: null,
+        maxLength: null,
+        listItemMinLength: null,
+        listItemMaxLength: null,
       ),
       'boolean' => _scalarType(ExiDatatype.boolean),
       'decimal' => _scalarType(ExiDatatype.decimal),
@@ -1680,6 +1748,10 @@ _SimpleType _scalarType(
   integerMaxInclusive: integerMaxInclusive,
   listItemIntegerMinInclusive: null,
   listItemIntegerMaxInclusive: null,
+  minLength: null,
+  maxLength: null,
+  listItemMinLength: null,
+  listItemMaxLength: null,
 );
 
 _SimpleType _withSchemaDatatype(_SimpleType type, ExiQName datatype) =>
@@ -1702,6 +1774,10 @@ _SimpleType _withSchemaDatatypeHierarchy(_SimpleType type, List<ExiQName> hierar
   integerMaxInclusive: type.integerMaxInclusive,
   listItemIntegerMinInclusive: type.listItemIntegerMinInclusive,
   listItemIntegerMaxInclusive: type.listItemIntegerMaxInclusive,
+  minLength: type.minLength,
+  maxLength: type.maxLength,
+  listItemMinLength: type.listItemMinLength,
+  listItemMaxLength: type.listItemMaxLength,
 );
 
 List<ExiQName> _builtinDatatypeHierarchy(String localName) {
