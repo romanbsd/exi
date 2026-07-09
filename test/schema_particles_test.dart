@@ -951,6 +951,42 @@ void main() {
       expect(document.toXmlString(), '<root><item>text</item></root>');
     });
 
+    test('uses local wildcard branches in a relaxed duplicate element grammar', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="left"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="item">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:any namespace="urn:other" processContents="skip"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      final document = _decode(
+        schema,
+        // Root selection; relaxed item grammar selects the local urn:other
+        // wildcard branch, its local name, the built-in child EE, then item EE.
+        '0010${_rawString('wild')}00011',
+      );
+
+      final elements = document.events.whereType<ExiStartElement>().toList();
+      expect(elements[1].name, const ExiQName(localName: 'item'));
+      expect(elements[2].name, const ExiQName(uri: 'urn:other', localName: 'wild'));
+    });
+
     test('decodes a particle that references a global element', () {
       final schema = _compile('''
         <xs:element name="root">
@@ -1625,7 +1661,7 @@ void main() {
     expect(elements[1].name, const ExiQName(uri: 'urn:other', localName: 'child'));
   });
 
-  test('keeps duplicate leading element wildcards unsupported when constraints conflict', () {
+  test('uses duplicate leading element wildcards when processing constraints conflict', () {
     final schema = ExiSchemaCompiler.compile(
       id: 'particles',
       source: '''
@@ -1643,8 +1679,18 @@ void main() {
         </xs:schema>
       ''',
     );
+    final bits = StringBuffer()
+      // Root=0; duplicate SE(urn:other:*) branches stay grouped and encode
+      // only the local name.
+      ..write('0')
+      ..write(_rawString('child'))
+      // The unknown child uses its schema-less start-tag EE production.
+      ..write('00');
 
-    expect(() => _decode(schema, '0${_rawString('child')}00'), throwsUnsupportedError);
+    final document = _decode(schema, bits.toString());
+    final elements = document.events.whereType<ExiStartElement>().toList();
+
+    expect(elements[1].name, const ExiQName(uri: 'urn:other', localName: 'child'));
   });
 
   test('uses a global element declaration for a strict wildcard match', () {

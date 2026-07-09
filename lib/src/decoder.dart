@@ -392,6 +392,7 @@ final class _DecoderState {
     _FragmentElementGroup group, {
     List<_FragmentElementGroup>? declarations,
     List<_FragmentAttributeGroup>? attributes,
+    List<_FragmentWildcardGroup>? wildcards,
   }) {
     final startEventIndex = events.length;
     events.add(ExiStartElement(group.name));
@@ -401,6 +402,7 @@ final class _DecoderState {
       startEventIndex,
       declarations: declarations,
       attributes: attributes,
+      wildcards: wildcards,
     );
   }
 
@@ -410,9 +412,11 @@ final class _DecoderState {
     int startEventIndex, {
     List<_FragmentElementGroup>? declarations,
     List<_FragmentAttributeGroup>? attributes,
+    List<_FragmentWildcardGroup>? wildcards,
   }) {
     final declarationGroups = declarations ?? _fragmentDeclarations;
     final attributeGroups = attributes ?? _fragmentAttributes;
+    final wildcardGroups = wildcards ?? const <_FragmentWildcardGroup>[];
     var currentElementName = elementName;
     final seenAttributes = <ExiQName>{};
     var attributesAllowed = true;
@@ -427,8 +431,10 @@ final class _DecoderState {
       final typeCount =
           attributesAllowed && group.hasTypeAlternatives && !seenAttributes.contains(_xsiTypeName) && !nilSeen ? 1 : 0;
       final nilCount = attributesAllowed && group.hasNillableDeclaration && !nilSeen ? 1 : 0;
-      final baseCount = attributeCount + typeCount + nilCount + declarationGroups.length + 3;
-      final nonStrictCount = !options.strict && _hasRelaxedFragmentDeviation(attributesAllowed) ? 1 : 0;
+      final baseCount = attributeCount + typeCount + nilCount + declarationGroups.length + wildcardGroups.length + 3;
+      final nonStrictCount = !options.strict && _hasRelaxedFragmentDeviation(attributesAllowed, attributeGroups)
+          ? 1
+          : 0;
       final selected = input.readNBitUnsigned(_bitWidth(baseCount + nonStrictCount));
       if (attributesAllowed && selected < attributeGroups.length) {
         final attribute = attributeGroups[selected];
@@ -507,7 +513,7 @@ final class _DecoderState {
         if (nilled) {
           throw const FormatException('A nilled relaxed fragment element cannot contain non-strict events');
         }
-        final production = _readRelaxedFragmentDeviation(inAttributePhase);
+        final production = _readRelaxedFragmentDeviation(inAttributePhase, attributeGroups);
         switch (production.type) {
           case _EventType.attribute:
             attributesAllowed = true;
@@ -567,7 +573,14 @@ final class _DecoderState {
             if (seenNamespaceDeclaration || seenAttributes.isNotEmpty) {
               throw const FormatException('Self-contained relaxed fragments must precede namespaces and attributes');
             }
-            _decodeRelaxedFragmentSelfContained(group, currentElementName, startEventIndex);
+            _decodeRelaxedFragmentSelfContained(
+              group,
+              currentElementName,
+              startEventIndex,
+              declarations: declarationGroups,
+              attributes: attributeGroups,
+              wildcards: wildcardGroups,
+            );
             return;
           case _EventType.entityReference:
             events.add(ExiEntityReference(strings.readString(input)));
@@ -596,11 +609,28 @@ final class _DecoderState {
             childGroup,
             declarations: _collectRelaxedElementContentDeclarations(childGroup.declarations),
             attributes: _collectRelaxedElementAttributes(childGroup.declarations),
+            wildcards: _collectRelaxedElementWildcards(childGroup.declarations),
           );
         }
         continue;
       }
-      if (contentIndex == declarationGroups.length) {
+      final wildcardIndex = contentIndex - declarationGroups.length;
+      if (wildcardIndex < wildcardGroups.length) {
+        if (nilled) {
+          throw const FormatException('A nilled relaxed fragment element cannot contain child elements');
+        }
+        final wildcard = wildcardGroups[wildcardIndex];
+        final name = wildcard.uri == null
+            ? strings.readQName(input)
+            : ExiQName(uri: wildcard.uri!, localName: strings.readString(input));
+        if (wildcard.excludedNamespaces?.contains(name.uri) ?? false) {
+          throw const FormatException('Element QName does not match the schema wildcard namespace constraint');
+        }
+        final declaration = schema?.globalElements.where((element) => element.name == name).firstOrNull;
+        _decodeElement(name, declaration: declaration);
+        continue;
+      }
+      if (contentIndex == declarationGroups.length + wildcardGroups.length) {
         if (nilled) {
           throw const FormatException('A nilled relaxed fragment element cannot contain child elements');
         }
@@ -609,11 +639,11 @@ final class _DecoderState {
         _decodeElement(name, declaration: declaration);
         continue;
       }
-      if (contentIndex == declarationGroups.length + 1) {
+      if (contentIndex == declarationGroups.length + wildcardGroups.length + 1) {
         events.add(ExiEndElement(currentElementName));
         return;
       }
-      if (contentIndex == declarationGroups.length + 2) {
+      if (contentIndex == declarationGroups.length + wildcardGroups.length + 2) {
         if (nilled) {
           throw const FormatException('A nilled relaxed fragment element cannot contain characters');
         }
@@ -624,7 +654,14 @@ final class _DecoderState {
     }
   }
 
-  void _decodeRelaxedFragmentSelfContained(_FragmentElementGroup group, ExiQName elementName, int startEventIndex) {
+  void _decodeRelaxedFragmentSelfContained(
+    _FragmentElementGroup group,
+    ExiQName elementName,
+    int startEventIndex, {
+    required List<_FragmentElementGroup> declarations,
+    required List<_FragmentAttributeGroup> attributes,
+    required List<_FragmentWildcardGroup> wildcards,
+  }) {
     final outerStrings = strings;
     final outerGrammars = grammars;
     final outerFragmentElements = _fragmentElements;
@@ -633,7 +670,14 @@ final class _DecoderState {
       grammars = {};
       _fragmentElements = [];
       input.alignToByte();
-      _decodeRelaxedFragmentContent(group, elementName, startEventIndex);
+      _decodeRelaxedFragmentContent(
+        group,
+        elementName,
+        startEventIndex,
+        declarations: declarations,
+        attributes: attributes,
+        wildcards: wildcards,
+      );
       input.alignToByte();
     } finally {
       strings = outerStrings;
@@ -642,16 +686,16 @@ final class _DecoderState {
     }
   }
 
-  bool _hasRelaxedFragmentDeviation(bool attributesAllowed) =>
-      (attributesAllowed && _fragmentAttributes.isNotEmpty) ||
+  bool _hasRelaxedFragmentDeviation(bool attributesAllowed, List<_FragmentAttributeGroup> attributeGroups) =>
+      (attributesAllowed && attributeGroups.isNotEmpty) ||
       options.fidelity.prefixes ||
       options.selfContained ||
       options.fidelity.dtd ||
       options.fidelity.comments ||
       options.fidelity.processingInstructions;
 
-  _Production _readRelaxedFragmentDeviation(bool attributesAllowed) {
-    final hasUntypedAttribute = attributesAllowed && _fragmentAttributes.isNotEmpty;
+  _Production _readRelaxedFragmentDeviation(bool attributesAllowed, List<_FragmentAttributeGroup> attributeGroups) {
+    final hasUntypedAttribute = attributesAllowed && attributeGroups.isNotEmpty;
     final hasNamespace = options.fidelity.prefixes;
     final hasSelfContained = options.selfContained;
     final hasEntity = options.fidelity.dtd;
@@ -1271,7 +1315,13 @@ final class _DecoderState {
             final group = _FragmentElementGroup(child.name, [...event.elementDeclarations]);
             final declarations = _collectRelaxedElementContentDeclarations(group.declarations);
             final attributes = _collectRelaxedElementAttributes(group.declarations);
-            _decodeRelaxedFragmentElement(group, declarations: declarations, attributes: attributes);
+            final wildcards = _collectRelaxedElementWildcards(group.declarations);
+            _decodeRelaxedFragmentElement(
+              group,
+              declarations: declarations,
+              attributes: attributes,
+              wildcards: wildcards,
+            );
           } else {
             _decodeElement(child.name, declaration: child);
           }
@@ -1619,6 +1669,57 @@ List<_FragmentAttributeGroup> _collectRelaxedElementAttributes(List<ExiElementDe
   return groups;
 }
 
+List<_FragmentWildcardGroup> _collectRelaxedElementWildcards(List<ExiElementDeclaration> declarations) {
+  final groups = <_FragmentWildcardGroup>[];
+
+  void addGroup(String? uri, Set<String>? excludedNamespaces) {
+    if (groups.any((group) => group.uri == uri && _sameStringSet(group.excludedNamespaces, excludedNamespaces))) {
+      return;
+    }
+    groups.add(_FragmentWildcardGroup(uri: uri, excludedNamespaces: excludedNamespaces));
+  }
+
+  void collectParticle(ExiParticle particle) {
+    switch (particle) {
+      case ExiEmptyParticle():
+      case ExiElementParticle():
+        return;
+      case ExiWildcardParticle(:final namespaces, :final excludedNamespaces):
+        final uris = namespaces?.toList();
+        uris?.sort();
+        if (uris == null) {
+          addGroup(null, excludedNamespaces);
+        } else {
+          for (final uri in uris) {
+            addGroup(uri, null);
+          }
+        }
+      case ExiSequenceParticle(:final particles):
+      case ExiChoiceParticle(:final particles):
+      case ExiAllParticle(:final particles):
+        for (final child in particles) {
+          collectParticle(child);
+        }
+      case ExiRepeatedParticle(:final particle):
+        collectParticle(particle);
+    }
+  }
+
+  for (final declaration in declarations) {
+    collectParticle(declaration.content ?? _legacyContent(declaration.children));
+  }
+
+  groups.sort((left, right) {
+    final leftUri = left.uri;
+    final rightUri = right.uri;
+    if (leftUri == null || rightUri == null) {
+      return leftUri == rightUri ? 0 : (leftUri == null ? 1 : -1);
+    }
+    return leftUri.compareTo(rightUri);
+  });
+  return groups;
+}
+
 List<_FragmentElementGroup> _collectFragmentDeclarations(ExiSchema? schema) {
   if (schema == null) {
     return const [];
@@ -1755,9 +1856,6 @@ List<_DeclaredEvent> _leadingElementEvents(ExiParticle particle) {
           if (existingIndex != -1) {
             final existing = result[existingIndex];
             final wildcards = existing.wildcardParticles;
-            if (!wildcards.every((wildcard) => _hasSameWildcardIdentity(wildcard, current))) {
-              throw UnsupportedError('Ambiguous unconstrained schema element wildcards are not supported yet');
-            }
             result[existingIndex] = _DeclaredEvent.wildcardElement(
               existing.wildcardParticle!,
               null,
@@ -1774,9 +1872,6 @@ List<_DeclaredEvent> _leadingElementEvents(ExiParticle particle) {
             if (existingIndex != -1) {
               final existing = result[existingIndex];
               final wildcards = existing.wildcardParticles;
-              if (!wildcards.every((wildcard) => _hasSameWildcardIdentity(wildcard, current))) {
-                throw UnsupportedError('Ambiguous schema element wildcards for namespace "$uri" are not supported yet');
-              }
               result[existingIndex] = _DeclaredEvent.wildcardElement(
                 existing.wildcardParticle!,
                 uri,
@@ -1829,11 +1924,6 @@ bool _hasSameElementGrammarIdentity(ExiElementDeclaration left, ExiElementDeclar
           _hasSameAnonymousSimpleContentGrammar(left, right) ||
           _hasSameAnonymousComplexContentGrammar(left, right));
 }
-
-bool _hasSameWildcardIdentity(ExiWildcardParticle left, ExiWildcardParticle right) =>
-    _sameStringSet(left.namespaces, right.namespaces) &&
-    _sameStringSet(left.excludedNamespaces, right.excludedNamespaces) &&
-    left.processContents == right.processContents;
 
 bool _sameStringSet(Set<String>? left, Set<String>? right) {
   if (left == null || right == null) {
@@ -2334,6 +2424,13 @@ final class _FragmentAttributeGroup {
   final List<ExiAttributeDeclaration> declarations;
 
   ExiAttributeDeclaration? get declaration => declarations.length == 1 ? declarations.single : null;
+}
+
+final class _FragmentWildcardGroup {
+  const _FragmentWildcardGroup({required this.uri, required this.excludedNamespaces});
+
+  final String? uri;
+  final Set<String>? excludedNamespaces;
 }
 
 final class _CompressedStreams {
