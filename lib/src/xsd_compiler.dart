@@ -484,14 +484,11 @@ final class _Compiler {
     final attributeWildcardNamespaces = _attributeWildcardNamespaces(complexType);
     final attributeWildcardExcludedNamespaces = _attributeWildcardExcludedNamespaces(complexType);
     final compositors = [
-      ..._children(complexType, 'sequence'),
-      ..._children(complexType, 'choice'),
-      ..._children(complexType, 'all'),
-      ..._children(complexType, 'group'),
+      for (final child in complexType.children.whereType<XmlElement>())
+        if (child.name.namespaceUri == _xsdUri &&
+            const {'sequence', 'choice', 'all', 'group'}.contains(child.name.local))
+          child,
     ];
-    if (compositors.length > 1) {
-      throw UnsupportedError('A complex type with multiple compositors is not supported');
-    }
     if (compositors.isEmpty) {
       if (attributes.isNotEmpty || mixed || anyAttribute) {
         return ExiElementDeclaration.complex(
@@ -508,13 +505,12 @@ final class _Compiler {
       }
       return ExiElementDeclaration.empty(name, schemaTypeName: schemaTypeName, nillable: nillable);
     }
-    final compositor = compositors.single;
-    final content = _compileParticle(compositor);
+    final content = _compileCompositorContent(compositors);
     final particles = content is ExiSequenceParticle ? content.particles : const <ExiParticle>[];
     final isFixedSequence =
         attributes.isEmpty &&
         !mixed &&
-        compositor.name.local == 'sequence' &&
+        compositors.every((compositor) => compositor.name.local == 'sequence') &&
         content is ExiSequenceParticle &&
         particles.every(
           (particle) => particle is ExiElementParticle && particle.minOccurs == 1 && particle.maxOccurs == 1,
@@ -588,10 +584,7 @@ final class _Compiler {
         throw UnsupportedError('Unsupported XSD complex-content component "${child.name.local}"');
       }
     }
-    final extensionContent = compositors.fold<ExiParticle>(
-      const ExiEmptyParticle(),
-      (content, compositor) => _concatenateParticles(content, _compileParticle(compositor)),
-    );
+    final extensionContent = _compileCompositorContent(compositors);
     final content = _concatenateParticles(_declarationContent(base), extensionContent);
     final contentMixed = switch (complexContent.getAttribute('mixed')) {
       null || 'false' || '0' => false,
@@ -650,6 +643,19 @@ final class _Compiler {
       return const ExiEmptyParticle();
     }
     return particles.length == 1 ? particles.single : ExiSequenceParticle(particles);
+  }
+
+  ExiParticle _compileCompositorContent(List<XmlElement> compositors) {
+    if (compositors.isEmpty) {
+      return const ExiEmptyParticle();
+    }
+    if (compositors.length == 1) {
+      return _compileParticle(compositors.single);
+    }
+    return compositors.fold<ExiParticle>(
+      const ExiEmptyParticle(),
+      (content, compositor) => _concatenateParticles(content, _compileParticle(compositor)),
+    );
   }
 
   ExiElementDeclaration _compileSimpleContent(

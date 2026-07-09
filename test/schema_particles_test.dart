@@ -1027,6 +1027,27 @@ void main() {
       expect(document.toXmlString(), '<root><first/><right/><last/></root>');
     });
 
+    test('decodes plain complex-type particles from multiple compositors in order', () {
+      final schema = _compile('''
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="first"/>
+            </xs:sequence>
+            <xs:choice>
+              <xs:element name="left"/>
+              <xs:element name="right"/>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      ''');
+
+      // Root is 0; first is implicit; choose right from the second compositor.
+      final document = _decode(schema, '01');
+
+      expect(document.toXmlString(), '<root><first/><right/></root>');
+    });
+
     test('decodes all-compositor children out of declaration order', () {
       final schema = _compile('''
         <xs:element name="root">
